@@ -27,6 +27,9 @@ export const broadcastApi = {
 
   getDetail: (id: number) =>
     api.get(`/broadcast/${id}`),
+
+  save: (id: number) =>
+    api.post(`/broadcast/${id}/save`),
 };
 
 // 设置相关 API

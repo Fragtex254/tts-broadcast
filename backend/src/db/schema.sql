@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   voice_config TEXT,
   source_items TEXT,
   status TEXT DEFAULT 'pending',
+  saved BOOLEAN DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

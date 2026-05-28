@@ -22,6 +22,13 @@ db.pragma('journal_mode = WAL');
 const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
 db.exec(schema);
 
+// 迁移：为旧数据库添加 saved 列
+try {
+  db.prepare('SELECT saved FROM broadcasts LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE broadcasts ADD COLUMN saved BOOLEAN DEFAULT 0');
+}
+
 // 默认设置
 const defaultSettings = {
   mimo_api_key: '',

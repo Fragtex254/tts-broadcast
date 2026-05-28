@@ -66,7 +66,7 @@ const getStatusBadge = (status: string) => {
 };
 
 export const History: React.FC = () => {
-  const { broadcasts, fetchBroadcasts, currentBroadcast, setCurrentBroadcast } =
+  const { broadcasts, fetchBroadcasts, currentBroadcast, setCurrentBroadcast, saveBroadcast } =
     useStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +102,7 @@ export const History: React.FC = () => {
   const getAudioUrl = (broadcast: Broadcast): string | null => {
     if (!broadcast.audio_path) return null;
     // audio_path 存储的是相对路径，拼接为 API 可访问的完整路径
-    return `/api/broadcast/audio/${broadcast.id}`;
+    return `/api/broadcast/${broadcast.id}/audio`;
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -206,13 +206,20 @@ export const History: React.FC = () => {
                     {/* 标题 */}
                     <div className="col-span-5 flex items-center">
                       <div className="min-w-0">
-                        <p
-                          className={`text-sm font-medium truncate ${
-                            isSelected ? 'text-blue-300' : 'text-white'
-                          }`}
-                        >
-                          {broadcast.title}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p
+                            className={`text-sm font-medium truncate ${
+                              isSelected ? 'text-blue-300' : 'text-white'
+                            }`}
+                          >
+                            {broadcast.title}
+                          </p>
+                          {broadcast.saved === 1 && (
+                            <svg className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                            </svg>
+                          )}
+                        </div>
                         {broadcast.voice_type && (
                           <p className="text-xs text-gray-500 mt-0.5">
                             语音: {broadcast.voice_type}
@@ -291,12 +298,32 @@ export const History: React.FC = () => {
             </div>
           )}
 
+          {/* 口播稿预览 */}
+          {currentBroadcast?.content && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">口播稿预览</h3>
+                <span className="text-xs text-gray-500">
+                  {currentBroadcast.content.length} 字 | 约 {Math.ceil(currentBroadcast.content.length / 4)} 秒
+                </span>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-4">
+                <pre className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                  {currentBroadcast.content}
+                </pre>
+              </div>
+            </div>
+          )}
+
           {/* 音频播放器 */}
           <AudioPlayer
             audioUrl={
               currentBroadcast ? getAudioUrl(currentBroadcast) : null
             }
             title={currentBroadcast?.title || '选择一条播报记录播放'}
+            broadcastId={currentBroadcast?.id}
+            isSaved={currentBroadcast?.saved === 1}
+            onSave={saveBroadcast}
           />
         </div>
       </main>

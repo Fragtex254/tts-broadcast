@@ -7,7 +7,7 @@ import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import useStore from '../store';
 
 export const Dashboard: React.FC = () => {
-  const { script, currentBroadcast } = useStore();
+  const { script, currentBroadcast, saveBroadcast } = useStore();
 
   const audioUrl = currentBroadcast?.audio_path
     ? `/api/broadcast/${currentBroadcast.id}/audio`
@@ -28,7 +28,13 @@ export const Dashboard: React.FC = () => {
           <div className="w-full lg:w-1/2 space-y-6 overflow-y-auto">
             <VoiceGenerator script={script} />
             <ScriptPreview />
-            <AudioPlayer audioUrl={audioUrl} title={currentBroadcast?.title} />
+            <AudioPlayer
+              audioUrl={audioUrl}
+              title={currentBroadcast?.title}
+              broadcastId={currentBroadcast?.id}
+              isSaved={currentBroadcast?.saved === 1}
+              onSave={saveBroadcast}
+            />
           </div>
         </div>
       </main>

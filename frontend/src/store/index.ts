@@ -14,6 +14,7 @@ export interface Broadcast {
   voice_config: string | null;
   source_items: string | null;
   status: string;
+  saved: number;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +83,7 @@ export interface AppState {
     pagination: { page: number; limit: number; total: number };
   }>;
   setCurrentBroadcast: (broadcast: Broadcast | null) => void;
+  saveBroadcast: (id: number) => Promise<Broadcast>;
   updateScript: (script: string) => void;
 
   // 设置操作
@@ -188,6 +190,22 @@ export const useStore = create<AppState>((set) => ({
   /** 设置当前播报 */
   setCurrentBroadcast: (broadcast) => {
     set({ currentBroadcast: broadcast });
+  },
+
+  /** 保存/取消保存播报 */
+  saveBroadcast: async (id) => {
+    try {
+      const response = await broadcastApi.save(id);
+      const updated = response.data.broadcast;
+      set((state) => ({
+        broadcasts: state.broadcasts.map((b) => (b.id === id ? updated : b)),
+        currentBroadcast: state.currentBroadcast?.id === id ? updated : state.currentBroadcast,
+      }));
+      return updated;
+    } catch (error) {
+      console.error('保存播报失败:', error);
+      throw error;
+    }
   },
 
   /** 更新口播稿内容 */

@@ -106,6 +106,25 @@ router.post('/generate', async (req, res) => {
 
     const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(result.lastInsertRowid);
 
+    // 清理旧的未保存记录，保留最近10条未保存的
+    const unsavedCount = db.prepare('SELECT COUNT(*) as count FROM broadcasts WHERE saved = 0').get().count;
+    if (unsavedCount > 10) {
+      const toDelete = db.prepare(
+        'SELECT id, audio_path FROM broadcasts WHERE saved = 0 ORDER BY created_at ASC LIMIT ?'
+      ).all(unsavedCount - 10);
+
+      const deleteStmt = db.prepare('DELETE FROM broadcasts WHERE id = ?');
+      for (const item of toDelete) {
+        deleteStmt.run(item.id);
+        if (item.audio_path) {
+          const filepath = path.join(__dirname, '../..', item.audio_path);
+          if (fs.existsSync(filepath)) {
+            fs.unlinkSync(filepath);
+          }
+        }
+      }
+    }
+
     res.json({
       broadcast,
       audioUrl: `/audio/${filename}`
@@ -167,6 +186,57 @@ router.get('/:id', (req, res) => {
   } catch (error) {
     console.error('获取播报详情失败:', error);
     res.status(500).json({ error: '获取播报详情失败' });
+  }
+});
+
+/**
+ * POST /api/broadcast/:id/save
+ * 保存/取消保存播报（标记为永久保存）
+ */
+router.post('/:id/save', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: '无效的播报 ID' });
+    }
+
+    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
+    if (!broadcast) {
+      return res.status(404).json({ error: '播报记录不存在' });
+    }
+
+    const newSaved = broadcast.saved ? 0 : 1;
+
+    // 如果是保存操作，检查上限（最多50条已保存）
+    if (newSaved === 1) {
+      const savedCount = db.prepare('SELECT COUNT(*) as count FROM broadcasts WHERE saved = 1').get().count;
+      if (savedCount >= 50) {
+        // 删除最旧的已保存记录（保留最新的49条）
+        const oldest = db.prepare(
+          'SELECT id, audio_path FROM broadcasts WHERE saved = 1 ORDER BY created_at ASC LIMIT ?'
+        ).all(savedCount - 49);
+
+        const deleteStmt = db.prepare('DELETE FROM broadcasts WHERE id = ?');
+        for (const item of oldest) {
+          deleteStmt.run(item.id);
+          // 删除对应的音频文件
+          if (item.audio_path) {
+            const filepath = path.join(__dirname, '../..', item.audio_path);
+            if (fs.existsSync(filepath)) {
+              fs.unlinkSync(filepath);
+            }
+          }
+        }
+      }
+    }
+
+    db.prepare('UPDATE broadcasts SET saved = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newSaved, id);
+
+    const updated = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
+    res.json({ broadcast: updated });
+  } catch (error) {
+    console.error('保存播报失败:', error);
+    res.status(500).json({ error: '保存播报失败' });
   }
 });
 
