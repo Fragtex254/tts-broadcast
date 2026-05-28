@@ -1,0 +1,59 @@
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: '/api',
+  timeout: 0, // 不设置超时限制，TTS 生成可能需要较长时间
+});
+
+// 播报相关 API
+export const broadcastApi = {
+  getToday: (params?: { category?: string; take?: number }) =>
+    api.get('/broadcast/today', { params }),
+
+  rewrite: (data: { items: any[]; opening?: string; closing?: string }) =>
+    api.post('/broadcast/rewrite', data),
+
+  generate: (data: {
+    text: string;
+    voice?: string;
+    voiceType?: string;
+    voiceDesign?: string;
+    voiceClone?: string;
+    stylePrompt?: string;
+  }) => api.post('/broadcast/generate', data),
+
+  getHistory: (params?: { page?: number; limit?: number }) =>
+    api.get('/broadcast/history', { params }),
+
+  getDetail: (id: number) =>
+    api.get(`/broadcast/${id}`),
+};
+
+// 设置相关 API
+export const settingsApi = {
+  get: () => api.get('/settings'),
+
+  update: (data: Record<string, any>) =>
+    api.put('/settings', data),
+
+  testKey: () => api.post('/settings/test-key'),
+};
+
+// 定时任务 API
+export const scheduleApi = {
+  getAll: () => api.get('/schedules'),
+
+  create: (data: { name: string; cron_expression: string; content_types?: string }) =>
+    api.post('/schedules', data),
+
+  update: (id: number, data: { name?: string; cron_expression?: string; content_types?: string }) =>
+    api.put(`/schedules/${id}`, data),
+
+  delete: (id: number) =>
+    api.delete(`/schedules/${id}`),
+
+  toggle: (id: number) =>
+    api.post(`/schedules/${id}/toggle`),
+};
+
+export default api;

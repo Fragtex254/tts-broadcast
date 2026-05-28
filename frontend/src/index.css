@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root {
+  --primary-color: #3b82f6;
+  --background-color: #1a1a2e;
+  --surface-color: #16213e;
+  --text-color: #e2e8f0;
+}
+
+body {
+  background-color: #111827;
+  color: #f3f4f6;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280;
+}
