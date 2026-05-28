@@ -17,15 +17,19 @@ export const Dashboard: React.FC = () => {
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header title="控制台" subtitle="生成今日 AI 简讯播报" />
 
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <main className="flex-1 flex overflow-hidden p-6">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 w-full">
+          {/* 左侧：快速生成（独立滚动） */}
+          <div className="w-full lg:w-1/2 flex flex-col overflow-y-auto">
             <QuickGenerate />
-            <VoiceGenerator script={script} />
           </div>
 
-          <ScriptPreview />
-          <AudioPlayer audioUrl={audioUrl} title={currentBroadcast?.title} />
+          {/* 右侧：语音生成 + 稿件预览 + 音频播放 */}
+          <div className="w-full lg:w-1/2 space-y-6 overflow-y-auto">
+            <VoiceGenerator script={script} />
+            <ScriptPreview />
+            <AudioPlayer audioUrl={audioUrl} title={currentBroadcast?.title} />
+          </div>
         </div>
       </main>
     </div>

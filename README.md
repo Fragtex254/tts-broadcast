@@ -79,17 +79,27 @@ NODE_ENV=development
 
 ### 启动
 
+**一键启动（推荐）：**
+
 ```bash
-# 启动后端（开发模式，支持热重载）
+./start.sh
+```
+
+脚本会自动检查并安装依赖，同时启动前端和后端服务。按 `Ctrl+C` 停止所有服务。
+
+**手动启动：**
+
+```bash
+# 终端 1：启动后端
 cd backend
 npm run dev
 
-# 启动前端（另一个终端）
+# 终端 2：启动前端
 cd frontend
 npm run dev
 ```
 
-前端默认运行在 `http://localhost:5173`，后端运行在 `http://localhost:3001`。
+启动后访问 `http://localhost:5173`，后端运行在 `http://localhost:3001`。
 
 ## API 文档
 
