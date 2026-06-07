@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import useStore from '../store';
@@ -38,7 +39,8 @@ const getStatusBadge = (status: string) => {
 };
 
 export const History: React.FC = () => {
-  const { broadcasts, fetchBroadcasts, currentBroadcast, setCurrentBroadcast, saveBroadcast } = useStore();
+  const { broadcasts, fetchBroadcasts, currentBroadcast, setCurrentBroadcast, saveBroadcast, fetchSegments } = useStore();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -61,6 +63,16 @@ export const History: React.FC = () => {
   useEffect(() => { loadBroadcasts(page); }, [page]);
 
   const handleSelectBroadcast = (broadcast: Broadcast) => setCurrentBroadcast(broadcast);
+  const handleReEdit = async (broadcast: Broadcast, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentBroadcast(broadcast);
+    try {
+      await fetchSegments(broadcast.id);
+    } catch {
+      // Even if segments fail to load, still navigate
+    }
+    navigate('/editor');
+  };
   const getAudioUrl = (broadcast: Broadcast): string | null => broadcast.audio_path ? `/api/broadcast/${broadcast.id}/audio` : null;
   const totalPages = Math.ceil(total / limit);
 
@@ -94,7 +106,7 @@ export const History: React.FC = () => {
             {!isLoading && !error && broadcasts.length === 0 && (
               <div className="p-12 text-center animate-fade-in">
                 <p className="font-display italic text-[16px] text-ink-soft/40 mb-1">暂无播报记录</p>
-                <p className="font-body text-[12px] text-ink-soft/30">前往控制台生成第一条播报</p>
+                <p className="font-body text-[12px] text-ink-soft/30">前往信源收集生成第一条播报</p>
               </div>
             )}
 
@@ -118,6 +130,12 @@ export const History: React.FC = () => {
                   <span className="font-body text-[12px] text-ink-soft/60 min-w-[80px]">{formatDate(broadcast.created_at)}</span>
                   <span className="font-body text-[12px] text-ink-soft/60 min-w-[50px]">{formatDuration(broadcast.duration)}</span>
                   {getStatusBadge(broadcast.status)}
+                  <button
+                    onClick={(e) => handleReEdit(broadcast, e)}
+                    className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none whitespace-nowrap"
+                  >
+                    ✏️ 重新编辑
+                  </button>
                 </div>
               );
             })}
