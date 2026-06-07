@@ -43,7 +43,8 @@ frontend/src/
 ├── App.tsx                     # 路由定义 + 全局布局
 ├── index.css                   # 设计 token + 全局样式 + 动画
 ├── pages/                      # 路由页面（一个文件一个页面）
-│   ├── Dashboard.tsx
+│   ├── SourceCollection.tsx
+│   ├── ScriptEditor.tsx
 │   ├── History.tsx
 │   └── Settings.tsx
 ├── components/
@@ -245,7 +246,7 @@ className="bg-white/60 rounded-2xl p-4 border border-card-border"
 
 | 类型 | 位置 | 特征 | 示例 |
 |------|------|------|------|
-| 页面组件 | `pages/` | 负责数据获取编排，组合子组件 | `Dashboard.tsx` |
+| 页面组件 | `pages/` | 负责数据获取编排，组合子组件 | `SourceCollection.tsx` |
 | 布局组件 | `components/Layout/` | 跨页面复用的布局骨架 | `Sidebar.tsx`, `Header.tsx` |
 | 功能组件 | `components/{Feature}/` | 独立功能单元，通过 props 接收数据 | `QuickGenerate.tsx` |
 
@@ -372,13 +373,12 @@ export interface AppState {
 
 ```tsx
 // 页面组件：获取多个 store 值
-export const Dashboard: React.FC = () => {
-  const { script, currentBroadcast, segments, saveBroadcast } = useStore();
+export const SourceCollection: React.FC = () => {
+  const { fetchNewsItems, items, ... } = useStore();
   // 编排逻辑...
   return (
     <div>
       <QuickGenerate onItemsLoaded={...} />
-      <ScriptPreview />  {/* ScriptPreview 内部自己调 useStore */}
     </div>
   );
 };
@@ -449,7 +449,8 @@ const handleFetch = async () => {
 
 | 路径 | 组件 | 说明 |
 |------|------|------|
-| `/` | `Dashboard` | 控制台（默认页） |
+| `/` | `SourceCollection` | 信源收集（默认页） |
+| `/editor` | `ScriptEditor` | 口播稿编辑 |
 | `/history` | `History` | 播报历史 |
 | `/settings` | `Settings` | 系统设置 |
 
@@ -572,7 +573,7 @@ const handleFetch = async () => {
 | 类型 | 规范 | 示例 |
 |------|------|------|
 | 组件文件 | PascalCase `.tsx` | `QuickGenerate.tsx` |
-| 页面文件 | PascalCase `.tsx` | `Dashboard.tsx` |
+| 页面文件 | PascalCase `.tsx` | `SourceCollection.tsx` |
 | 工具/service 文件 | camelCase `.ts` | `api.ts` |
 | 组件名 | PascalCase | `ScriptPreview`, `AudioPlayer` |
 | Hook/函数 | camelCase | `useStore`, `handleFetch` |
@@ -588,7 +589,7 @@ const handleFetch = async () => {
 文件路径                              → 组件名
 components/Dashboard/AudioPlayer.tsx → AudioPlayer
 components/Layout/Sidebar.tsx        → Sidebar
-pages/Dashboard.tsx                  → Dashboard
+pages/SourceCollection.tsx           → SourceCollection
 ```
 
 ---
