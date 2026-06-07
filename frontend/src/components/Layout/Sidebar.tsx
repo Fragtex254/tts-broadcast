@@ -2,7 +2,8 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 
 const navItems = [
-  { path: '/', label: '控制台', icon: '◉' },
+  { path: '/', label: '信源收集', icon: '◉' },
+  { path: '/editor', label: '口播稿编辑', icon: '○' },
   { path: '/history', label: '历史记录', icon: '○' },
   { path: '/settings', label: '设置', icon: '○' },
 ];
@@ -43,7 +44,7 @@ export const Sidebar: React.FC = () => {
 
       <div className="p-4 pt-4 border-t border-card-border">
         <div className="font-display italic text-[13px] text-ink/25 pl-4">
-          v 2.0.0
+          v 3.0.0
         </div>
       </div>
     </aside>
