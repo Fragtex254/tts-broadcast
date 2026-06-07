@@ -1,6 +1,47 @@
 @import "tailwindcss";
 
-/* === SOFT EDITORIAL DESIGN TOKENS === */
+/* === TAILWIND v4 DESIGN TOKEN REGISTRATION === */
+@theme {
+  /* Colors */
+  --color-paper: #F2EEDF;
+  --color-paper-2: #ECE6D2;
+  --color-ink: #2A241B;
+  --color-ink-soft: #5C5345;
+  --color-pink: #E1A4C2;
+  --color-lemon: #D6DD63;
+  --color-blush: #E8C9B6;
+  --color-sage: #B7C7A8;
+  --color-lilac: #C9BEDC;
+  --color-card-fill: rgba(255, 255, 255, 0.55);
+  --color-card-border: rgba(42, 36, 27, 0.08);
+  --color-rule-soft: rgba(42, 36, 27, 0.12);
+
+  /* Border Radius */
+  --radius-card: 24px;
+  --radius-pill: 9999px;
+  --radius-btn: 12px;
+  --radius-input: 12px;
+
+  /* Box Shadows */
+  --shadow-card: 0 1px 4px rgba(42, 36, 27, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(42, 36, 27, 0.08);
+  --shadow-btn: 0 1px 3px rgba(42, 36, 27, 0.06);
+
+  /* Font Families */
+  --font-display: 'Cormorant Garamond', 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
+  --font-body: 'Work Sans', 'Yozai', 'Noto Sans SC', sans-serif;
+
+  /* Animations */
+  --animate-fade-in-up: fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  --animate-fade-in-left: fade-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  --animate-fade-in: fade-in 0.3s ease forwards;
+  --animate-breathe: breathe 2.5s ease-in-out infinite;
+  --animate-shake: shake 0.3s ease-in-out;
+  --animate-scale-bounce: scale-bounce 0.3s ease;
+  --animate-waveform-pulse: waveform-pulse 1.5s ease-in-out infinite;
+}
+
+/* === SOFT EDITORIAL DESIGN TOKENS (CSS Custom Properties) === */
 :root {
   --color-paper: #F2EEDF;
   --color-paper-2: #ECE6D2;
