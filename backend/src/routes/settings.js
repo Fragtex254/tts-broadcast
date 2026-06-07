@@ -67,7 +67,9 @@ router.put('/', (req, res) => {
  */
 router.post('/test-key', async (req, res) => {
   try {
-    const isValid = await mimo.testApiKey();
+    const { type } = req.body || {};
+    const mimoType = type === 'tts' ? 'tts' : 'anthropic';
+    const isValid = await mimo.testApiKey(mimoType);
     res.json({ valid: isValid });
   } catch (error) {
     console.error('测试 API Key 失败:', error);

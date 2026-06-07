@@ -65,7 +65,7 @@ export const settingsApi = {
   update: (data: Record<string, any>) =>
     api.put('/settings', data),
 
-  testKey: () => api.post('/settings/test-key'),
+  testKey: (type?: 'llm' | 'tts') => api.post('/settings/test-key', { type }),
 };
 
 // 定时任务 API

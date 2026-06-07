@@ -45,6 +45,7 @@ export interface TodayItem {
 /** 应用设置 */
 export interface Settings {
   mimo_api_key: string;
+  mimo_tts_api_key: string;
   default_voice: string;
   opening_script: string;
   closing_script: string;
@@ -118,7 +119,7 @@ export interface AppState {
   // 设置操作
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;
-  testApiKey: () => Promise<{ valid: boolean; error?: string }>;
+  testApiKey: (type?: 'llm' | 'tts') => Promise<{ valid: boolean; error?: string }>;
 
   // 定时任务操作
   fetchSchedules: () => Promise<void>;
@@ -132,6 +133,7 @@ export interface AppState {
 
 const defaultSettings: Settings = {
   mimo_api_key: '',
+  mimo_tts_api_key: '',
   default_voice: '冰糖',
   opening_script: '大家好，欢迎收听今日 AI 简讯。',
   closing_script: '以上就是今天的 AI 简讯，感谢收听，我们明天再见。',
@@ -393,9 +395,9 @@ export const useStore = create<AppState>((set) => ({
   },
 
   /** 测试 API Key */
-  testApiKey: async () => {
+  testApiKey: async (type?: 'llm' | 'tts') => {
     try {
-      const response = await settingsApi.testKey();
+      const response = await settingsApi.testKey(type);
       return response.data;
     } catch (error) {
       console.error('测试 API Key 失败:', error);

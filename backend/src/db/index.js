@@ -42,6 +42,7 @@ try {
 // 默认设置
 const defaultSettings = {
   mimo_api_key: '',
+  mimo_tts_api_key: '',
   default_voice: '冰糖',
   opening_script: '大家好，欢迎收听今日 AI 简讯。',
   closing_script: '以上就是今天的 AI 简讯，感谢收听，我们明天再见。',
