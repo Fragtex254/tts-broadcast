@@ -3,9 +3,10 @@ import { useStore } from '../../store';
 
 interface QuickGenerateProps {
   onItemsLoaded?: () => void;
+  onRewriteComplete?: () => void;
 }
 
-export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded }) => {
+export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onRewriteComplete }) => {
   const { todayItems, fetchTodayItems, rewriteScript, isRewriting } = useStore();
   const [category, setCategory] = useState<string>('');
   const [count, setCount] = useState<number>(10);
@@ -54,6 +55,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded }) =
     setError(null);
     try {
       await rewriteScript({ items: todayItems });
+      onRewriteComplete?.();
     } catch (err) {
       setError('改写口播稿失败，请稍后重试');
       console.error(err);
