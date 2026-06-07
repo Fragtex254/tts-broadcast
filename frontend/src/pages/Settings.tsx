@@ -50,10 +50,10 @@ export const Settings: React.FC = () => {
     finally { setIsSaving(false); }
   };
 
-  const handleTestKey = async () => {
+  const handleTestKey = async (type: 'llm' | 'tts') => {
     setIsTestingKey(true);
     setTestResult(null);
-    try { setTestResult(await testApiKey()); }
+    try { setTestResult(await testApiKey(type)); }
     catch (e) { setTestResult({ valid: false, error: (e as Error).message }); }
     finally { setIsTestingKey(false); }
   };
@@ -113,29 +113,66 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && (
-            <SectionCard dotColor="bg-pink" title="API Key 设置" index={0}>
-              <div>
-                <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">MiMo API Key</label>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={formData.mimo_api_key}
-                    onChange={(e) => handleChange('mimo_api_key', e.target.value)}
-                    placeholder="请输入 MiMo API Key"
-                    className="flex-1 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
-                  />
-                  <button
-                    onClick={handleTestKey}
-                    disabled={isTestingKey || !formData.mimo_api_key}
-                    className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
-                  >
-                    {isTestingKey ? (
-                      <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
-                    ) : '测试连接'}
-                  </button>
+            <SectionCard dotColor="bg-pink" title="API 配置" index={0}>
+              <div className="space-y-4">
+                {/* LLM API Key */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">LLM API Key</label>
+                    <span className="font-body text-[10px] text-ink-soft/40">用于资讯改写、文本切分</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={formData.mimo_api_key}
+                      onChange={(e) => handleChange('mimo_api_key', e.target.value)}
+                      placeholder="输入 LLM API Key"
+                      className="flex-1 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                    />
+                    <button
+                      onClick={() => handleTestKey('llm')}
+                      disabled={isTestingKey || !formData.mimo_api_key}
+                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
+                    >
+                      {isTestingKey ? (
+                        <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
+                      ) : '测试连接'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* 分隔线 */}
+                <div className="border-t border-dashed border-card-border" />
+
+                {/* TTS API Key */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">TTS API Key</label>
+                    <span className="font-body text-[10px] text-ink-soft/40">用于语音合成</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={formData.mimo_tts_api_key}
+                      onChange={(e) => handleChange('mimo_tts_api_key', e.target.value)}
+                      placeholder="输入 TTS API Key"
+                      className="flex-1 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                    />
+                    <button
+                      onClick={() => handleTestKey('tts')}
+                      disabled={isTestingKey || !formData.mimo_tts_api_key}
+                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
+                    >
+                      {isTestingKey ? (
+                        <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
+                      ) : '测试连接'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 测试结果 */}
                 {testResult && (
-                  <div className={`mt-3 p-3 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
+                  <div className={`p-3 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
                     {testResult.valid ? '✓ API Key 验证成功！' : `✕ 验证失败: ${testResult.error}`}
                   </div>
                 )}
