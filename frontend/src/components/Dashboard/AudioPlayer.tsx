@@ -9,6 +9,16 @@ interface AudioPlayerProps {
   mode?: string | null;
 }
 
+const generateWaveformBars = (count: number) => {
+  const bars: number[] = [];
+  for (let i = 0; i < count; i++) {
+    bars.push(8 + Math.random() * 20);
+  }
+  return bars;
+};
+
+const WAVEFORM_BARS = generateWaveformBars(32);
+
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   audioUrl,
   title = '语音播报',
@@ -26,15 +36,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     const handleLoadedMetadata = () => setDuration(audio.duration);
     const handleEnded = () => setIsPlaying(false);
-
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
-
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -45,12 +52,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !audioUrl) return;
-
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play();
-    }
+    if (isPlaying) { audio.pause(); } else { audio.play(); }
     setIsPlaying(!isPlaying);
   }, [isPlaying, audioUrl]);
 
@@ -85,12 +87,17 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     a.click();
   };
 
+  const progress = duration > 0 ? currentTime / duration : 0;
+
   if (!audioUrl) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">播放器</h3>
-        <div className="bg-gray-700 rounded-lg p-8 flex items-center justify-center">
-          <p className="text-gray-500 text-sm">
+      <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-2 h-2 rounded-full bg-sage" />
+          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">播放器</h3>
+        </div>
+        <div className="bg-white/40 rounded-2xl p-8 flex items-center justify-center border border-card-border">
+          <p className="font-body text-[12px] text-ink-soft/40 animate-fade-in">
             {mode === 'segmented' ? '请先合并所有句子音频' : '生成语音后在此播放'}
           </p>
         </div>
@@ -99,142 +106,78 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">播放器</h3>
+    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-sage" />
+          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">播放器</h3>
+        </div>
+        <div className="flex items-center gap-3">
           {broadcastId && onSave && (
             <button
               onClick={() => onSave(broadcastId)}
-              className={`text-sm transition-colors flex items-center gap-1 ${
-                isSaved
-                  ? 'text-yellow-400 hover:text-yellow-300'
-                  : 'text-gray-400 hover:text-yellow-400'
-              }`}
+              className={`font-body text-[11px] transition-colors flex items-center gap-1 uppercase tracking-wider ${isSaved ? 'text-lemon' : 'text-ink-soft/40 hover:text-lemon'}`}
               title={isSaved ? '取消保存' : '保存此播报'}
             >
-              <svg
-                className="w-4 h-4"
-                fill={isSaved ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                />
+              <svg className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
               </svg>
-              {isSaved ? '已保存' : '保存'}
             </button>
           )}
-          <button
-            onClick={handleDownload}
-            className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
+          <button onClick={handleDownload} className="font-body text-[11px] text-ink-soft/40 hover:text-ink transition-colors flex items-center gap-1 uppercase tracking-wider">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            下载
           </button>
         </div>
       </div>
 
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
-      {/* 播放器主体 */}
-      <div className="bg-gray-700 rounded-lg p-4">
-        {/* 标题 */}
-        <div className="mb-3">
-          <p className="text-white text-sm font-medium truncate">{title}</p>
+      {/* pill 形播放器主体 */}
+      <div className="bg-white/50 rounded-full px-4 py-3 flex items-center gap-3 border border-card-border">
+        <button
+          onClick={togglePlay}
+          className="w-9 h-9 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border"
+        >
+          {isPlaying ? (
+            <svg className="w-4 h-4 text-ink" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+          ) : (
+            <svg className="w-4 h-4 text-ink ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          )}
+        </button>
+
+        {/* 波形可视化 */}
+        <div className="flex-1 flex items-center gap-[2px] h-7 overflow-hidden">
+          {WAVEFORM_BARS.map((height, i) => {
+            const barProgress = i / WAVEFORM_BARS.length;
+            const isPlayed = barProgress <= progress;
+            return (
+              <div
+                key={i}
+                className={`w-[3px] rounded-full transition-all duration-100 ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
+                style={{
+                  height: `${height}px`,
+                  ...(isPlaying && isPlayed ? { animation: `waveform-pulse 1.5s ease-in-out ${i * 0.05}s infinite` } : {}),
+                }}
+              />
+            );
+          })}
         </div>
 
-        {/* 进度条 */}
-        <div className="mb-3">
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeek}
-            className="w-full h-1.5 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-          />
-          <div className="flex justify-between mt-1">
-            <span className="text-xs text-gray-400">
-              {formatTime(currentTime)}
-            </span>
-            <span className="text-xs text-gray-400">
-              {formatTime(duration)}
-            </span>
-          </div>
-        </div>
-
-        {/* 控制区 */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* 播放/暂停按钮 */}
-            <button
-              onClick={togglePlay}
-              className="w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center transition-colors"
-            >
-              {isPlaying ? (
-                <svg
-                  className="w-5 h-5 text-white"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                </svg>
-              ) : (
-                <svg
-                  className="w-5 h-5 text-white ml-0.5"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
-          </div>
-
-          {/* 音量控制 */}
-          <div className="flex items-center gap-2">
-            <svg
-              className="w-4 h-4 text-gray-400"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              {volume === 0 ? (
-                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
-              ) : volume < 0.5 ? (
-                <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
-              ) : (
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-              )}
-            </svg>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={volume}
-              onChange={handleVolumeChange}
-              className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
-          </div>
-        </div>
+        <span className="font-body text-[11px] text-ink-soft/50 min-w-[72px] text-right tabular-nums">
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </span>
       </div>
+
+      <input
+        type="range"
+        min={0}
+        max={duration || 0}
+        value={currentTime}
+        onChange={handleSeek}
+        className="w-full h-0 opacity-0 -mt-3 relative z-10 cursor-pointer"
+      />
     </div>
   );
 };
