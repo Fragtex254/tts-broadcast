@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store';
 import { broadcastApi } from '../../services/api';
 
@@ -49,8 +49,13 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
     });
   }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, updateVoiceConfig]);
 
-  // 切换音色后同步到后端（影响段落重新生成）
+  // 切换音色后同步到后端（影响段落重新生成），跳过首次渲染
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     if (!currentBroadcast) return;
     broadcastApi.updateVoiceConfig(currentBroadcast.id, {
       voiceType,

@@ -176,7 +176,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
             {/* 音频播放（已生成时显示） */}
             {seg.status === 'generated' && seg.audio_path && (
-              <SegmentAudio audioUrl={seg.audio_path} />
+              <SegmentAudio audioUrl={`${seg.audio_path}?t=${seg.updated_at}`} />
             )}
 
             <div className="flex items-center gap-0.5">

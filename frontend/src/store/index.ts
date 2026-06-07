@@ -355,7 +355,7 @@ export const useStore = create<AppState>((set) => ({
       ),
     }));
     try {
-      // 先同步最新音色配置到后端
+      // 先同步最新音色配置到后端（从 store 读取最新值）
       const { voiceConfig } = useStore.getState();
       await broadcastApi.updateVoiceConfig(broadcastId, {
         voiceType: voiceConfig.voiceType,
@@ -363,7 +363,8 @@ export const useStore = create<AppState>((set) => ({
         voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
         voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
         stylePrompt: voiceConfig.stylePrompt || undefined,
-      });
+      }).catch(() => {/* 即使更新失败也继续重新生成 */});
+
       const response = await broadcastApi.regenerateSegment(broadcastId, segId);
       const updated = response.data.segment;
       set((state) => ({
