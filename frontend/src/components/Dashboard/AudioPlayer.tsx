@@ -31,7 +31,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -62,14 +61,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const time = Number(e.target.value);
     audio.currentTime = time;
     setCurrentTime(time);
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const vol = Number(e.target.value);
-    audio.volume = vol;
-    setVolume(vol);
   };
 
   const formatTime = (seconds: number): string => {

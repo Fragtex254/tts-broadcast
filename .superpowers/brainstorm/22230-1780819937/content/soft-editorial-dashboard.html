@@ -1,0 +1,747 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@300;400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #2d2d2d;
+    font-family: 'Work Sans', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .se-app {
+    width: 100%;
+    max-width: 1100px;
+    background: #F2EEDF;
+    border-radius: 28px;
+    overflow: hidden;
+    display: flex;
+    min-height: 640px;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(42,36,27,0.15);
+  }
+
+  /* Grain */
+  .se-app::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 10;
+    mix-blend-mode: multiply;
+  }
+
+  /* Sidebar */
+  .se-sidebar {
+    width: 200px;
+    background: rgba(236,230,210,0.7);
+    border-right: 1px solid rgba(42,36,27,0.1);
+    padding: 28px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+    z-index: 1;
+  }
+
+  .se-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: #2A241B;
+    padding: 0 10px 18px;
+    border-bottom: 1px solid rgba(42,36,27,0.12);
+    margin-bottom: 16px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+
+  .se-logo span {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #5C5345;
+    display: block;
+    margin-top: 6px;
+  }
+
+  .se-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 400;
+    color: #5C5345;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .se-nav-item:hover {
+    color: #2A241B;
+    background: rgba(42,36,27,0.04);
+  }
+
+  .se-nav-item.active {
+    color: #2A241B;
+    background: rgba(255,255,255,0.6);
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(42,36,27,0.06);
+  }
+
+  .se-nav-icon {
+    font-size: 15px;
+    line-height: 1;
+    opacity: 0.6;
+  }
+
+  .se-nav-item.active .se-nav-icon { opacity: 1; }
+
+  .se-sidebar-footer {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid rgba(42,36,27,0.08);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(42,36,27,0.3);
+    padding-left: 14px;
+    font-style: italic;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 13px;
+  }
+
+  /* Main */
+  .se-main {
+    flex: 1;
+    padding: 28px;
+    overflow-y: auto;
+    z-index: 1;
+    position: relative;
+  }
+
+  .se-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(42,36,27,0.1);
+  }
+
+  .se-header h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px;
+    font-weight: 500;
+    color: #2A241B;
+    letter-spacing: -0.015em;
+    line-height: 0.95;
+  }
+
+  .se-header-sub {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #5C5345;
+    margin-top: 6px;
+    font-weight: 400;
+  }
+
+  .se-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    background: rgba(183,199,168,0.25);
+    font-size: 11px;
+    font-weight: 500;
+    color: #5C5345;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .se-status-dot {
+    width: 5px;
+    height: 5px;
+    background: #B7C7A8;
+    border-radius: 50%;
+    animation: se-breathe 2.5s infinite;
+  }
+
+  @keyframes se-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Grid */
+  .se-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* Card */
+  .se-card {
+    background: rgba(255,255,255,0.55);
+    border-radius: 24px;
+    padding: 22px;
+    box-shadow: 0 1px 4px rgba(42,36,27,0.04);
+    backdrop-filter: blur(8px);
+  }
+
+  .se-card-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+    font-weight: 500;
+    font-style: italic;
+    color: #5C5345;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .se-card-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Config row */
+  .se-config-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .se-select {
+    flex: 1;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(42,36,27,0.12);
+    border-radius: 12px;
+    padding: 9px 14px;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: #2A241B;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .se-btn {
+    border: none;
+    border-radius: 12px;
+    padding: 9px 20px;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(42,36,27,0.06);
+    white-space: nowrap;
+  }
+
+  .se-btn:active {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
+
+  .se-btn-lemon { background: #D6DD63; color: #2A241B; }
+  .se-btn-pink { background: #E1A4C2; color: #2A241B; }
+  .se-btn-sage { background: #B7C7A8; color: #2A241B; }
+  .se-btn-lilac { background: #C9BEDC; color: #2A241B; }
+  .se-btn-full { width: 100%; text-align: center; }
+
+  /* News items */
+  .se-news-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(42,36,27,0.06);
+    align-items: flex-start;
+  }
+
+  .se-news-item:last-child { border-bottom: none; }
+
+  .se-news-num {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 500;
+    font-style: italic;
+    color: #E1A4C2;
+    min-width: 26px;
+    line-height: 1.1;
+  }
+
+  .se-news-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #2A241B;
+    line-height: 1.35;
+  }
+
+  .se-news-cat {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 10px;
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #2A241B;
+  }
+
+  .cat-models { background: rgba(214,221,99,0.3); }
+  .cat-industry { background: rgba(232,201,182,0.4); }
+
+  /* Script area */
+  .se-script-area {
+    background: rgba(255,255,255,0.6);
+    border-radius: 18px;
+    padding: 18px;
+    font-size: 13px;
+    color: #2A241B;
+    line-height: 1.9;
+    min-height: 110px;
+    border: 1px solid rgba(42,36,27,0.06);
+  }
+
+  .se-script-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(42,36,27,0.35);
+  }
+
+  /* Voice grid */
+  .se-voice-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .se-voice-card {
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(42,36,27,0.08);
+    border-radius: 16px;
+    padding: 10px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .se-voice-card:hover {
+    background: rgba(255,255,255,0.7);
+    border-color: rgba(42,36,27,0.15);
+  }
+
+  .se-voice-card.selected {
+    background: rgba(214,221,99,0.25);
+    border-color: rgba(42,36,27,0.2);
+    box-shadow: 0 2px 6px rgba(42,36,27,0.06);
+  }
+
+  .se-voice-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 500;
+    font-size: 15px;
+    color: #2A241B;
+  }
+
+  .se-voice-id {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(42,36,27,0.35);
+    margin-top: 2px;
+  }
+
+  /* Audio player */
+  .se-player {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 20px;
+    border: 1px solid rgba(42,36,27,0.06);
+  }
+
+  .se-play-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(225,164,194,0.25);
+    border: 1px solid rgba(42,36,27,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    flex-shrink: 0;
+    color: #2A241B;
+    transition: all 0.2s;
+  }
+
+  .se-play-btn:hover {
+    background: rgba(225,164,194,0.4);
+  }
+
+  .se-waveform {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 28px;
+  }
+
+  .se-wave-bar {
+    width: 3px;
+    border-radius: 4px;
+    transition: height 0.1s;
+  }
+
+  .se-wave-bar.played { background: #E1A4C2; }
+  .se-wave-bar.unplayed { background: rgba(42,36,27,0.1); }
+
+  .se-time {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(42,36,27,0.45);
+    min-width: 80px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Segment editor */
+  .se-segment {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.45);
+    border-radius: 14px;
+    border: 1px solid rgba(42,36,27,0.06);
+    margin-bottom: 8px;
+  }
+
+  .se-segment-idx {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 500;
+    font-style: italic;
+    color: #C9BEDC;
+    min-width: 22px;
+  }
+
+  .se-segment-text {
+    flex: 1;
+    font-size: 12px;
+    color: #2A241B;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+  }
+
+  .se-segment-status {
+    font-size: 9px;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #2A241B;
+  }
+
+  .se-segment-status.done { background: rgba(183,199,168,0.3); }
+  .se-segment-status.pending { background: rgba(214,221,99,0.25); }
+
+  .se-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  /* Palette */
+  .palette-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .palette-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .palette-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+  }
+
+  .palette-label {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.04em;
+  }
+</style>
+
+<h2>Dashboard 全貌 — Soft Editorial 风格</h2>
+<p class="subtitle">温暖杂志感 · Cormorant Garamond 衬线标题 · 柔和粉彩色系 · 文学笔记本气质</p>
+
+<div class="mockup">
+  <div class="mockup-header">📡 TTS Broadcast — Soft Editorial Design System</div>
+  <div class="mockup-body" style="padding: 0; background: #2d2d2d;">
+    <div class="se-app">
+      <!-- Sidebar -->
+      <div class="se-sidebar">
+        <div class="se-logo">
+          AI 简讯播报
+          <span>每日资讯语音播报</span>
+        </div>
+        <div class="se-nav-item active">
+          <span class="se-nav-icon">◉</span> 控制台
+        </div>
+        <div class="se-nav-item">
+          <span class="se-nav-icon">○</span> 历史记录
+        </div>
+        <div class="se-nav-item">
+          <span class="se-nav-icon">○</span> 设置
+        </div>
+        <div class="se-sidebar-footer">v 2.0.0</div>
+      </div>
+
+      <!-- Main -->
+      <div class="se-main">
+        <div class="se-header">
+          <div>
+            <h1>控制台</h1>
+            <div class="se-header-sub">生成今日 AI 简讯播报</div>
+          </div>
+          <div class="se-status">
+            <span class="se-status-dot"></span>
+            系统在线
+          </div>
+        </div>
+
+        <div class="se-grid">
+          <!-- Left column -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- News fetch -->
+            <div class="se-card">
+              <div class="se-card-title">
+                <span class="se-card-dot" style="background: #D6DD63;"></span>
+                资讯获取
+              </div>
+              <div class="se-config-row">
+                <select class="se-select"><option>全部分类</option></select>
+                <select class="se-select" style="max-width: 90px;"><option>10 条</option></select>
+                <button class="se-btn se-btn-lemon">获取</button>
+              </div>
+              <div class="se-news-item">
+                <span class="se-news-num">01</span>
+                <div>
+                  <div class="se-news-title">OpenAI 发布 GPT-5 多模态模型</div>
+                  <span class="se-news-cat cat-models">AI 模型</span>
+                </div>
+              </div>
+              <div class="se-news-item">
+                <span class="se-news-num">02</span>
+                <div>
+                  <div class="se-news-title">Google DeepMind 推出 Gemini 2.5</div>
+                  <span class="se-news-cat cat-models">AI 模型</span>
+                </div>
+              </div>
+              <div class="se-news-item">
+                <span class="se-news-num">03</span>
+                <div>
+                  <div class="se-news-title">Anthropic Claude 获企业级安全认证</div>
+                  <span class="se-news-cat cat-industry">行业动态</span>
+                </div>
+              </div>
+              <div style="margin-top: 10px;">
+                <button class="se-btn se-btn-pink se-btn-full">✦ 一键改写口播稿</button>
+              </div>
+            </div>
+
+            <!-- Segment editor -->
+            <div class="se-card">
+              <div class="se-card-title">
+                <span class="se-card-dot" style="background: #C9BEDC;"></span>
+                段落编辑器
+              </div>
+              <div class="se-segment">
+                <span class="se-segment-idx">01</span>
+                <span class="se-segment-text">各位听众好，欢迎收听今日 AI 简讯播报...</span>
+                <span class="se-segment-status done">✓ 就绪</span>
+              </div>
+              <div class="se-segment">
+                <span class="se-segment-idx">02</span>
+                <span class="se-segment-text">首先来看第一条重磅消息，OpenAI 发布了 GPT-5...</span>
+                <span class="se-segment-status done">✓ 就绪</span>
+              </div>
+              <div class="se-segment">
+                <span class="se-segment-idx">03</span>
+                <span class="se-segment-text">Google DeepMind 紧随其后，推出 Gemini 2.5...</span>
+                <span class="se-segment-status pending">◌ 等待中</span>
+              </div>
+              <div class="se-actions">
+                <button class="se-btn se-btn-sage" style="flex:1; text-align:center;">全部生成</button>
+                <button class="se-btn se-btn-lilac" style="flex:1; text-align:center;">合并音频</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right column -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Script preview -->
+            <div class="se-card">
+              <div class="se-card-title">
+                <span class="se-card-dot" style="background: #E1A4C2;"></span>
+                口播稿预览
+              </div>
+              <div class="se-script-area">
+                各位听众好，欢迎收听今日 AI 简讯播报。今天为大家带来四条重要资讯。
+
+                首先来看第一条重磅消息，OpenAI 正式发布了 GPT-5 多模态大模型。这款新模型在推理能力、多语言理解和代码生成方面均取得了显著突破...
+              </div>
+              <div class="se-script-meta">
+                <span>1,247 字</span>
+                <span>≈ 5 分 12 秒</span>
+              </div>
+            </div>
+
+            <!-- Voice selector -->
+            <div class="se-card">
+              <div class="se-card-title">
+                <span class="se-card-dot" style="background: #E8C9B6;"></span>
+                音色选择
+              </div>
+              <div class="se-voice-grid">
+                <div class="se-voice-card">
+                  <div class="se-voice-name">冰糖</div>
+                  <div class="se-voice-id">ICE_SUGAR</div>
+                </div>
+                <div class="se-voice-card selected">
+                  <div class="se-voice-name">蜜糖</div>
+                  <div class="se-voice-id">HONEY</div>
+                </div>
+                <div class="se-voice-card">
+                  <div class="se-voice-name">清风</div>
+                  <div class="se-voice-id">BREEZE</div>
+                </div>
+                <div class="se-voice-card">
+                  <div class="se-voice-name">茉莉</div>
+                  <div class="se-voice-id">JASMINE</div>
+                </div>
+                <div class="se-voice-card">
+                  <div class="se-voice-name">苏打</div>
+                  <div class="se-voice-id">SODA</div>
+                </div>
+                <div class="se-voice-card">
+                  <div class="se-voice-name">白桦</div>
+                  <div class="se-voice-id">BIRCH</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Audio player -->
+            <div class="se-card">
+              <div class="se-card-title">
+                <span class="se-card-dot" style="background: #B7C7A8;"></span>
+                音频播放器
+              </div>
+              <div class="se-player">
+                <div class="se-play-btn">▶</div>
+                <div class="se-waveform">
+                  <div class="se-wave-bar played" style="height: 8px;"></div>
+                  <div class="se-wave-bar played" style="height: 14px;"></div>
+                  <div class="se-wave-bar played" style="height: 20px;"></div>
+                  <div class="se-wave-bar played" style="height: 12px;"></div>
+                  <div class="se-wave-bar played" style="height: 26px;"></div>
+                  <div class="se-wave-bar played" style="height: 18px;"></div>
+                  <div class="se-wave-bar played" style="height: 22px;"></div>
+                  <div class="se-wave-bar played" style="height: 10px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 16px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 24px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 14px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 20px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 8px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 18px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 28px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 12px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 16px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 22px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 10px;"></div>
+                  <div class="se-wave-bar unplayed" style="height: 20px;"></div>
+                </div>
+                <div class="se-time">01:24 / 05:12</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Design System -->
+<div style="margin-top: 20px;">
+  <h3>配色方案 — Soft Editorial Palette</h3>
+  <div class="palette-row">
+    <div class="palette-chip"><div class="palette-dot" style="background: #F2EEDF;"></div><span class="palette-label">纸色 #F2EEDF</span></div>
+    <div class="palette-chip"><div class="palette-dot" style="background: #ECE6D2;"></div><span class="palette-label">纸色-2 #ECE6D2</span></div>
+    <div class="palette-chip"><div class="palette-dot" style="background: #2A241B;"></div><span class="palette-label">墨色 #2A241B</span></div>
+    <div class="palette-chip"><div class="palette-dot" style="background: #E1A4C2;"></div><span class="palette-label">玫瑰粉 #E1A4C2</span></div>
+    <div class="palette-chip"><div class="palette-dot" style="background: #D6DD63;"></div><span class="palette-label">柠檬绿 #D6DD63</span></div>
+    <div class="palette-chip"><div class="palette-dot" style="background: #E8C9B6;"></div><span class="palette-label">蜜桃腮红 #E8C9B6</span></div>
+    <div class="palette-chip"><div class="palette-dot" style="background: #B7C7A8;"></div><span class="palette-label">鼠尾草 #B7C7A8</span></div>
+    <div class="palette-chip"><div class="palette-dot" style="background: #C9BEDC;"></div><span class="palette-label">丁香紫 #C9BEDC</span></div>
+  </div>
+</div>
+
+<div style="margin-top: 16px;">
+  <h3>字体方案</h3>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;">
+    <div class="palette-chip"><span style="font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 500; color: #F2EEDF; font-style: italic;">Cormorant Garamond</span><span class="palette-label" style="color: rgba(255,255,255,0.5);">标题 · 数字 · 装饰</span></div>
+    <div class="palette-chip"><span style="font-family: 'Work Sans', sans-serif; font-size: 14px; font-weight: 400; color: #F2EEDF;">Work Sans</span><span class="palette-label" style="color: rgba(255,255,255,0.5);">正文 · 按钮 · 标签</span></div>
+  </div>
+</div>
+
+<div style="margin-top: 16px;">
+  <h3>设计签名</h3>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
+    <div class="palette-chip"><span class="palette-label" style="color: #F2EEDF;">▢ 毛玻璃半透明卡片 (rgba + backdrop-filter)</span></div>
+    <div class="palette-chip"><span class="palette-label" style="color: #F2EEDF;">▢ 24px 大圆角</span></div>
+    <div class="palette-chip"><span class="palette-label" style="color: #F2EEDF;">▢ 极轻阴影 + 1px 细线</span></div>
+    <div class="palette-chip"><span class="palette-label" style="color: #F2EEDF;">▢ 颗粒纹理叠加</span></div>
+    <div class="palette-chip"><span class="palette-label" style="color: #F2EEDF;">▢ 斜体衬线点缀</span></div>
+  </div>
+</div>

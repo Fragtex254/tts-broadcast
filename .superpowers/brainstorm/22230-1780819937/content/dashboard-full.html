@@ -1,0 +1,741 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  .dashboard-mockup {
+    font-family: 'Rajdhani', sans-serif;
+    background: #0a0a0f;
+    min-height: 680px;
+    display: flex;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(0, 240, 255, 0.1);
+    position: relative;
+  }
+
+  /* Background grid pattern */
+  .dashboard-mockup::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Sidebar */
+  .db-sidebar {
+    width: 220px;
+    background: rgba(10, 10, 20, 0.95);
+    border-right: 1px solid rgba(0, 240, 255, 0.15);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  .db-logo {
+    padding: 0 20px 24px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+    margin-bottom: 16px;
+  }
+
+  .db-logo h2 {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: #00f0ff;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin: 0;
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  }
+
+  .db-logo p {
+    font-size: 11px;
+    color: rgba(0, 240, 255, 0.4);
+    margin: 4px 0 0;
+    letter-spacing: 1px;
+  }
+
+  .db-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+
+  .db-nav-item:hover {
+    color: rgba(0, 240, 255, 0.7);
+    background: rgba(0, 240, 255, 0.03);
+  }
+
+  .db-nav-item.active {
+    color: #00f0ff;
+    border-left-color: #00f0ff;
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.08), transparent);
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+  }
+
+  .db-nav-icon {
+    width: 18px;
+    text-align: center;
+    font-size: 15px;
+  }
+
+  /* Main content */
+  .db-main {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    z-index: 1;
+    position: relative;
+  }
+
+  .db-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+  }
+
+  .db-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+    letter-spacing: 1px;
+  }
+
+  .db-header .db-subtitle {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 2px;
+  }
+
+  .db-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: #00f0ff;
+    letter-spacing: 1px;
+  }
+
+  .db-status-dot {
+    width: 6px;
+    height: 6px;
+    background: #00f0ff;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #00f0ff;
+    animation: pulse-dot 2s infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Two column layout */
+  .db-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    position: relative;
+  }
+
+  /* Card base */
+  .db-card {
+    background: rgba(15, 15, 30, 0.8);
+    border: 1px solid rgba(0, 240, 255, 0.1);
+    border-radius: 8px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .db-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.3), transparent);
+  }
+
+  .db-card-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(0, 240, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .db-card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.15), transparent);
+  }
+
+  /* Quick Generate panel */
+  .db-config-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .db-select {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 4px;
+    padding: 8px 10px;
+    color: rgba(255, 255, 255, 0.8);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    outline: none;
+  }
+
+  .db-btn-primary {
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(0, 240, 255, 0.05));
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    color: #00f0ff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .db-btn-primary:hover {
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.25), rgba(0, 240, 255, 0.1));
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+  }
+
+  .db-btn-accent {
+    background: linear-gradient(135deg, rgba(255, 0, 100, 0.15), rgba(255, 0, 100, 0.05));
+    border: 1px solid rgba(255, 0, 100, 0.3);
+    color: #ff0064;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .db-btn-accent:hover {
+    box-shadow: 0 0 15px rgba(255, 0, 100, 0.2);
+  }
+
+  /* News items */
+  .db-news-item {
+    display: flex;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .db-news-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(0, 240, 255, 0.4);
+    min-width: 24px;
+    padding-top: 2px;
+  }
+
+  .db-news-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.3;
+  }
+
+  .db-news-cat {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(255, 0, 100, 0.6);
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  /* Script preview */
+  .db-script-area {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 240, 255, 0.08);
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.8;
+    min-height: 100px;
+    font-family: 'Rajdhani', sans-serif;
+  }
+
+  .db-script-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(0, 240, 255, 0.4);
+    letter-spacing: 1px;
+  }
+
+  /* Voice selector */
+  .db-voice-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .db-voice-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    padding: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .db-voice-card.selected {
+    border-color: rgba(0, 240, 255, 0.4);
+    background: rgba(0, 240, 255, 0.05);
+    color: #00f0ff;
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+  }
+
+  .db-voice-name {
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .db-voice-id {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: rgba(0, 240, 255, 0.3);
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+  }
+
+  /* Audio player */
+  .db-player {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 240, 255, 0.08);
+    border-radius: 4px;
+  }
+
+  .db-play-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    color: #00f0ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .db-waveform {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 32px;
+  }
+
+  .db-wave-bar {
+    width: 3px;
+    background: rgba(0, 240, 255, 0.3);
+    border-radius: 1px;
+    transition: height 0.1s;
+  }
+
+  .db-wave-bar.active {
+    background: #00f0ff;
+    box-shadow: 0 0 4px rgba(0, 240, 255, 0.4);
+  }
+
+  .db-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(0, 240, 255, 0.5);
+    min-width: 80px;
+    text-align: right;
+  }
+
+  /* Segment editor */
+  .db-segment {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    border-left: 2px solid rgba(0, 240, 255, 0.2);
+  }
+
+  .db-segment-idx {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(0, 240, 255, 0.4);
+    min-width: 20px;
+  }
+
+  .db-segment-text {
+    flex: 1;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .db-segment-status {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  .db-segment-status.done {
+    background: rgba(0, 255, 136, 0.1);
+    color: #00ff88;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+  }
+
+  .db-segment-status.pending {
+    background: rgba(255, 200, 0, 0.08);
+    color: rgba(255, 200, 0, 0.7);
+    border: 1px solid rgba(255, 200, 0, 0.15);
+  }
+
+  .db-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  /* Color palette ref */
+  .palette-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .palette-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .palette-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .palette-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.5px;
+  }
+</style>
+
+<h2>Dashboard 全貌预览</h2>
+<p class="subtitle">Cyberpunk Studio 风格 · TTS Broadcast 控制台</p>
+
+<div class="mockup">
+  <div class="mockup-header">📡 http://localhost:5173 — TTS Broadcast Dashboard</div>
+  <div class="mockup-body" style="padding: 0;">
+    <div class="dashboard-mockup">
+      <!-- Sidebar -->
+      <div class="db-sidebar">
+        <div class="db-logo">
+          <h2>AI · BROADCAST</h2>
+          <p>每日 AI 资讯播报系统</p>
+        </div>
+        <div class="db-nav-item active">
+          <span class="db-nav-icon">◈</span> 控制台
+        </div>
+        <div class="db-nav-item">
+          <span class="db-nav-icon">◇</span> 历史记录
+        </div>
+        <div class="db-nav-item">
+          <span class="db-nav-icon">◆</span> 设置
+        </div>
+        <div style="flex:1"></div>
+        <div style="padding: 0 20px; font-family: 'Space Mono', monospace; font-size: 10px; color: rgba(0,240,255,0.2); letter-spacing: 1px;">
+          SYS::v2.0.0
+        </div>
+      </div>
+
+      <!-- Main -->
+      <div class="db-main">
+        <div class="db-header">
+          <div>
+            <h1>控制台</h1>
+            <div class="db-subtitle">生成今日 AI 简讯播报</div>
+          </div>
+          <div class="db-status-badge">
+            <span class="db-status-dot"></span>
+            SYSTEM ONLINE
+          </div>
+        </div>
+
+        <div class="db-grid">
+          <!-- Left: Quick Generate -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="db-card">
+              <div class="db-card-title">◈ 资讯获取</div>
+              <div class="db-config-row">
+                <select class="db-select">
+                  <option>全部分类</option>
+                </select>
+                <select class="db-select" style="max-width: 80px;">
+                  <option>10 条</option>
+                </select>
+                <button class="db-btn-primary">获取资讯</button>
+              </div>
+              <div class="db-news-item">
+                <span class="db-news-num">01</span>
+                <div>
+                  <div class="db-news-title">OpenAI 发布 GPT-5 多模态模型</div>
+                  <div class="db-news-cat">AI_MODELS</div>
+                </div>
+              </div>
+              <div class="db-news-item">
+                <span class="db-news-num">02</span>
+                <div>
+                  <div class="db-news-title">Google DeepMind 推出 Gemini 2.5</div>
+                  <div class="db-news-cat">AI_MODELS</div>
+                </div>
+              </div>
+              <div class="db-news-item">
+                <span class="db-news-num">03</span>
+                <div>
+                  <div class="db-news-title">Anthropic Claude 获企业级安全认证</div>
+                  <div class="db-news-cat">INDUSTRY</div>
+                </div>
+              </div>
+              <div class="db-news-item">
+                <span class="db-news-num">04</span>
+                <div>
+                  <div class="db-news-title">Meta 开源 Llama 4 架构细节</div>
+                  <div class="db-news-cat">AI_MODELS</div>
+                </div>
+              </div>
+              <div style="margin-top: 8px;">
+                <button class="db-btn-accent" style="width: 100%; text-align: center;">▸ 一键改写口播稿</button>
+              </div>
+            </div>
+
+            <!-- Segment Editor -->
+            <div class="db-card">
+              <div class="db-card-title">◇ 段落编辑器</div>
+              <div class="db-segment">
+                <span class="db-segment-idx">01</span>
+                <span class="db-segment-text">各位听众好，欢迎收听今日 AI 简讯播报...</span>
+                <span class="db-segment-status done">✓ READY</span>
+              </div>
+              <div class="db-segment">
+                <span class="db-segment-idx">02</span>
+                <span class="db-segment-text">首先来看第一条重磅消息，OpenAI 发布了 GPT-5...</span>
+                <span class="db-segment-status done">✓ READY</span>
+              </div>
+              <div class="db-segment">
+                <span class="db-segment-idx">03</span>
+                <span class="db-segment-text">Google DeepMind 紧随其后，推出 Gemini 2.5...</span>
+                <span class="db-segment-status pending">◌ PENDING</span>
+              </div>
+              <div class="db-actions">
+                <button class="db-btn-primary" style="flex:1; text-align: center;">全部生成</button>
+                <button class="db-btn-accent" style="flex:1; text-align: center;">合并音频</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Script + Voice + Player -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="db-card">
+              <div class="db-card-title">◈ 口播稿预览</div>
+              <div class="db-script-area">
+                各位听众好，欢迎收听今日 AI 简讯播报。今天为大家带来四条重要资讯。
+
+                首先来看第一条重磅消息，OpenAI 正式发布了 GPT-5 多模态大模型。这款新模型在推理能力、多语言理解和代码生成方面均取得了显著突破...
+              </div>
+              <div class="db-script-meta">
+                <span>1,247 字</span>
+                <span>≈ 5 分 12 秒</span>
+              </div>
+            </div>
+
+            <!-- Voice Selector -->
+            <div class="db-card">
+              <div class="db-card-title">◆ 音色选择</div>
+              <div class="db-voice-grid">
+                <div class="db-voice-card">
+                  <div class="db-voice-name">冰糖</div>
+                  <div class="db-voice-id">ICE_SUGAR</div>
+                </div>
+                <div class="db-voice-card selected">
+                  <div class="db-voice-name">蜜糖</div>
+                  <div class="db-voice-id">HONEY</div>
+                </div>
+                <div class="db-voice-card">
+                  <div class="db-voice-name">清风</div>
+                  <div class="db-voice-id">BREEZE</div>
+                </div>
+                <div class="db-voice-card">
+                  <div class="db-voice-name">茉莉</div>
+                  <div class="db-voice-id">JASMINE</div>
+                </div>
+                <div class="db-voice-card">
+                  <div class="db-voice-name">苏打</div>
+                  <div class="db-voice-id">SODA</div>
+                </div>
+                <div class="db-voice-card">
+                  <div class="db-voice-name">白桦</div>
+                  <div class="db-voice-id">BIRCH</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Audio Player -->
+            <div class="db-card">
+              <div class="db-card-title">◈ 音频播放器</div>
+              <div class="db-player">
+                <div class="db-play-btn">▶</div>
+                <div class="db-waveform">
+                  <div class="db-wave-bar active" style="height: 8px;"></div>
+                  <div class="db-wave-bar active" style="height: 14px;"></div>
+                  <div class="db-wave-bar active" style="height: 20px;"></div>
+                  <div class="db-wave-bar active" style="height: 12px;"></div>
+                  <div class="db-wave-bar active" style="height: 26px;"></div>
+                  <div class="db-wave-bar active" style="height: 18px;"></div>
+                  <div class="db-wave-bar active" style="height: 22px;"></div>
+                  <div class="db-wave-bar active" style="height: 10px;"></div>
+                  <div class="db-wave-bar" style="height: 16px;"></div>
+                  <div class="db-wave-bar" style="height: 24px;"></div>
+                  <div class="db-wave-bar" style="height: 14px;"></div>
+                  <div class="db-wave-bar" style="height: 20px;"></div>
+                  <div class="db-wave-bar" style="height: 8px;"></div>
+                  <div class="db-wave-bar" style="height: 18px;"></div>
+                  <div class="db-wave-bar" style="height: 28px;"></div>
+                  <div class="db-wave-bar" style="height: 12px;"></div>
+                  <div class="db-wave-bar" style="height: 16px;"></div>
+                  <div class="db-wave-bar" style="height: 22px;"></div>
+                  <div class="db-wave-bar" style="height: 10px;"></div>
+                  <div class="db-wave-bar" style="height: 20px;"></div>
+                  <div class="db-wave-bar" style="height: 14px;"></div>
+                  <div class="db-wave-bar" style="height: 26px;"></div>
+                  <div class="db-wave-bar" style="height: 8px;"></div>
+                  <div class="db-wave-bar" style="height: 18px;"></div>
+                </div>
+                <div class="db-time">01:24 / 05:12</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Color Palette -->
+<div style="margin-top: 16px;">
+  <h3>配色方案</h3>
+  <div class="palette-row">
+    <div class="palette-chip">
+      <div class="palette-dot" style="background: #0a0a0f;"></div>
+      <span class="palette-label">背景 #0a0a0f</span>
+    </div>
+    <div class="palette-chip">
+      <div class="palette-dot" style="background: #0f0f1e;"></div>
+      <span class="palette-label">卡片 #0f0f1e</span>
+    </div>
+    <div class="palette-chip">
+      <div class="palette-dot" style="background: #00f0ff;"></div>
+      <span class="palette-label">主色 #00f0ff</span>
+    </div>
+    <div class="palette-chip">
+      <div class="palette-dot" style="background: #ff0064;"></div>
+      <span class="palette-label">强调 #ff0064</span>
+    </div>
+    <div class="palette-chip">
+      <div class="palette-dot" style="background: #00ff88;"></div>
+      <span class="palette-label">成功 #00ff88</span>
+    </div>
+    <div class="palette-chip">
+      <div class="palette-dot" style="background: #ffc800;"></div>
+      <span class="palette-label">警告 #ffc800</span>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 16px;">
+  <h3>字体方案</h3>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+    <div class="palette-chip">
+      <span style="font-family: 'Space Mono', monospace; font-size: 13px; color: #00f0ff;">Space Mono</span>
+      <span class="palette-label">标题 · 数据 · 标签</span>
+    </div>
+    <div class="palette-chip">
+      <span style="font-family: 'Rajdhani', sans-serif; font-size: 13px; color: rgba(255,255,255,0.8);">Rajdhani</span>
+      <span class="palette-label">正文 · 按钮 · 导航</span>
+    </div>
+  </div>
+</div>
