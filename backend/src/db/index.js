@@ -18,6 +18,9 @@ const db = new Database(DB_PATH);
 // 启用 WAL 模式提高性能
 db.pragma('journal_mode = WAL');
 
+// 启用外键约束（SQLite 默认关闭）
+db.pragma('foreign_keys = ON');
+
 // 初始化数据库表
 const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
 db.exec(schema);

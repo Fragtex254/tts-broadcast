@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   source_items TEXT,
   status TEXT DEFAULT 'pending',
   saved BOOLEAN DEFAULT 0,
-  mode TEXT DEFAULT 'whole',
+  mode TEXT DEFAULT 'whole' CHECK (mode IN ('whole', 'segmented')),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
