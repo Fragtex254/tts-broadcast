@@ -104,10 +104,11 @@ AI 切分 → segments 创建（status=pending, audio_path=null）
 **切分** `POST /api/broadcast/:id/split`
 
 1. 读取广播稿件文本
-2. 调用 `mimo.splitScript(text)` 智能切分
-3. 将 `broadcasts.mode` 设为 `'segmented'`
-4. 为每个短句创建 `segments` 记录（`status='pending'`）
-5. 返回 segments 列表
+2. 若该广播已有 segments，先删除所有旧 segments 及其音频文件
+3. 调用 `mimo.splitScript(text)` 智能切分
+4. 将 `broadcasts.mode` 设为 `'segmented'`，`audio_path` 置为 NULL
+5. 为每个短句创建 `segments` 记录（`status='pending'`）
+6. 返回 segments 列表
 
 **编辑单句** `PUT /api/broadcast/:id/segments/:segId`
 
@@ -134,8 +135,8 @@ AI 切分 → segments 创建（status=pending, audio_path=null）
 1. 校验所有 segments 的 `status` 均为 `'generated'`，否则返回 400
 2. 按 `index` 顺序读取所有 segment 音频文件
 3. 调用 `audio.mergeWavFiles()` 拼接 WAV 数据
-4. 写入 `audio/broadcast_{id}_merged.wav`
-5. 更新 `broadcasts.audio_path` 指向合并文件
+4. 写入 `audio/broadcast_{id}_merged.wav`（若已有旧的 `audio_path`，先删除旧文件）
+5. 更新 `broadcasts.audio_path` 指向合并文件，`status` 设为 `'generated'`
 6. 返回更新后的 broadcast 对象
 
 **删除单句** `DELETE /api/broadcast/:id/segments/:segId`
