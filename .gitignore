@@ -42,3 +42,5 @@ Desktop.ini
 # Database and Audio
 backend/data/
 backend/audio/*.wav
+.superpowers/
+.superpowers/
