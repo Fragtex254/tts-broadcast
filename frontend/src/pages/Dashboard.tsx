@@ -3,15 +3,18 @@ import { Header } from '../components/Layout/Header';
 import { QuickGenerate } from '../components/Dashboard/QuickGenerate';
 import { ScriptPreview } from '../components/Dashboard/ScriptPreview';
 import { VoiceGenerator } from '../components/Dashboard/VoiceGenerator';
+import { SegmentEditor } from '../components/Dashboard/SegmentEditor';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import useStore from '../store';
 
 export const Dashboard: React.FC = () => {
-  const { script, currentBroadcast, saveBroadcast } = useStore();
+  const { script, currentBroadcast, segments, saveBroadcast } = useStore();
 
   const audioUrl = currentBroadcast?.audio_path
     ? `/api/broadcast/${currentBroadcast.id}/audio`
     : null;
+
+  const isSegmented = currentBroadcast?.mode === 'segmented';
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -24,16 +27,20 @@ export const Dashboard: React.FC = () => {
             <QuickGenerate />
           </div>
 
-          {/* 右侧：语音生成 + 稿件预览 + 音频播放 */}
+          {/* 右侧：语音生成 + 稿件预览 + 逐句编辑 + 音频播放 */}
           <div className="w-full lg:w-1/2 space-y-6 overflow-y-auto">
             <VoiceGenerator script={script} />
             <ScriptPreview />
+            {isSegmented && segments.length > 0 && currentBroadcast && (
+              <SegmentEditor broadcastId={currentBroadcast.id} />
+            )}
             <AudioPlayer
               audioUrl={audioUrl}
               title={currentBroadcast?.title}
               broadcastId={currentBroadcast?.id}
               isSaved={currentBroadcast?.saved === 1}
               onSave={saveBroadcast}
+              mode={currentBroadcast?.mode}
             />
           </div>
         </div>

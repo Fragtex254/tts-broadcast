@@ -3,7 +3,6 @@ import { useStore } from '../../store';
 
 interface VoiceGeneratorProps {
   script: string;
-  onGenerated?: (audioUrl: string) => void;
 }
 
 const VOICE_OPTIONS = [
@@ -26,9 +25,8 @@ const VOICE_TYPES = [
 
 export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
   script,
-  onGenerated,
 }) => {
-  const { generateBroadcast, isGenerating, settings } = useStore();
+  const { generateBroadcast, splitScript, isGenerating, isSplitting, settings } = useStore();
   const [voiceType, setVoiceType] = useState('preset');
   const [selectedVoice, setSelectedVoice] = useState(settings.default_voice || '冰糖');
   const [voiceClone, setVoiceClone] = useState('');
@@ -36,7 +34,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
   const [stylePrompt, setStylePrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async () => {
+  const handleSplitAndGenerate = async () => {
     if (!script) {
       setError('请先生成口播稿');
       return;
@@ -44,6 +42,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
     setError(null);
 
     try {
+      // Step 1: Create segmented broadcast record
       const result = await generateBroadcast({
         text: script,
         voice: voiceType === 'preset' ? selectedVoice : undefined,
@@ -51,10 +50,13 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
         voiceDesign: voiceType === 'design' ? voiceDesign : undefined,
         voiceClone: voiceType === 'clone' ? voiceClone : undefined,
         stylePrompt: stylePrompt || undefined,
+        mode: 'segmented',
       });
-      onGenerated?.(result.audioUrl);
+
+      // Step 2: AI split into segments
+      await splitScript(result.broadcast.id);
     } catch (err) {
-      setError('语音生成失败，请检查 API Key 或稍后重试');
+      setError('操作失败，请检查 API Key 或稍后重试');
       console.error(err);
     }
   };
@@ -155,11 +157,11 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
 
       {/* 生成按钮 */}
       <button
-        onClick={handleGenerate}
-        disabled={isGenerating || !script}
+        onClick={handleSplitAndGenerate}
+        disabled={isGenerating || isSplitting || !script}
         className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white font-medium rounded-lg px-4 py-3 transition-colors flex items-center justify-center gap-2"
       >
-        {isGenerating ? (
+        {isSplitting ? (
           <>
             <svg
               className="animate-spin h-5 w-5"
@@ -181,10 +183,34 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-            生成中...
+            AI 切分中...
+          </>
+        ) : isGenerating ? (
+          <>
+            <svg
+              className="animate-spin h-5 w-5"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+            创建中...
           </>
         ) : (
-          '生成语音播报'
+          '切分并生成语音'
         )}
       </button>
 

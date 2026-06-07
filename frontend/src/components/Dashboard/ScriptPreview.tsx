@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 
-interface ScriptPreviewProps {
-  onScriptReady?: (script: string) => void;
-}
-
-export const ScriptPreview: React.FC<ScriptPreviewProps> = ({ onScriptReady }) => {
+export const ScriptPreview: React.FC = () => {
   const { script, updateScript, settings } = useStore();
   const [isEditing, setIsEditing] = useState(false);
   const [localScript, setLocalScript] = useState(script);
@@ -22,10 +18,6 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({ onScriptReady }) =
   const handleCancel = () => {
     setLocalScript(script);
     setIsEditing(false);
-  };
-
-  const handleUseScript = () => {
-    onScriptReady?.(script);
   };
 
   const handleAddOpening = () => {
@@ -108,26 +100,18 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({ onScriptReady }) =
 
       {/* 操作栏 */}
       {script && !isEditing && (
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-          <div className="flex gap-2">
-            <button
-              onClick={handleAddOpening}
-              className="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-            >
-              + 添加开场白
-            </button>
-            <button
-              onClick={handleAddClosing}
-              className="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-            >
-              + 添加结束语
-            </button>
-          </div>
+        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-700">
           <button
-            onClick={handleUseScript}
-            className="text-sm bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg px-4 py-2 transition-colors"
+            onClick={handleAddOpening}
+            className="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
           >
-            使用此稿件生成语音
+            + 添加开场白
+          </button>
+          <button
+            onClick={handleAddClosing}
+            className="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+          >
+            + 添加结束语
           </button>
         </div>
       )}

@@ -20,6 +20,7 @@ export const broadcastApi = {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    mode?: 'whole' | 'segmented';
   }) => api.post('/broadcast/generate', data),
 
   getHistory: (params?: { page?: number; limit?: number }) =>

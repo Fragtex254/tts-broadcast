@@ -6,6 +6,7 @@ interface AudioPlayerProps {
   broadcastId?: number;
   isSaved?: boolean;
   onSave?: (id: number) => void;
+  mode?: string | null;
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
@@ -14,6 +15,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   broadcastId,
   isSaved,
   onSave,
+  mode,
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -88,7 +90,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       <div className="bg-gray-800 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-white mb-4">播放器</h3>
         <div className="bg-gray-700 rounded-lg p-8 flex items-center justify-center">
-          <p className="text-gray-500 text-sm">生成语音后在此播放</p>
+          <p className="text-gray-500 text-sm">
+            {mode === 'segmented' ? '请先合并所有句子音频' : '生成语音后在此播放'}
+          </p>
         </div>
       </div>
     );

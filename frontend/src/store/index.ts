@@ -15,6 +15,7 @@ export interface Broadcast {
   source_items: string | null;
   status: string;
   saved: number;
+  mode: 'whole' | 'segmented';
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +95,7 @@ export interface AppState {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    mode?: 'whole' | 'segmented';
   }) => Promise<{ broadcast: Broadcast; audioUrl: string }>;
   fetchBroadcasts: (params?: { page?: number; limit?: number }) => Promise<{
     broadcasts: Broadcast[];

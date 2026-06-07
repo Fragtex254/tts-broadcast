@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useStore, Segment } from '../../store';
+import { useStore } from '../../store';
+import type { Segment } from '../../store';
 
 // ============ 子组件：StatusBadge ============
 
