@@ -21,6 +21,14 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded }) =
     { value: 'tip', label: '技巧' },
   ];
 
+  const categoryColors: Record<string, string> = {
+    'ai-models': 'bg-lemon/30',
+    'ai-products': 'bg-lilac/30',
+    'industry': 'bg-blush/40',
+    'paper': 'bg-sage/30',
+    'tip': 'bg-pink/20',
+  };
+
   const handleFetch = async () => {
     setIsLoading(true);
     setError(null);
@@ -53,94 +61,104 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded }) =
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 flex flex-col min-h-full">
-      <h3 className="text-lg font-semibold text-white mb-4">快速生成</h3>
-
-      {/* 配置区 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">资讯分类</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none"
-          >
-            {categories.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">条目数量</label>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={count}
-            onChange={(e) => setCount(Number(e.target.value))}
-            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="flex items-end">
-          <button
-            onClick={handleFetch}
-            disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-medium rounded-lg px-4 py-2 transition-colors"
-          >
-            {isLoading ? '加载中...' : '获取今日资讯'}
-          </button>
-        </div>
+    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
+      {/* 标题 */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-2 h-2 rounded-full bg-lemon" />
+        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">资讯获取</h3>
       </div>
 
-      {/* 资讯预览 */}
+      {/* 配置区 */}
+      <div className="flex gap-2 mb-4">
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="flex-1 bg-white/70 text-ink rounded-full px-3.5 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] appearance-none cursor-pointer transition-colors"
+        >
+          {categories.map((cat) => (
+            <option key={cat.value} value={cat.value}>{cat.label}</option>
+          ))}
+        </select>
+        <select
+          value={count}
+          onChange={(e) => setCount(Number(e.target.value))}
+          className="w-20 bg-white/70 text-ink rounded-full px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] appearance-none cursor-pointer transition-colors"
+        >
+          {[5, 10, 15, 20].map((n) => (
+            <option key={n} value={n}>{n} 条</option>
+          ))}
+        </select>
+        <button
+          onClick={handleFetch}
+          disabled={isLoading}
+          className="bg-lemon hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider whitespace-nowrap"
+        >
+          {isLoading ? '加载中...' : '获取'}
+        </button>
+      </div>
+
+      {/* 资讯列表 */}
       {todayItems.length > 0 && (
-        <div className="mt-4 flex-1 flex flex-col min-h-0">
+        <div className="mt-3">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-gray-400">
+            <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">
               已加载 {todayItems.length} 条资讯
             </span>
             <button
               onClick={handleRewrite}
               disabled={isRewriting}
-              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+              className="bg-pink hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider"
             >
-              {isRewriting ? '改写中...' : '一键改写口播稿'}
+              {isRewriting ? '改写中...' : '✦ 一键改写口播稿'}
             </button>
           </div>
 
-          <div className="space-y-2 flex-1 min-h-0">
+          <div className="space-y-0">
             {todayItems.map((item, index) => (
               <div
                 key={item.id}
-                className="bg-gray-700 rounded-lg p-3 flex items-start gap-3"
+                className="flex items-start gap-3 py-2.5 border-b border-card-border last:border-0"
+                style={{
+                  animation: `fade-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both`,
+                }}
               >
-                <span className="text-blue-400 font-mono text-sm mt-0.5">
+                <span className="font-display italic text-[16px] font-medium text-pink min-w-[26px] leading-snug">
                   {String(index + 1).padStart(2, '0')}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-white text-sm font-medium truncate">
+                  <h4 className="font-body text-[13px] font-medium text-ink leading-snug">
                     {item.title}
                   </h4>
-                  <p className="text-gray-400 text-xs mt-1 line-clamp-2">
-                    {item.summary}
-                  </p>
+                  {item.category && (
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md font-body text-[9px] font-medium uppercase tracking-wider text-ink ${categoryColors[item.category] || 'bg-paper-2'}`}>
+                      {categories.find(c => c.value === item.category)?.label || item.category}
+                    </span>
+                  )}
                 </div>
-                <span className="text-xs text-gray-500 shrink-0">
-                  {item.category}
-                </span>
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* 骨架屏加载态 */}
+      {isLoading && todayItems.length === 0 && (
+        <div className="mt-3 space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-start gap-3 py-2.5 animate-pulse" style={{ animationDelay: `${i * 0.05}s` }}>
+              <div className="w-6 h-4 bg-ink/5 rounded" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 bg-ink/5 rounded w-3/4" />
+                <div className="h-2 bg-ink/5 rounded w-1/4" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 错误提示 */}
       {error && (
-        <div className="mt-4 bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-400 text-sm">
+        <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
           {error}
         </div>
       )}
