@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { ScriptPreview } from '../components/Dashboard/ScriptPreview';
@@ -7,15 +7,56 @@ import { SegmentEditor } from '../components/Dashboard/SegmentEditor';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import useStore from '../store';
 
+const MIN_LEFT_WIDTH = 200;
+const MAX_LEFT_WIDTH = 400;
+const DEFAULT_LEFT_WIDTH = 260;
+
 export const ScriptEditor: React.FC = () => {
   const navigate = useNavigate();
   const { script, currentBroadcast, segments, saveBroadcast } = useStore();
+  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const audioUrl = currentBroadcast?.audio_path
     ? `/api/broadcast/${currentBroadcast.id}/audio`
     : null;
 
   const isSegmented = currentBroadcast?.mode === 'segmented';
+
+  // 拖动处理
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - rect.left;
+      const clamped = Math.min(MAX_LEFT_WIDTH, Math.max(MIN_LEFT_WIDTH, newWidth));
+      setLeftWidth(clamped);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isDragging]);
 
   // 空状态：无口播稿时引导回信源收集
   if (!script && !currentBroadcast) {
@@ -49,28 +90,50 @@ export const ScriptEditor: React.FC = () => {
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header title="口播稿编辑" subtitle="编辑稿件、切分短句并生成语音" />
 
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-4">
-          {/* 上：口播稿预览 */}
-          <ScriptPreview />
+      <main className="flex-1 overflow-hidden">
+        <div ref={containerRef} className="flex h-full">
+          {/* 左侧固定面板：语音生成 */}
+          <div
+            className="flex-shrink-0 overflow-y-auto p-4 border-r border-card-border bg-paper-2/30"
+            style={{ width: leftWidth }}
+          >
+            <VoiceGenerator script={script} layout="vertical" />
+          </div>
 
-          {/* 中上：语音生成（横向紧凑条） */}
-          <VoiceGenerator script={script} />
+          {/* 可拖动分隔条 */}
+          <div
+            onMouseDown={handleMouseDown}
+            className={`flex-shrink-0 w-1.5 cursor-col-resize flex items-center justify-center group transition-colors ${
+              isDragging ? 'bg-lilac/30' : 'hover:bg-lilac/15'
+            }`}
+          >
+            <div className={`w-0.5 h-8 rounded-full transition-colors ${
+              isDragging ? 'bg-lilac' : 'bg-card-border group-hover:bg-ink/20'
+            }`} />
+          </div>
 
-          {/* 中下：段落编辑器（主体区域） */}
-          {isSegmented && segments.length > 0 && currentBroadcast && (
-            <SegmentEditor broadcastId={currentBroadcast.id} />
-          )}
+          {/* 右侧滚动区域：稿件预览 + 段落编辑器 + 播放器 */}
+          <div className="flex-1 overflow-y-auto p-6 min-w-0">
+            <div className="max-w-4xl mx-auto space-y-4">
+              {/* 口播稿预览 */}
+              <ScriptPreview />
 
-          {/* 底：播放器 */}
-          <AudioPlayer
-            audioUrl={audioUrl}
-            title={currentBroadcast?.title}
-            broadcastId={currentBroadcast?.id}
-            isSaved={currentBroadcast?.saved === 1}
-            onSave={saveBroadcast}
-            mode={currentBroadcast?.mode}
-          />
+              {/* 段落编辑器（主体区域） */}
+              {isSegmented && segments.length > 0 && currentBroadcast && (
+                <SegmentEditor broadcastId={currentBroadcast.id} />
+              )}
+
+              {/* 播放器 */}
+              <AudioPlayer
+                audioUrl={audioUrl}
+                title={currentBroadcast?.title}
+                broadcastId={currentBroadcast?.id}
+                isSaved={currentBroadcast?.saved === 1}
+                onSave={saveBroadcast}
+                mode={currentBroadcast?.mode}
+              />
+            </div>
+          </div>
         </div>
       </main>
     </div>

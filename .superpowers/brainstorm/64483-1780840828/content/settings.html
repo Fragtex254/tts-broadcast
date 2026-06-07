@@ -1,0 +1,89 @@
+<h2>设置页面改动</h2>
+<p class="subtitle">路径 <code>/settings</code> — API Key 分组为 LLM 和 TTS 两个独立输入框</p>
+
+<div class="mockup">
+  <div class="mockup-header">设置页面 — API Key 区域</div>
+  <div class="mockup-body" style="padding:20px;min-height:320px">
+    <!-- API Key section -->
+    <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:20px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#E1A4C2"></span>
+        <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">API 配置</span>
+      </div>
+
+      <!-- LLM API Key -->
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="font-size:12px;color:#2A241B;font-weight:500">LLM API Key</span>
+          <span style="font-size:10px;color:#5C5345;opacity:0.5">用于资讯改写、文本切分</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="password" placeholder="输入 LLM API Key" style="flex:1;padding:8px 14px;border-radius:10px;border:1px solid rgba(0,0,0,0.1);font-size:12px;background:rgba(255,255,255,0.7);outline:none" />
+          <span style="padding:6px 14px;border-radius:8px;background:#B7C7A8;font-size:11px;color:#2A241B;cursor:pointer;font-weight:500;white-space:nowrap">测试连接</span>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div style="border-top:1px dashed rgba(0,0,0,0.08);margin:16px 0"></div>
+
+      <!-- TTS API Key -->
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="font-size:12px;color:#2A241B;font-weight:500">TTS API Key</span>
+          <span style="font-size:10px;color:#5C5345;opacity:0.5">用于语音合成</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="password" placeholder="输入 TTS API Key" style="flex:1;padding:8px 14px;border-radius:10px;border:1px solid rgba(0,0,0,0.1);font-size:12px;background:rgba(255,255,255,0.7);outline:none" />
+          <span style="padding:6px 14px;border-radius:8px;background:#B7C7A8;font-size:11px;color:#2A241B;cursor:pointer;font-weight:500;white-space:nowrap">测试连接</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Other settings sections (collapsed preview) -->
+    <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:16px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#E8C9B6"></span>
+        <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">音色设置</span>
+        <span style="margin-left:auto;font-size:11px;color:#5C5345;opacity:0.4">默认：冰糖</span>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:16px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#B7C7A8"></span>
+        <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">播报设置</span>
+        <span style="margin-left:auto;font-size:11px;color:#5C5345;opacity:0.4">开场白 · 结束语</span>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:16px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#D6DD63"></span>
+        <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">定时任务</span>
+        <span style="margin-left:auto;font-size:11px;color:#5C5345;opacity:0.4">1 个任务</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>改动要点</h3>
+  <div style="font-size:13px;line-height:1.8">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>API Key 拆分为两行</strong>：LLM（改写+切分）和 TTS（语音合成）各自独立输入框 + 测试按钮</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>描述标签</strong>：每个输入框下方标注用途，帮助用户区分两个 key</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>后端同步</strong>：默认设置中新增 <code>mimo_tts_api_key: ''</code>，<code>test-key</code> 端点需支持 <code>type</code> 参数</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>其他设置不变</strong>：音色、播报设置、定时任务保持现有样式</span>
+    </div>
+  </div>
+</div>

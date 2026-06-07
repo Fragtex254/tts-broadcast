@@ -1,0 +1,103 @@
+<h2>信源收集页面设计</h2>
+<p class="subtitle">路径 <code>/</code> — 原 QuickGenerate 组件独立为页面</p>
+
+<div class="mockup">
+  <div class="mockup-header">信源收集 — 页面布局</div>
+  <div class="mockup-body" style="padding:20px;min-height:320px">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="font-size:24px;font-weight:500;color:#2A241B;font-family:'Cormorant Garamond',serif">信源收集</div>
+        <div style="font-size:12px;color:#5C5345;margin-top:2px">获取今日 AI 资讯并改写为口播稿</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#D6DD63;animation:breathe 2s infinite"></span>
+        <span style="font-size:10px;color:#5C5345;text-transform:uppercase;letter-spacing:0.05em">系统在线</span>
+      </div>
+    </div>
+
+    <!-- Content card -->
+    <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:20px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <!-- Card title -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#D6DD63"></span>
+        <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">资讯获取</span>
+      </div>
+
+      <!-- Filters -->
+      <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <span style="padding:4px 10px;border-radius:20px;font-size:11px;background:#2A241B;color:#F2EEDF;cursor:pointer">全部</span>
+          <span style="padding:4px 10px;border-radius:20px;font-size:11px;background:rgba(0,0,0,0.05);color:#5C5345;cursor:pointer">AI模型</span>
+          <span style="padding:4px 10px;border-radius:20px;font-size:11px;background:rgba(0,0,0,0.05);color:#5C5345;cursor:pointer">AI产品</span>
+          <span style="padding:4px 10px;border-radius:20px;font-size:11px;background:rgba(0,0,0,0.05);color:#5C5345;cursor:pointer">行业动态</span>
+          <span style="padding:4px 10px;border-radius:20px;font-size:11px;background:rgba(0,0,0,0.05);color:#5C5345;cursor:pointer">论文</span>
+          <span style="padding:4px 10px;border-radius:20px;font-size:11px;background:rgba(0,0,0,0.05);color:#5C5345;cursor:pointer">技巧</span>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
+          <span style="font-size:11px;color:#5C5345">条数</span>
+          <select style="padding:4px 8px;border-radius:20px;border:1px solid rgba(0,0,0,0.1);font-size:11px;background:white">
+            <option>10</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Fetch button -->
+      <div style="display:flex;justify-content:center;margin-bottom:16px">
+        <div style="padding:8px 24px;border-radius:20px;background:#D6DD63;font-size:12px;font-weight:500;color:#2A241B;cursor:pointer;letter-spacing:0.05em;text-transform:uppercase">获取今日资讯</div>
+      </div>
+
+      <!-- News list mockup -->
+      <div style="space-y:8px">
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.6);border:1px solid rgba(0,0,0,0.04);margin-bottom:6px">
+          <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;font-weight:500;color:#C9BEDC;min-width:24px">01</span>
+          <div>
+            <div style="font-size:13px;color:#2A241B;margin-bottom:3px">OpenAI 发布 GPT-5 模型，推理能力大幅提升</div>
+            <span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(214,221,99,0.2);color:#5C5345;text-transform:uppercase;letter-spacing:0.05em">AI模型</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.6);border:1px solid rgba(0,0,0,0.04);margin-bottom:6px">
+          <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;font-weight:500;color:#C9BEDC;min-width:24px">02</span>
+          <div>
+            <div style="font-size:13px;color:#2A241B;margin-bottom:3px">Google DeepMind 推出新一代蛋白质预测工具</div>
+            <span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(232,201,182,0.3);color:#5C5345;text-transform:uppercase;letter-spacing:0.05em">论文</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.6);border:1px solid rgba(0,0,0,0.04);margin-bottom:6px">
+          <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;font-weight:500;color:#C9BEDC;min-width:24px">03</span>
+          <div>
+            <div style="font-size:13px;color:#2A241B;margin-bottom:3px">Anthropic Claude 4 发布，支持 100万 token 上下文</div>
+            <span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(214,221,99,0.2);color:#5C5345;text-transform:uppercase;letter-spacing:0.05em">AI模型</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rewrite button -->
+      <div style="display:flex;justify-content:center;margin-top:16px">
+        <div style="padding:8px 24px;border-radius:20px;background:#E1A4C2;font-size:12px;font-weight:500;color:#2A241B;cursor:pointer;letter-spacing:0.05em">一键改写口播稿</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>页面行为</h3>
+  <div style="font-size:13px;line-height:1.8">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span>组件与现有 <code>QuickGenerate.tsx</code> 基本一致，包裹在 <code>Header</code> + 卡片布局中</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span>资讯列表使用现有样式，带入场动画 <code>fade-in-up</code> + stagger</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>关键变化：</strong>点击"一键改写口播稿"后，自动调用 <code>rewriteScript()</code>，成功后 <code>navigate('/editor')</code></span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <span style="color:#b47032;font-weight:600">→</span>
+      <span>改写状态（<code>isRewriting</code>）通过 Zustand store 跨页面共享，编辑页可感知加载中</span>
+    </div>
+  </div>
+</div>

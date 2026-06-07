@@ -1,0 +1,114 @@
+<h2>导航与路由设计</h2>
+<p class="subtitle">方案 A：4 个独立页面，最小改动拆分</p>
+
+<div class="mockup">
+  <div class="mockup-header">侧边栏导航结构</div>
+  <div class="mockup-body" style="display:flex;gap:0;padding:0;min-height:360px">
+    <!-- Sidebar -->
+    <div style="width:180px;background:#ECE6D2;padding:16px;border-right:1px solid rgba(0,0,0,0.08)">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;color:#5C5345;margin-bottom:4px;text-transform:uppercase">AI 简讯播报</div>
+      <div style="font-size:10px;color:#5C5345;opacity:0.6;margin-bottom:20px">每日资讯语音播报</div>
+
+      <!-- Nav items -->
+      <div style="margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:12px;color:#5C5345;cursor:pointer">
+          <span style="font-size:14px">📡</span> 信源收集
+        </div>
+      </div>
+      <div style="margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:12px;color:#5C5345;cursor:pointer">
+          <span style="font-size:14px">✏️</span> 口播稿编辑
+        </div>
+      </div>
+      <div style="margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:12px;color:#5C5345;cursor:pointer">
+          <span style="font-size:14px">📋</span> 历史记录
+        </div>
+      </div>
+      <div style="margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:12px;color:#5C5345;cursor:pointer">
+          <span style="font-size:14px">⚙️</span> 设置
+        </div>
+      </div>
+
+      <div style="margin-top:auto;padding-top:40px;font-size:9px;color:#5C5345;opacity:0.4">v 3.0.0</div>
+    </div>
+
+    <!-- Main content placeholder -->
+    <div style="flex:1;padding:20px;display:flex;align-items:center;justify-content:center">
+      <div style="text-align:center;color:#5C5345;opacity:0.3">
+        <div style="font-size:40px;margin-bottom:8px">📄</div>
+        <div style="font-size:12px">页面内容区</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>路由映射</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+    <thead>
+      <tr style="border-bottom:2px solid rgba(0,0,0,0.1)">
+        <th style="text-align:left;padding:8px 12px">路径</th>
+        <th style="text-align:left;padding:8px 12px">页面</th>
+        <th style="text-align:left;padding:8px 12px">对应组件</th>
+        <th style="text-align:left;padding:8px 12px">说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid rgba(0,0,0,0.05)">
+        <td style="padding:8px 12px"><code>/</code></td>
+        <td style="padding:8px 12px">信源收集</td>
+        <td style="padding:8px 12px"><code>SourceCollection</code></td>
+        <td style="padding:8px 12px">默认首页，原 QuickGenerate</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(0,0,0,0.05)">
+        <td style="padding:8px 12px"><code>/editor</code></td>
+        <td style="padding:8px 12px">口播稿编辑</td>
+        <td style="padding:8px 12px"><code>ScriptEditor</code></td>
+        <td style="padding:8px 12px">原 Dashboard 右半部分</td>
+      </tr>
+      <tr style="border-bottom:1px solid rgba(0,0,0,0.05)">
+        <td style="padding:8px 12px"><code>/history</code></td>
+        <td style="padding:8px 12px">历史记录</td>
+        <td style="padding:8px 12px"><code>History</code></td>
+        <td style="padding:8px 12px">保持不变 + 新增重新编辑</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px"><code>/settings</code></td>
+        <td style="padding:8px 12px">设置</td>
+        <td style="padding:8px 12px"><code>Settings</code></td>
+        <td style="padding:8px 12px">扩展 API Key 分组</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section" style="margin-top:16px">
+  <h3>文件变更</h3>
+  <div style="display:flex;gap:16px;font-size:12px;margin-top:8px">
+    <div style="flex:1;padding:12px;background:rgba(42,119,102,0.06);border-radius:8px;border:1px solid rgba(42,119,102,0.15)">
+      <strong style="color:#2a7">新增</strong>
+      <ul style="margin:6px 0 0 16px;line-height:1.8">
+        <li><code>pages/SourceCollection.tsx</code></li>
+        <li><code>pages/ScriptEditor.tsx</code></li>
+      </ul>
+    </div>
+    <div style="flex:1;padding:12px;background:rgba(180,120,50,0.06);border-radius:8px;border:1px solid rgba(180,120,50,0.15)">
+      <strong style="color:#b47032">修改</strong>
+      <ul style="margin:6px 0 0 16px;line-height:1.8">
+        <li><code>App.tsx</code> — 路由 +1</li>
+        <li><code>Sidebar.tsx</code> — 导航项 4 个</li>
+        <li><code>History.tsx</code> — 加"重新编辑"</li>
+        <li><code>Settings.tsx</code> — 加 TTS Key</li>
+        <li><code>store/index.ts</code> — 微调</li>
+      </ul>
+    </div>
+    <div style="flex:1;padding:12px;background:rgba(193,60,90,0.06);border-radius:8px;border:1px solid rgba(193,60,90,0.15)">
+      <strong style="color:#c13c5a">删除</strong>
+      <ul style="margin:6px 0 0 16px;line-height:1.8">
+        <li><code>pages/Dashboard.tsx</code></li>
+      </ul>
+    </div>
+  </div>
+</div>

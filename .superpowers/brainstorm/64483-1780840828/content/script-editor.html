@@ -1,0 +1,165 @@
+<h2>口播稿编辑页面设计</h2>
+<p class="subtitle">路径 <code>/editor</code> — 上下两栏布局，编辑在上，生成在下</p>
+
+<div class="mockup">
+  <div class="mockup-header">口播稿编辑 — 页面布局</div>
+  <div class="mockup-body" style="padding:20px;min-height:480px">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="font-size:24px;font-weight:500;color:#2A241B;font-family:'Cormorant Garamond',serif">口播稿编辑</div>
+        <div style="font-size:12px;color:#5C5345;margin-top:2px">编辑稿件、切分短句并生成语音</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#D6DD63"></span>
+        <span style="font-size:10px;color:#5C5345;text-transform:uppercase;letter-spacing:0.05em">系统在线</span>
+      </div>
+    </div>
+
+    <!-- Upper section: Script editing -->
+    <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:20px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#E1A4C2"></span>
+        <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">口播稿预览</span>
+        <span style="margin-left:auto;font-size:11px;color:#5C5345;opacity:0.5">482 字 · 约 2 分钟</span>
+      </div>
+
+      <!-- Script content mockup -->
+      <div style="background:rgba(255,255,255,0.6);border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.04);font-size:13px;line-height:1.8;color:#2A241B;font-family:inherit;margin-bottom:12px">
+        大家好，欢迎收听今日 AI 简讯。今天我们为大家带来最新的 AI 领域动态。首先是 OpenAI 发布了 GPT-5 模型，这次升级在推理能力上有了质的飞跃...<br>
+        <span style="color:#5C5345;opacity:0.4">（更多内容...）</span>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <span style="padding:5px 14px;border-radius:8px;background:rgba(0,0,0,0.04);font-size:11px;color:#5C5345;cursor:pointer">✎ 编辑</span>
+        <span style="padding:5px 14px;border-radius:8px;background:rgba(0,0,0,0.04);font-size:11px;color:#5C5345;cursor:pointer">+ 开场白</span>
+        <span style="padding:5px 14px;border-radius:8px;background:rgba(0,0,0,0.04);font-size:11px;color:#5C5345;cursor:pointer">+ 结束语</span>
+      </div>
+    </div>
+
+    <!-- Lower section: Voice + Segments + Player (stacked) -->
+    <div style="display:flex;gap:16px">
+      <!-- Left: Voice generator -->
+      <div style="flex:1;background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:20px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#E8C9B6"></span>
+          <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">语音生成</span>
+        </div>
+
+        <!-- Voice grid mockup -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
+          <div style="padding:8px;border-radius:8px;background:#E8C9B6;text-align:center;font-size:11px;color:#2A241B;border:1px solid rgba(0,0,0,0.06)">🍬 冰糖</div>
+          <div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.6);text-align:center;font-size:11px;color:#5C5345;border:1px solid rgba(0,0,0,0.06)">🍯 蜜糖</div>
+          <div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.6);text-align:center;font-size:11px;color:#5C5345;border:1px solid rgba(0,0,0,0.06)">🌿 清风</div>
+          <div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.6);text-align:center;font-size:11px;color:#5C5345;border:1px solid rgba(0,0,0,0.06)">🐟 墨鱼</div>
+          <div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.6);text-align:center;font-size:11px;color:#5C5345;border:1px solid rgba(0,0,0,0.06)">🌳 楠楠</div>
+          <div style="padding:8px;border-radius:8px;background:rgba(255,255,255,0.6);text-align:center;font-size:11px;color:#5C5345;border:1px solid rgba(0,0,0,0.06)">...</div>
+        </div>
+
+        <!-- Generate button -->
+        <div style="display:flex;justify-content:center">
+          <div style="padding:8px 20px;border-radius:8px;background:#C9BEDC;font-size:12px;font-weight:500;color:#2A241B;cursor:pointer">切分并生成语音</div>
+        </div>
+      </div>
+
+      <!-- Right: Segment editor + Player -->
+      <div style="flex:1;display:flex;flex-direction:column;gap:16px">
+        <!-- Segment editor -->
+        <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:20px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#C9BEDC"></span>
+            <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">段落编辑器</span>
+          </div>
+
+          <!-- Segment mockup -->
+          <div style="font-size:12px">
+            <div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:rgba(183,199,168,0.15);border:1px solid rgba(183,199,168,0.3);margin-bottom:4px">
+              <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;color:#C9BEDC;min-width:18px">01</span>
+              <span style="flex:1;color:#2A241B;font-size:12px">大家好，欢迎收听今日AI简讯。</span>
+              <span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(183,199,168,0.3);color:#2A241B">✓ 已生成</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:rgba(214,221,99,0.08);border:1px solid rgba(214,221,99,0.2);margin-bottom:4px">
+              <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;color:#C9BEDC;min-width:18px">02</span>
+              <span style="flex:1;color:#2A241B;font-size:12px">今天我们为大家带来最新的AI领域动态。</span>
+              <span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(214,221,99,0.2);color:#2A241B">⏳ 等待中</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:rgba(214,221,99,0.08);border:1px solid rgba(214,221,99,0.2);margin-bottom:4px">
+              <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;color:#C9BEDC;min-width:18px">03</span>
+              <span style="flex:1;color:#2A241B;font-size:12px">首先是OpenAI发布了GPT-5模型...</span>
+              <span style="font-size:9px;padding:2px 6px;border-radius:10px;background:rgba(214,221,99,0.2);color:#2A241B">⏳ 等待中</span>
+            </div>
+          </div>
+
+          <!-- Batch actions -->
+          <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
+            <span style="padding:5px 14px;border-radius:8px;background:#B7C7A8;font-size:11px;color:#2A241B;cursor:pointer">全部生成</span>
+            <span style="padding:5px 14px;border-radius:8px;background:#C9BEDC;font-size:11px;color:#2A241B;cursor:pointer">合并音频</span>
+          </div>
+        </div>
+
+        <!-- Audio player -->
+        <div style="background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);border-radius:12px;padding:20px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#B7C7A8"></span>
+            <span style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:14px;font-weight:500;color:#5C5345">播放器</span>
+          </div>
+
+          <!-- Player mockup -->
+          <div style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:20px;background:rgba(255,255,255,0.6);border:1px solid rgba(0,0,0,0.06)">
+            <div style="width:32px;height:32px;border-radius:50%;background:#B7C7A8;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer">▶</div>
+            <div style="flex:1;display:flex;align-items:center;gap:2px;height:24px">
+              <div style="width:3px;height:8px;background:#B7C7A8;border-radius:1px"></div>
+              <div style="width:3px;height:14px;background:#B7C7A8;border-radius:1px"></div>
+              <div style="width:3px;height:10px;background:#B7C7A8;border-radius:1px"></div>
+              <div style="width:3px;height:18px;background:#E1A4C2;border-radius:1px"></div>
+              <div style="width:3px;height:12px;background:#E1A4C2;border-radius:1px"></div>
+              <div style="width:3px;height:6px;background:rgba(0,0,0,0.08);border-radius:1px"></div>
+              <div style="width:3px;height:16px;background:rgba(0,0,0,0.08);border-radius:1px"></div>
+              <div style="width:3px;height:9px;background:rgba(0,0,0,0.08);border-radius:1px"></div>
+              <div style="width:3px;height:14px;background:rgba(0,0,0,0.08);border-radius:1px"></div>
+              <div style="width:3px;height:7px;background:rgba(0,0,0,0.08);border-radius:1px"></div>
+            </div>
+            <span style="font-size:11px;color:#5C5345;font-variant-numeric:tabular-nums">0:00 / 2:15</span>
+            <span style="font-size:14px;cursor:pointer;opacity:0.5">⬇</span>
+            <span style="font-size:14px;cursor:pointer;opacity:0.5">⭐</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>页面行为</h3>
+  <div style="font-size:13px;line-height:1.8">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>上半区</strong>：ScriptPreview（口播稿预览 + 编辑 + 开场白/结束语）</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>下半区左侧</strong>：VoiceGenerator（音色选择 + 切分生成按钮）</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>下半区右侧</strong>：SegmentEditor + AudioPlayer 上下堆叠</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>入口 1</strong>：从信源收集改写后自动跳转，store 中 <code>script</code> 和 <code>currentBroadcast</code> 已就绪</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <span style="color:#2a7;font-weight:600">✓</span>
+      <span><strong>入口 2</strong>：从历史记录点击"重新编辑"，通过 <code>setCurrentBroadcast()</code> + <code>navigate('/editor')</code> 进入</span>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px">
+  <h3>空状态</h3>
+  <div style="font-size:13px;line-height:1.8;color:#5C5345">
+    当直接访问 <code>/editor</code> 且 store 中无 script 时，显示空状态提示：<br>
+    <em>"暂无口播稿，请先前往信源收集获取资讯"</em>，附"前往信源收集"按钮。
+  </div>
+</div>
