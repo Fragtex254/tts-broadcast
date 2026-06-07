@@ -23,9 +23,7 @@ const VOICE_TYPES = [
   { value: 'design', label: '音色设计' },
 ];
 
-export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
-  script,
-}) => {
+export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ script }) => {
   const { generateBroadcast, splitScript, isGenerating, isSplitting, settings } = useStore();
   const [voiceType, setVoiceType] = useState('preset');
   const [selectedVoice, setSelectedVoice] = useState(settings.default_voice || '冰糖');
@@ -40,9 +38,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
       return;
     }
     setError(null);
-
     try {
-      // Step 1: Create segmented broadcast record
       const result = await generateBroadcast({
         text: script,
         voice: voiceType === 'preset' ? selectedVoice : undefined,
@@ -52,8 +48,6 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
         stylePrompt: stylePrompt || undefined,
         mode: 'segmented',
       });
-
-      // Step 2: AI split into segments
       await splitScript(result.broadcast.id);
     } catch (err) {
       setError('操作失败，请检查 API Key 或稍后重试');
@@ -61,22 +55,28 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
     }
   };
 
+  const isBusy = isGenerating || isSplitting;
+
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-white mb-4">语音生成</h3>
+    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both' }}>
+      {/* 标题 */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-2 h-2 rounded-full bg-blush" />
+        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">语音生成</h3>
+      </div>
 
       {/* 音色类型选择 */}
       <div className="mb-4">
-        <label className="block text-sm text-gray-400 mb-2">音色类型</label>
+        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">音色类型</label>
         <div className="flex gap-2">
           {VOICE_TYPES.map((type) => (
             <button
               key={type.value}
               onClick={() => setVoiceType(type.value)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-xl font-body text-[12px] font-medium transition-all duration-150 ${
                 voiceType === type.value
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  ? 'bg-white/60 text-ink shadow-card border border-card-border'
+                  : 'text-ink-soft hover:text-ink hover:bg-white/30'
               }`}
             >
               {type.label}
@@ -85,129 +85,82 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
         </div>
       </div>
 
-      {/* 根据类型显示不同配置 */}
+      {/* 预设音色网格 */}
       {voiceType === 'preset' && (
-        <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-2">选择音色</label>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="mb-4 animate-fade-in">
+          <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">选择音色</label>
+          <div className="grid grid-cols-3 gap-2">
             {VOICE_OPTIONS.map((voice) => (
               <button
                 key={voice.value}
                 onClick={() => setSelectedVoice(voice.value)}
-                className={`p-3 rounded-lg text-left transition-colors ${
+                className={`p-2.5 rounded-2xl text-center transition-all duration-150 ${
                   selectedVoice === voice.value
-                    ? 'bg-blue-600/30 border border-blue-500'
-                    : 'bg-gray-700 border border-gray-600 hover:border-gray-500'
+                    ? 'bg-lemon/25 border border-ink/15 shadow-card'
+                    : 'bg-white/50 border border-card-border hover:border-ink/10'
                 }`}
               >
-                <span className="text-white text-sm font-medium">
-                  {voice.label}
-                </span>
-                <span className="text-gray-400 text-xs block mt-0.5">
-                  {voice.description}
-                </span>
+                <span className="font-display text-[15px] font-medium text-ink block">{voice.label}</span>
+                <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40 mt-0.5 block">{voice.description}</span>
               </button>
             ))}
           </div>
         </div>
       )}
 
+      {/* 声音克隆 */}
       {voiceType === 'clone' && (
-        <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-2">
-            克隆声音 ID
-          </label>
+        <div className="mb-4 animate-fade-in">
+          <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">克隆声音 ID</label>
           <input
             type="text"
             value={voiceClone}
             onChange={(e) => setVoiceClone(e.target.value)}
             placeholder="输入已克隆的声音 ID"
-            className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none"
+            className="w-full bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
           />
         </div>
       )}
 
+      {/* 音色设计 */}
       {voiceType === 'design' && (
-        <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-2">
-            音色设计描述
-          </label>
+        <div className="mb-4 animate-fade-in">
+          <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">音色设计描述</label>
           <textarea
             value={voiceDesign}
             onChange={(e) => setVoiceDesign(e.target.value)}
             placeholder="描述你想要的音色，例如：年轻女性，声音甜美，语速适中..."
-            className="w-full h-20 bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none resize-none"
+            className="w-full h-20 bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[12px] transition-colors"
           />
         </div>
       )}
 
       {/* 风格提示词 */}
       <div className="mb-4">
-        <label className="block text-sm text-gray-400 mb-2">
-          风格提示词 <span className="text-gray-500">(可选)</span>
+        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">
+          风格提示词 <span className="normal-case tracking-normal text-ink-soft/40">(可选)</span>
         </label>
         <input
           type="text"
           value={stylePrompt}
           onChange={(e) => setStylePrompt(e.target.value)}
           placeholder="例如：语速稍快，情绪饱满，专业播报风格"
-          className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none"
+          className="w-full bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
         />
       </div>
 
       {/* 生成按钮 */}
       <button
         onClick={handleSplitAndGenerate}
-        disabled={isGenerating || isSplitting || !script}
-        className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white font-medium rounded-lg px-4 py-3 transition-colors flex items-center justify-center gap-2"
+        disabled={isBusy || !script}
+        className="w-full bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-3 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider flex items-center justify-center gap-2"
       >
-        {isSplitting ? (
+        {isBusy ? (
           <>
-            <svg
-              className="animate-spin h-5 w-5"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            AI 切分中...
-          </>
-        ) : isGenerating ? (
-          <>
-            <svg
-              className="animate-spin h-5 w-5"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            创建中...
+            <span className="w-4 h-1 bg-ink/20 rounded-full overflow-hidden">
+              <span className="block h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} />
+            </span>
+            {isSplitting ? 'AI 切分中...' : '创建中...'}
           </>
         ) : (
           '切分并生成语音'
@@ -216,7 +169,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({
 
       {/* 错误提示 */}
       {error && (
-        <div className="mt-3 bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-400 text-sm">
+        <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
           {error}
         </div>
       )}
