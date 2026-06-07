@@ -226,7 +226,11 @@ router.post('/:id/split', async (req, res) => {
       text
     })));
 
-    // 更新广播 mode
+    // 更新广播 mode，删除旧的整段音频文件
+    if (broadcast.audio_path) {
+      const oldAudioPath = path.join(__dirname, '../..', broadcast.audio_path);
+      if (fs.existsSync(oldAudioPath)) fs.unlinkSync(oldAudioPath);
+    }
     db.prepare("UPDATE broadcasts SET mode = 'segmented', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
 
     const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(id);
@@ -257,85 +261,14 @@ router.get('/:id/segments', (req, res) => {
   }
 });
 
-router.put('/:id/segments/:segId', (req, res) => {
-  try {
-    const segId = parseInt(req.params.segId, 10);
-    const { text } = req.body;
-
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
-      return res.status(400).json({ error: '请提供有效的文本内容' });
-    }
-
-    const segment = db.prepare('SELECT * FROM segments WHERE id = ?').get(segId);
-    if (!segment) {
-      return res.status(404).json({ error: '句子不存在' });
-    }
-
-    if (segment.audio_path) {
-      const fp = path.join(__dirname, '../..', segment.audio_path);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-
-    db.prepare(
-      "UPDATE segments SET text = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(text.trim(), segId);
-
-    const updated = db.prepare('SELECT * FROM segments WHERE id = ?').get(segId);
-    res.json({ segment: updated });
-  } catch (error) {
-    console.error('编辑句子失败:', error);
-    res.status(500).json({ error: '编辑句子失败' });
-  }
-});
-
-router.post('/:id/segments/:segId/regenerate', async (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-    const segId = parseInt(req.params.segId, 10);
-
-    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
-    if (!segment) {
-      return res.status(404).json({ error: '句子不存在' });
-    }
-
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
-    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
-
-    db.prepare("UPDATE segments SET status = 'generating', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segId);
-
-    try {
-      const audioBuffer = await mimo.generateSpeech({
-        text: segment.text,
-        voice: voiceConfig.voice,
-        voiceType: broadcast.voice_type,
-        voiceDesign: voiceConfig.voiceDesign,
-        voiceClone: voiceConfig.voiceClone,
-        stylePrompt: voiceConfig.stylePrompt
-      });
-
-      const filename = `segment_${broadcastId}_${segment.index}.wav`;
-      const filepath = path.join(audioDir, filename);
-      fs.writeFileSync(filepath, audioBuffer);
-
-      db.prepare(
-        "UPDATE segments SET audio_path = ?, status = 'generated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-      ).run(`/audio/${filename}`, segId);
-    } catch (ttsError) {
-      db.prepare("UPDATE segments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segId);
-      return res.status(500).json({ error: '语音生成失败: ' + ttsError.message });
-    }
-
-    const updated = db.prepare('SELECT * FROM segments WHERE id = ?').get(segId);
-    res.json({ segment: updated });
-  } catch (error) {
-    console.error('重新生成失败:', error);
-    res.status(500).json({ error: '重新生成失败' });
-  }
-});
-
 router.post('/:id/segments/batch-generate', async (req, res) => {
   try {
     const broadcastId = parseInt(req.params.id, 10);
+
+    if (!Number.isInteger(broadcastId) || broadcastId <= 0) {
+      return res.status(400).json({ error: '无效的播报 ID' });
+    }
+
     const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
     if (!broadcast) {
       return res.status(404).json({ error: '播报记录不存在' });
@@ -428,56 +361,6 @@ router.post('/:id/segments/merge', (req, res) => {
   }
 });
 
-router.delete('/:id/segments/:segId', (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-    const segId = parseInt(req.params.segId, 10);
-
-    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
-    if (!segment) {
-      return res.status(404).json({ error: '句子不存在' });
-    }
-
-    if (segment.audio_path) {
-      const fp = path.join(__dirname, '../..', segment.audio_path);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-
-    const deletedIndex = segment.index;
-    db.prepare('DELETE FROM segments WHERE id = ?').run(segId);
-
-    const laterSegments = db.prepare(
-      'SELECT * FROM segments WHERE broadcast_id = ? AND "index" > ? ORDER BY "index"'
-    ).all(broadcastId, deletedIndex);
-
-    for (const seg of laterSegments) {
-      const newIndex = seg.index - 1;
-
-      if (seg.audio_path) {
-        const oldPath = path.join(__dirname, '../..', seg.audio_path);
-        const newFilename = `segment_${broadcastId}_${newIndex}.wav`;
-        const newPath = path.join(audioDir, newFilename);
-        if (fs.existsSync(oldPath)) {
-          fs.renameSync(oldPath, newPath);
-        }
-        db.prepare(
-          'UPDATE segments SET "index" = ?, audio_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-        ).run(newIndex, `/audio/${newFilename}`, seg.id);
-      } else {
-        db.prepare(
-          'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-        ).run(newIndex, seg.id);
-      }
-    }
-
-    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
-    res.json({ segments });
-  } catch (error) {
-    console.error('删除句子失败:', error);
-    res.status(500).json({ error: '删除句子失败' });
-  }
-});
-
 router.post('/:id/segments/reorder', (req, res) => {
   try {
     const broadcastId = parseInt(req.params.id, 10);
@@ -485,6 +368,14 @@ router.post('/:id/segments/reorder', (req, res) => {
 
     if (!Array.isArray(segmentIds)) {
       return res.status(400).json({ error: '请提供 segmentIds 数组' });
+    }
+
+    // 验证所有 segment 都属于当前 broadcast
+    const ownedCount = db.prepare(
+      `SELECT COUNT(*) as count FROM segments WHERE broadcast_id = ? AND id IN (${segmentIds.map(() => '?').join(',')})`
+    ).get(broadcastId, ...segmentIds).count;
+    if (ownedCount !== segmentIds.length) {
+      return res.status(400).json({ error: '部分句子不属于当前播报' });
     }
 
     const updateStmt = db.prepare(
@@ -504,6 +395,153 @@ router.post('/:id/segments/reorder', (req, res) => {
   } catch (error) {
     console.error('重排序失败:', error);
     res.status(500).json({ error: '重排序失败' });
+  }
+});
+
+router.put('/:id/segments/:segId', (req, res) => {
+  try {
+    const broadcastId = parseInt(req.params.id, 10);
+    const segId = parseInt(req.params.segId, 10);
+
+    if (!Number.isInteger(broadcastId) || broadcastId <= 0) {
+      return res.status(400).json({ error: '无效的播报 ID' });
+    }
+    if (!Number.isInteger(segId) || segId <= 0) {
+      return res.status(400).json({ error: '无效的句子 ID' });
+    }
+
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: '请提供有效的文本内容' });
+    }
+
+    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
+    if (!segment) {
+      return res.status(404).json({ error: '句子不存在' });
+    }
+
+    if (segment.audio_path) {
+      const fp = path.join(__dirname, '../..', segment.audio_path);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    }
+
+    db.prepare(
+      "UPDATE segments SET text = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).run(text.trim(), segId);
+
+    const updated = db.prepare('SELECT * FROM segments WHERE id = ?').get(segId);
+    res.json({ segment: updated });
+  } catch (error) {
+    console.error('编辑句子失败:', error);
+    res.status(500).json({ error: '编辑句子失败' });
+  }
+});
+
+router.post('/:id/segments/:segId/regenerate', async (req, res) => {
+  try {
+    const broadcastId = parseInt(req.params.id, 10);
+    const segId = parseInt(req.params.segId, 10);
+
+    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
+    if (!segment) {
+      return res.status(404).json({ error: '句子不存在' });
+    }
+
+    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
+    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
+
+    db.prepare("UPDATE segments SET status = 'generating', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segId);
+
+    try {
+      const audioBuffer = await mimo.generateSpeech({
+        text: segment.text,
+        voice: voiceConfig.voice,
+        voiceType: broadcast.voice_type,
+        voiceDesign: voiceConfig.voiceDesign,
+        voiceClone: voiceConfig.voiceClone,
+        stylePrompt: voiceConfig.stylePrompt
+      });
+
+      const filename = `segment_${broadcastId}_${segment.index}.wav`;
+      const filepath = path.join(audioDir, filename);
+      fs.writeFileSync(filepath, audioBuffer);
+
+      db.prepare(
+        "UPDATE segments SET audio_path = ?, status = 'generated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+      ).run(`/audio/${filename}`, segId);
+    } catch (ttsError) {
+      db.prepare("UPDATE segments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segId);
+      return res.status(500).json({ error: '语音生成失败: ' + ttsError.message });
+    }
+
+    const updated = db.prepare('SELECT * FROM segments WHERE id = ?').get(segId);
+    res.json({ segment: updated });
+  } catch (error) {
+    console.error('重新生成失败:', error);
+    res.status(500).json({ error: '重新生成失败' });
+  }
+});
+
+router.delete('/:id/segments/:segId', (req, res) => {
+  try {
+    const broadcastId = parseInt(req.params.id, 10);
+    const segId = parseInt(req.params.segId, 10);
+
+    if (!Number.isInteger(broadcastId) || broadcastId <= 0) {
+      return res.status(400).json({ error: '无效的播报 ID' });
+    }
+    if (!Number.isInteger(segId) || segId <= 0) {
+      return res.status(400).json({ error: '无效的句子 ID' });
+    }
+
+    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
+    if (!segment) {
+      return res.status(404).json({ error: '句子不存在' });
+    }
+
+    if (segment.audio_path) {
+      const fp = path.join(__dirname, '../..', segment.audio_path);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    }
+
+    const deletedIndex = segment.index;
+
+    const deleteAndReindex = db.transaction(() => {
+      db.prepare('DELETE FROM segments WHERE id = ?').run(segId);
+
+      const laterSegments = db.prepare(
+        'SELECT * FROM segments WHERE broadcast_id = ? AND "index" > ? ORDER BY "index"'
+      ).all(broadcastId, deletedIndex);
+
+      for (const seg of laterSegments) {
+        const newIndex = seg.index - 1;
+
+        if (seg.audio_path) {
+          const oldPath = path.join(__dirname, '../..', seg.audio_path);
+          const newFilename = `segment_${broadcastId}_${newIndex}.wav`;
+          const newPath = path.join(audioDir, newFilename);
+          if (fs.existsSync(oldPath)) {
+            fs.renameSync(oldPath, newPath);
+          }
+          db.prepare(
+            'UPDATE segments SET "index" = ?, audio_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          ).run(newIndex, `/audio/${newFilename}`, seg.id);
+        } else {
+          db.prepare(
+            'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          ).run(newIndex, seg.id);
+        }
+      }
+    });
+
+    deleteAndReindex();
+
+    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
+    res.json({ segments });
+  } catch (error) {
+    console.error('删除句子失败:', error);
+    res.status(500).json({ error: '删除句子失败' });
   }
 });
 
