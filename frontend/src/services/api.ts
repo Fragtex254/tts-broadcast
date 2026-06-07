@@ -30,6 +30,31 @@ export const broadcastApi = {
 
   save: (id: number) =>
     api.post(`/broadcast/${id}/save`),
+
+  // Segment API
+  split: (id: number) =>
+    api.post(`/broadcast/${id}/split`),
+
+  getSegments: (id: number) =>
+    api.get(`/broadcast/${id}/segments`),
+
+  updateSegment: (broadcastId: number, segId: number, data: { text: string }) =>
+    api.put(`/broadcast/${broadcastId}/segments/${segId}`, data),
+
+  regenerateSegment: (broadcastId: number, segId: number) =>
+    api.post(`/broadcast/${broadcastId}/segments/${segId}/regenerate`),
+
+  batchGenerateSegments: (broadcastId: number) =>
+    api.post(`/broadcast/${broadcastId}/segments/batch-generate`),
+
+  mergeSegments: (broadcastId: number) =>
+    api.post(`/broadcast/${broadcastId}/segments/merge`),
+
+  deleteSegment: (broadcastId: number, segId: number) =>
+    api.delete(`/broadcast/${broadcastId}/segments/${segId}`),
+
+  reorderSegments: (broadcastId: number, segmentIds: number[]) =>
+    api.post(`/broadcast/${broadcastId}/segments/reorder`, { segmentIds }),
 };
 
 // 设置相关 API

@@ -19,6 +19,18 @@ export interface Broadcast {
   updated_at: string;
 }
 
+/** 逐句 segment */
+export interface Segment {
+  id: number;
+  broadcast_id: number;
+  index: number;
+  text: string;
+  audio_path: string | null;
+  status: 'pending' | 'generating' | 'generated' | 'failed';
+  created_at: string;
+  updated_at: string;
+}
+
 /** 今日资讯条目 */
 export interface TodayItem {
   id: string;
@@ -60,6 +72,11 @@ export interface AppState {
   isGenerating: boolean;
   isRewriting: boolean;
 
+  // Segment 状态
+  segments: Segment[];
+  isSplitting: boolean;
+  isMerging: boolean;
+
   // 设置状态
   settings: Settings;
   isLoadingSettings: boolean;
@@ -85,6 +102,16 @@ export interface AppState {
   setCurrentBroadcast: (broadcast: Broadcast | null) => void;
   saveBroadcast: (id: number) => Promise<Broadcast>;
   updateScript: (script: string) => void;
+
+  // Segment 操作
+  splitScript: (broadcastId: number) => Promise<Segment[]>;
+  fetchSegments: (broadcastId: number) => Promise<Segment[]>;
+  updateSegmentText: (broadcastId: number, segId: number, text: string) => Promise<Segment>;
+  regenerateSegment: (broadcastId: number, segId: number) => Promise<Segment>;
+  batchGenerateSegments: (broadcastId: number) => Promise<{ segments: Segment[]; results: any[] }>;
+  deleteSegment: (broadcastId: number, segId: number) => Promise<Segment[]>;
+  mergeSegments: (broadcastId: number) => Promise<Broadcast>;
+  clearSegments: () => void;
 
   // 设置操作
   fetchSettings: () => Promise<void>;
@@ -119,6 +146,11 @@ export const useStore = create<AppState>((set) => ({
   script: '',
   isGenerating: false,
   isRewriting: false,
+
+  // Segment 状态
+  segments: [],
+  isSplitting: false,
+  isMerging: false,
 
   // 设置状态
   settings: defaultSettings,
@@ -211,6 +243,125 @@ export const useStore = create<AppState>((set) => ({
   /** 更新口播稿内容 */
   updateScript: (script) => {
     set({ script });
+  },
+
+  // ============ Segment 操作 ============
+
+  splitScript: async (broadcastId) => {
+    set({ isSplitting: true });
+    try {
+      const response = await broadcastApi.split(broadcastId);
+      const segments = response.data.segments;
+      set({ segments, isSplitting: false });
+      return segments;
+    } catch (error) {
+      set({ isSplitting: false });
+      console.error('切分失败:', error);
+      throw error;
+    }
+  },
+
+  fetchSegments: async (broadcastId) => {
+    try {
+      const response = await broadcastApi.getSegments(broadcastId);
+      const segments = response.data.segments;
+      set({ segments });
+      return segments;
+    } catch (error) {
+      console.error('获取 segments 失败:', error);
+      throw error;
+    }
+  },
+
+  updateSegmentText: async (broadcastId, segId, text) => {
+    try {
+      const response = await broadcastApi.updateSegment(broadcastId, segId, { text });
+      const updated = response.data.segment;
+      set((state) => ({
+        segments: state.segments.map((s) => (s.id === segId ? updated : s)),
+      }));
+      return updated;
+    } catch (error) {
+      console.error('编辑句子失败:', error);
+      throw error;
+    }
+  },
+
+  regenerateSegment: async (broadcastId, segId) => {
+    set((state) => ({
+      segments: state.segments.map((s) =>
+        s.id === segId ? { ...s, status: 'generating' as const } : s
+      ),
+    }));
+    try {
+      const response = await broadcastApi.regenerateSegment(broadcastId, segId);
+      const updated = response.data.segment;
+      set((state) => ({
+        segments: state.segments.map((s) => (s.id === segId ? updated : s)),
+      }));
+      return updated;
+    } catch (error) {
+      set((state) => ({
+        segments: state.segments.map((s) =>
+          s.id === segId ? { ...s, status: 'failed' as const } : s
+        ),
+      }));
+      console.error('重新生成失败:', error);
+      throw error;
+    }
+  },
+
+  batchGenerateSegments: async (broadcastId) => {
+    set((state) => ({
+      segments: state.segments.map((s) =>
+        s.status === 'pending' || s.status === 'failed'
+          ? { ...s, status: 'generating' as const }
+          : s
+      ),
+    }));
+    try {
+      const response = await broadcastApi.batchGenerateSegments(broadcastId);
+      const { segments, results } = response.data;
+      set({ segments });
+      return { segments, results };
+    } catch (error) {
+      console.error('批量生成失败:', error);
+      throw error;
+    }
+  },
+
+  deleteSegment: async (broadcastId, segId) => {
+    try {
+      const response = await broadcastApi.deleteSegment(broadcastId, segId);
+      const segments = response.data.segments;
+      set({ segments });
+      return segments;
+    } catch (error) {
+      console.error('删除句子失败:', error);
+      throw error;
+    }
+  },
+
+  mergeSegments: async (broadcastId) => {
+    set({ isMerging: true });
+    try {
+      const response = await broadcastApi.mergeSegments(broadcastId);
+      const broadcast = response.data.broadcast;
+      set((state) => ({
+        currentBroadcast: broadcast,
+        broadcasts: state.broadcasts.map((b) => (b.id === broadcastId ? broadcast : b)),
+        isMerging: false,
+      }));
+      return broadcast;
+    } catch (error) {
+      set({ isMerging: false });
+      console.error('合并失败:', error);
+      throw error;
+    }
+  },
+
+  clearSegments: () => {
+    set({ segments: [] });
   },
 
   // ============ 设置操作 ============
