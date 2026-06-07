@@ -100,12 +100,20 @@ describe('WAV 合并服务', () => {
     fs.writeFileSync(fp, wav);
 
     const merged = mergeWavFiles([fp]);
-    expect(merged.length).toBe(wav.length);
-    expect(merged.readUInt32LE(4)).toBe(wav.readUInt32LE(4));
-    expect(merged.readUInt32LE(40)).toBe(wav.readUInt32LE(40));
+    expect(merged).toEqual(wav);
   });
 
   test('空文件列表抛出错误', () => {
     expect(() => mergeWavFiles([])).toThrow('至少需要一个 WAV 文件');
+  });
+
+  test('文件不存在时抛出错误', () => {
+    expect(() => mergeWavFiles(['/nonexistent/path.wav'])).toThrow();
+  });
+
+  test('文件太小时抛出错误', () => {
+    const tiny = path.join(tmpDir, 'tiny.wav');
+    fs.writeFileSync(tiny, Buffer.alloc(10)); // 小于 44 字节
+    expect(() => mergeWavFiles([tiny])).toThrow(/太小/);
   });
 });

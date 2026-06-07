@@ -9,11 +9,24 @@ const WAV_HEADER_SIZE = 44;
  * @returns {Buffer} 合并后的 WAV Buffer
  */
 function mergeWavFiles(filePaths) {
-  if (!filePaths || filePaths.length === 0) {
+  if (!Array.isArray(filePaths) || filePaths.length === 0) {
     throw new Error('至少需要一个 WAV 文件');
   }
 
   const buffers = filePaths.map(fp => fs.readFileSync(fp));
+
+  // 验证每个文件是有效的 WAV
+  for (let i = 0; i < buffers.length; i++) {
+    const buf = buffers[i];
+    if (buf.length < WAV_HEADER_SIZE) {
+      throw new Error(`WAV 文件 ${filePaths[i]} 太小（${buf.length} 字节），需要至少 ${WAV_HEADER_SIZE} 字节`);
+    }
+    const riff = buf.toString('ascii', 0, 4);
+    const wave = buf.toString('ascii', 8, 12);
+    if (riff !== 'RIFF' || wave !== 'WAVE') {
+      throw new Error(`WAV 文件 ${filePaths[i]} 不是有效的 WAV 格式`);
+    }
+  }
 
   // 用第一个文件的 header 作为模板
   const header = Buffer.from(buffers[0].slice(0, WAV_HEADER_SIZE));
