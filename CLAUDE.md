@@ -87,6 +87,20 @@ PORT=3001
 NODE_ENV=development
 ```
 
+## Frontend Development Conventions
+
+**所有前端开发必须严格遵守 `frontend/FRONTEND_CONVENTIONS.md` 中的规范。** 这是一份完整的前端开发规范文档，涵盖：
+
+- **设计系统** — Soft Editorial 风格（暖纸色背景、Cormorant Garamond 标题、粉彩色系、毛玻璃卡片）
+- **色彩/字体/卡片/按钮/输入框** — 全部有统一的 Tailwind class 模板，不允许硬编码颜色值或使用旧的 `gray-*` / `blue-*` / `purple-*` 暗色主题
+- **组件规范** — 文件结构、Props interface 命名、导出方式、入场动画延迟分配
+- **加载状态** — 使用骨架屏（`animate-pulse`），不使用 spinner
+- **错误状态** — 使用 `animate-shake` + `bg-pink/10`
+- **状态管理** — Zustand store 使用模式、接口类型统一定义在 `store/index.ts`
+- **命名规范** — 文件/组件/函数/常量/CSS 变量命名规则
+
+新增页面或组件时，务必对照文档末尾的 Checklist 逐项检查。
+
 ## Key Patterns
 
 - Backend uses OpenAI SDK with custom base_url for MiMo API compatibility
