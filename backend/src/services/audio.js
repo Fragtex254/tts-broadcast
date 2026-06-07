@@ -1,0 +1,35 @@
+const fs = require('fs');
+
+const WAV_HEADER_SIZE = 44;
+
+/**
+ * 合并多个 WAV 文件为一个
+ * 要求所有 WAV 文件格式一致（24kHz/16bit/mono）
+ * @param {string[]} filePaths - WAV 文件路径数组（按播放顺序）
+ * @returns {Buffer} 合并后的 WAV Buffer
+ */
+function mergeWavFiles(filePaths) {
+  if (!filePaths || filePaths.length === 0) {
+    throw new Error('至少需要一个 WAV 文件');
+  }
+
+  const buffers = filePaths.map(fp => fs.readFileSync(fp));
+
+  // 用第一个文件的 header 作为模板
+  const header = Buffer.from(buffers[0].slice(0, WAV_HEADER_SIZE));
+
+  // 提取所有文件的 PCM 数据（从 byte 44 开始）
+  const pcmChunks = buffers.map(buf => buf.slice(WAV_HEADER_SIZE));
+  const totalPcmSize = pcmChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+
+  // 拼接所有 PCM 数据
+  const mergedPcm = Buffer.concat(pcmChunks);
+
+  // 更新 header 中的大小字段
+  header.writeUInt32LE(WAV_HEADER_SIZE + totalPcmSize - 8, 4); // RIFF chunk size
+  header.writeUInt32LE(totalPcmSize, 40);                       // data chunk size
+
+  return Buffer.concat([header, mergedPcm]);
+}
+
+module.exports = { mergeWavFiles };
