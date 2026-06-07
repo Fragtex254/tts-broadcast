@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   source_items TEXT,
   status TEXT DEFAULT 'pending',
   saved BOOLEAN DEFAULT 0,
+  mode TEXT DEFAULT 'whole',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -31,5 +32,18 @@ CREATE TABLE IF NOT EXISTS schedules (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS segments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  broadcast_id INTEGER NOT NULL,
+  "index" INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  audio_path TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_broadcasts_created_at ON broadcasts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_schedules_is_active ON schedules(is_active);
+CREATE INDEX IF NOT EXISTS idx_segments_broadcast_id ON segments(broadcast_id);

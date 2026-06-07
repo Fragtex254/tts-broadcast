@@ -29,6 +29,13 @@ try {
   db.exec('ALTER TABLE broadcasts ADD COLUMN saved BOOLEAN DEFAULT 0');
 }
 
+// 迁移：为旧数据库添加 mode 列
+try {
+  db.prepare('SELECT mode FROM broadcasts LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE broadcasts ADD COLUMN mode TEXT DEFAULT 'whole'");
+}
+
 // 默认设置
 const defaultSettings = {
   mimo_api_key: '',
