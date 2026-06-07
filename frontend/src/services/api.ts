@@ -56,6 +56,14 @@ export const broadcastApi = {
 
   reorderSegments: (broadcastId: number, segmentIds: number[]) =>
     api.post(`/broadcast/${broadcastId}/segments/reorder`, { segmentIds }),
+
+  updateVoiceConfig: (broadcastId: number, data: {
+    voiceType: string;
+    voice?: string;
+    voiceDesign?: string;
+    voiceClone?: string;
+    stylePrompt?: string;
+  }) => api.patch(`/broadcast/${broadcastId}/voice-config`, data),
 };
 
 // 设置相关 API

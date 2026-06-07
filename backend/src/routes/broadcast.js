@@ -570,6 +570,32 @@ router.get('/:id', (req, res) => {
 });
 
 /**
+ * PATCH /api/broadcast/:id/voice-config
+ * 更新播报的音色配置（用于段落重新生成时使用新音色）
+ */
+router.patch('/:id/voice-config', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: '无效的播报 ID' });
+    }
+
+    const { voiceType, voice, voiceDesign, voiceClone, stylePrompt } = req.body;
+    const voiceConfig = JSON.stringify({ voice, voiceDesign, voiceClone, stylePrompt });
+
+    db.prepare(
+      'UPDATE broadcasts SET voice_type = ?, voice_config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(voiceType || 'preset', voiceConfig, id);
+
+    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
+    res.json({ broadcast });
+  } catch (error) {
+    console.error('更新音色配置失败:', error);
+    res.status(500).json({ error: '更新音色配置失败' });
+  }
+});
+
+/**
  * POST /api/broadcast/:id/save
  * 保存/取消保存播报（标记为永久保存）
  */

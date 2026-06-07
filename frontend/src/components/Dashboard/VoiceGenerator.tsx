@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
+import { broadcastApi } from '../../services/api';
 
 interface VoiceGeneratorProps {
   layout?: 'horizontal' | 'vertical';
@@ -46,7 +47,22 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       voiceClone,
       stylePrompt,
     });
-  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt]);
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, updateVoiceConfig]);
+
+  // 切换音色后同步到后端（影响段落重新生成）
+  useEffect(() => {
+    if (!currentBroadcast) return;
+    const timer = setTimeout(() => {
+      broadcastApi.updateVoiceConfig(currentBroadcast.id, {
+        voiceType,
+        voice: voiceType === 'preset' ? selectedVoice : undefined,
+        voiceDesign: voiceType === 'design' ? voiceDesign : undefined,
+        voiceClone: voiceType === 'clone' ? voiceClone : undefined,
+        stylePrompt: stylePrompt || undefined,
+      }).catch(() => {/* 静默失败，不影响用户体验 */});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast]);
 
   const handleBatchGenerate = async () => {
     if (!currentBroadcast) {
