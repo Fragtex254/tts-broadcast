@@ -2,64 +2,33 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useStore } from '../../store';
 import type { Segment } from '../../store';
 
-// ============ 子组件：StatusBadge ============
+// ============ StatusBadge ============
 
 interface StatusBadgeProps {
   status: Segment['status'];
 }
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
-  switch (status) {
-    case 'pending':
-      return (
-        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-600 text-gray-300">
-          <span>⏳</span> 待生成
-        </span>
-      );
-    case 'generating':
-      return (
-        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-600/30 text-blue-400">
-          <svg
-            className="animate-spin h-3 w-3"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          生成中
-        </span>
-      );
-    case 'generated':
-      return (
-        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-600/30 text-green-400">
-          <span>✅</span> 已生成
-        </span>
-      );
-    case 'failed':
-      return (
-        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-600/30 text-red-400">
-          <span>❌</span> 失败
-        </span>
-      );
-    default:
-      return null;
-  }
+  const styles: Record<string, string> = {
+    pending: 'bg-lemon/25 text-ink',
+    generating: 'bg-lilac/25 text-ink',
+    generated: 'bg-sage/30 text-ink',
+    failed: 'bg-pink/20 text-ink',
+  };
+  const labels: Record<string, string> = {
+    pending: '◌ 等待中',
+    generating: '⟳ 生成中',
+    generated: '✓ 就绪',
+    failed: '✕ 失败',
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] px-2.5 py-1 rounded-full font-body font-medium uppercase tracking-wider ${styles[status] || ''}`}>
+      {labels[status] || status}
+    </span>
+  );
 };
 
-// ============ 子组件：SegmentAudio ============
+// ============ SegmentAudio ============
 
 interface SegmentAudioProps {
   audioUrl: string;
@@ -73,13 +42,10 @@ const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
     const handleLoadedMetadata = () => setDuration(audio.duration);
     const handleEnded = () => setIsPlaying(false);
-
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
-
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
@@ -89,20 +55,13 @@ const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play();
-    }
+    if (isPlaying) { audio.pause(); } else { audio.play(); }
     setIsPlaying(!isPlaying);
   }, [isPlaying]);
 
-  const formatTime = (seconds: number): string => {
-    if (isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const formatTime = (s: number) => {
+    if (isNaN(s)) return '0:00';
+    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   };
 
   return (
@@ -110,52 +69,31 @@ const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
       <button
         onClick={togglePlay}
-        className="w-7 h-7 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center transition-colors flex-shrink-0"
+        className="w-7 h-7 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border"
       >
         {isPlaying ? (
-          <svg
-            className="w-3.5 h-3.5 text-white"
-            fill="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-          </svg>
+          <svg className="w-3 h-3 text-ink" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
         ) : (
-          <svg
-            className="w-3.5 h-3.5 text-white ml-0.5"
-            fill="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          <svg className="w-3 h-3 text-ink ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
         )}
       </button>
-      <span className="text-xs text-gray-400">{formatTime(duration)}</span>
+      <span className="font-body text-[10px] text-ink-soft/50">{formatTime(duration)}</span>
     </div>
   );
 };
 
-// ============ 主组件：SegmentEditor ============
+// ============ 主组件 ============
 
 interface SegmentEditorProps {
   broadcastId: number;
   onMerged?: () => void;
 }
 
-export const SegmentEditor: React.FC<SegmentEditorProps> = ({
-  broadcastId,
-  onMerged,
-}) => {
+export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMerged }) => {
   const {
-    segments,
-    isSplitting,
-    isMerging,
-    fetchSegments,
-    updateSegmentText,
-    regenerateSegment,
-    batchGenerateSegments,
-    deleteSegment,
-    mergeSegments,
+    segments, isSplitting, isMerging,
+    fetchSegments, updateSegmentText, regenerateSegment,
+    batchGenerateSegments, deleteSegment, mergeSegments,
   } = useStore();
 
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -163,291 +101,117 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchSegments(broadcastId).catch(() => {
-      setError('加载句子列表失败');
-    });
+    fetchSegments(broadcastId).catch(() => setError('加载句子列表失败'));
   }, [broadcastId, fetchSegments]);
 
-  // 没有 segments 且不在 splitting 时返回 null
-  if (!segments.length && !isSplitting) {
-    return null;
-  }
+  if (!segments.length && !isSplitting) return null;
 
-  const hasPendingOrFailed = segments.some(
-    (s) => s.status === 'pending' || s.status === 'failed'
-  );
+  const hasPendingOrFailed = segments.some((s) => s.status === 'pending' || s.status === 'failed');
   const allGenerated = segments.length > 0 && segments.every((s) => s.status === 'generated');
 
-  // 编辑相关
-  const handleStartEdit = (seg: Segment) => {
-    setEditingId(seg.id);
-    setEditText(seg.text);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditText('');
-  };
-
+  const handleStartEdit = (seg: Segment) => { setEditingId(seg.id); setEditText(seg.text); };
+  const handleCancelEdit = () => { setEditingId(null); setEditText(''); };
   const handleSaveEdit = async (segId: number) => {
     if (!editText.trim()) return;
     setError(null);
-    try {
-      await updateSegmentText(broadcastId, segId, editText.trim());
-      setEditingId(null);
-      setEditText('');
-    } catch {
-      setError('保存编辑失败，请重试');
-    }
+    try { await updateSegmentText(broadcastId, segId, editText.trim()); setEditingId(null); setEditText(''); }
+    catch { setError('保存编辑失败'); }
   };
+  const handleRegenerate = async (segId: number) => { setError(null); try { await regenerateSegment(broadcastId, segId); } catch { setError('重新生成失败'); } };
+  const handleDelete = async (segId: number) => { setError(null); try { await deleteSegment(broadcastId, segId); } catch { setError('删除失败'); } };
+  const handleBatchGenerate = async () => { setError(null); try { await batchGenerateSegments(broadcastId); } catch { setError('批量生成失败'); } };
+  const handleMerge = async () => { setError(null); try { await mergeSegments(broadcastId); onMerged?.(); } catch { setError('合并失败'); } };
 
-  // 重新生成单个句子
-  const handleRegenerate = async (segId: number) => {
-    setError(null);
-    try {
-      await regenerateSegment(broadcastId, segId);
-    } catch {
-      setError('重新生成失败，请重试');
-    }
-  };
-
-  // 删除句子
-  const handleDelete = async (segId: number) => {
-    setError(null);
-    try {
-      await deleteSegment(broadcastId, segId);
-    } catch {
-      setError('删除失败，请重试');
-    }
-  };
-
-  // 批量生成
-  const handleBatchGenerate = async () => {
-    setError(null);
-    try {
-      await batchGenerateSegments(broadcastId);
-    } catch {
-      setError('批量生成失败，请重试');
-    }
-  };
-
-  // 合并
-  const handleMerge = async () => {
-    setError(null);
-    try {
-      await mergeSegments(broadcastId);
-      onMerged?.();
-    } catch {
-      setError('合并失败，请重试');
-    }
-  };
-
-  // splitting 加载态
   if (isSplitting) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6">
+      <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
         <div className="flex items-center justify-center gap-3 py-8">
-          <svg
-            className="animate-spin h-5 w-5 text-blue-400"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          <span className="text-gray-300">正在切分句子...</span>
+          <div className="w-4 h-1 bg-ink/10 rounded-full overflow-hidden">
+            <div className="h-full bg-lilac rounded-full animate-pulse" style={{ width: '60%' }} />
+          </div>
+          <span className="font-body text-[12px] text-ink-soft">正在切分句子...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-white mb-4">逐句编辑</h3>
+    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both' }}>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-2 h-2 rounded-full bg-lilac" />
+        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">段落编辑器</h3>
+      </div>
 
-      {/* Segment 列表 */}
-      <div className="space-y-3 mb-4">
-        {segments.map((seg) => (
+      <div className="space-y-2 mb-4">
+        {segments.map((seg, index) => (
           <div
             key={seg.id}
-            className="bg-gray-700 rounded-lg p-4 border border-gray-600"
+            className="bg-white/45 rounded-2xl p-3 border border-card-border flex items-center gap-3"
+            style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both` }}
           >
-            {/* 顶部行：序号 + 状态 + 操作按钮 */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 font-mono">
-                  #{seg.index + 1}
-                </span>
-                <StatusBadge status={seg.status} />
-              </div>
+            <span className="font-display italic text-[18px] font-medium text-lilac min-w-[22px]">
+              {String(seg.index + 1).padStart(2, '0')}
+            </span>
 
-              <div className="flex items-center gap-1">
-                {/* 编辑按钮 */}
-                <button
-                  onClick={() => handleStartEdit(seg)}
-                  disabled={seg.status === 'generating' || editingId === seg.id}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="编辑"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                    />
-                  </svg>
-                </button>
-
-                {/* 重新生成按钮 */}
-                <button
-                  onClick={() => handleRegenerate(seg.id)}
-                  disabled={seg.status === 'generating'}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="重新生成"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                </button>
-
-                {/* 删除按钮 */}
-                <button
-                  onClick={() => handleDelete(seg.id)}
-                  disabled={seg.status === 'generating'}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="删除"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-              </div>
+            <div className="flex-1 min-w-0">
+              {editingId === seg.id ? (
+                <div className="animate-fade-in">
+                  <textarea
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="w-full h-16 bg-white/60 text-ink rounded-xl px-3 py-2 border border-ink/15 focus:border-ink/25 focus:outline-none resize-none font-body text-[12px]"
+                    autoFocus
+                  />
+                  <div className="flex gap-2 mt-1.5">
+                    <button onClick={() => handleSaveEdit(seg.id)} className="px-3 py-1 bg-sage text-ink text-[11px] font-body rounded-lg shadow-btn">保存</button>
+                    <button onClick={handleCancelEdit} className="px-3 py-1 text-ink-soft text-[11px] font-body">取消</button>
+                  </div>
+                </div>
+              ) : (
+                <p className="font-body text-[12px] text-ink leading-relaxed truncate">{seg.text}</p>
+              )}
             </div>
 
-            {/* 文本内容 / 编辑模式 */}
-            {editingId === seg.id ? (
-              <div>
-                <textarea
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  className="w-full h-20 bg-gray-800 text-white rounded-lg px-3 py-2 border border-gray-500 focus:border-blue-500 focus:outline-none resize-none text-sm"
-                  autoFocus
-                />
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    onClick={() => handleSaveEdit(seg.id)}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-                  >
-                    保存
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-gray-300 text-sm rounded-lg transition-colors"
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-200 leading-relaxed">{seg.text}</p>
-            )}
+            <StatusBadge status={seg.status} />
 
-            {/* 音频播放器（已生成时显示） */}
-            {seg.status === 'generated' && seg.audio_path && (
-              <div className="mt-2 pt-2 border-t border-gray-600">
-                <SegmentAudio audioUrl={seg.audio_path} />
-              </div>
-            )}
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => handleStartEdit(seg)} disabled={seg.status === 'generating' || editingId === seg.id} className="p-1.5 rounded-lg text-ink-soft/40 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title="编辑">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              </button>
+              <button onClick={() => handleRegenerate(seg.id)} disabled={seg.status === 'generating'} className="p-1.5 rounded-lg text-ink-soft/40 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title="重新生成">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              </button>
+              <button onClick={() => handleDelete(seg.id)} disabled={seg.status === 'generating'} className="p-1.5 rounded-lg text-ink-soft/40 hover:text-pink hover:bg-white/50 transition-colors disabled:opacity-30" title="删除">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* 错误提示 */}
       {error && (
-        <div className="mb-4 bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-400 text-sm">
-          {error}
-        </div>
+        <div className="mb-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">{error}</div>
       )}
 
-      {/* 底部操作栏 */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <button
           onClick={handleBatchGenerate}
           disabled={!hasPendingOrFailed}
-          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2.5 transition-colors text-sm"
+          className="flex-1 bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
         >
           全部生成
         </button>
         <button
           onClick={handleMerge}
           disabled={!allGenerated || isMerging}
-          className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2.5 transition-colors flex items-center justify-center gap-2 text-sm"
+          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider flex items-center justify-center gap-2"
         >
           {isMerging ? (
             <>
-              <svg
-                className="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
+              <div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>
               合并中...
             </>
-          ) : (
-            '合并为完整音频'
-          )}
+          ) : '合并音频'}
         </button>
       </div>
     </div>
