@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 
 export const ScriptPreview: React.FC = () => {
-  const { script, updateScript, settings } = useStore();
+  const { script, updateScript, settings, splitScriptAction, isSplitting, currentBroadcast, segments } = useStore();
   const [isEditing, setIsEditing] = useState(false);
   const [localScript, setLocalScript] = useState(script);
   const [showSaved, setShowSaved] = useState(false);
+  const [splitError, setSplitError] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalScript(script);
@@ -34,6 +35,18 @@ export const ScriptPreview: React.FC = () => {
     updateScript(newScript);
     setLocalScript(newScript);
   };
+
+  const handleSplit = async () => {
+    if (!script) return;
+    setSplitError(null);
+    try {
+      await splitScriptAction(script);
+    } catch {
+      setSplitError('切分失败，请稍后重试');
+    }
+  };
+
+  const isAlreadySplit = currentBroadcast?.mode === 'segmented' && segments.length > 0;
 
   const wordCount = script.length;
   const estimatedDuration = Math.ceil(wordCount / 4);
@@ -109,6 +122,24 @@ export const ScriptPreview: React.FC = () => {
       {script && !isEditing && (
         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-card-border">
           <button
+            onClick={handleSplit}
+            disabled={isSplitting || isAlreadySplit}
+            className="font-body text-[11px] px-3 py-1.5 bg-pink/20 hover:bg-pink/30 disabled:opacity-40 text-ink-soft rounded-full transition-colors uppercase tracking-wider flex items-center gap-1.5"
+          >
+            {isSplitting ? (
+              <>
+                <span className="w-2.5 h-0.5 bg-ink/20 rounded-full overflow-hidden">
+                  <span className="block h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} />
+                </span>
+                切分中...
+              </>
+            ) : isAlreadySplit ? (
+              '✓ 已切分'
+            ) : (
+              '✦ 切分口播稿'
+            )}
+          </button>
+          <button
             onClick={handleAddOpening}
             className="font-body text-[11px] px-3 py-1.5 bg-sage/20 hover:bg-sage/30 text-ink-soft rounded-full transition-colors uppercase tracking-wider"
           >
@@ -120,6 +151,13 @@ export const ScriptPreview: React.FC = () => {
           >
             + 添加结束语
           </button>
+        </div>
+      )}
+
+      {/* 切分错误提示 */}
+      {splitError && (
+        <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-2.5 text-ink text-[11px] font-body animate-shake">
+          {splitError}
         </div>
       )}
     </div>

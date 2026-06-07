@@ -79,6 +79,16 @@ export interface AppState {
   isSplitting: boolean;
   isMerging: boolean;
 
+  // 语音配置（VoiceGenerator 写入，splitScriptAction 读取）
+  voiceConfig: {
+    voice: string;
+    voiceType: string;
+    voiceDesign: string;
+    voiceClone: string;
+    stylePrompt: string;
+  };
+  updateVoiceConfig: (config: Partial<AppState['voiceConfig']>) => void;
+
   // 设置状态
   settings: Settings;
   isLoadingSettings: boolean;
@@ -107,6 +117,7 @@ export interface AppState {
   updateScript: (script: string) => void;
 
   // Segment 操作
+  splitScriptAction: (text: string) => Promise<void>;
   splitScript: (broadcastId: number) => Promise<Segment[]>;
   fetchSegments: (broadcastId: number) => Promise<Segment[]>;
   updateSegmentText: (broadcastId: number, segId: number, text: string) => Promise<Segment>;
@@ -155,6 +166,15 @@ export const useStore = create<AppState>((set) => ({
   segments: [],
   isSplitting: false,
   isMerging: false,
+
+  // 语音配置
+  voiceConfig: {
+    voice: defaultSettings.default_voice || '冰糖',
+    voiceType: 'preset',
+    voiceDesign: '',
+    voiceClone: '',
+    stylePrompt: '',
+  },
 
   // 设置状态
   settings: defaultSettings,
@@ -249,7 +269,44 @@ export const useStore = create<AppState>((set) => ({
     set({ script });
   },
 
+  /** 更新语音配置 */
+  updateVoiceConfig: (config) => {
+    set((state) => ({
+      voiceConfig: { ...state.voiceConfig, ...config },
+    }));
+  },
+
   // ============ Segment 操作 ============
+
+  /** 切分口播稿：创建 broadcast 记录 + AI 切分为短句 */
+  splitScriptAction: async (text) => {
+    set({ isSplitting: true });
+    try {
+      const { voiceConfig } = useStore.getState();
+      const genResponse = await broadcastApi.generate({
+        text,
+        voice: voiceConfig.voiceType === 'preset' ? voiceConfig.voice : undefined,
+        voiceType: voiceConfig.voiceType,
+        voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
+        voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
+        stylePrompt: voiceConfig.stylePrompt || undefined,
+        mode: 'segmented',
+      });
+      const { broadcast } = genResponse.data;
+      set((state) => ({
+        broadcasts: [broadcast, ...state.broadcasts],
+        currentBroadcast: broadcast,
+      }));
+
+      const splitResponse = await broadcastApi.split(broadcast.id);
+      const segments = splitResponse.data.segments;
+      set({ segments, isSplitting: false });
+    } catch (error) {
+      set({ isSplitting: false });
+      console.error('切分口播稿失败:', error);
+      throw error;
+    }
+  },
 
   splitScript: async (broadcastId) => {
     set({ isSplitting: true });

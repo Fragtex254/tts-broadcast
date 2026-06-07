@@ -97,7 +97,7 @@ export const ScriptEditor: React.FC = () => {
             className="flex-shrink-0 overflow-y-auto p-4 border-r border-card-border bg-paper-2/30"
             style={{ width: leftWidth }}
           >
-            <VoiceGenerator script={script} layout="vertical" />
+            <VoiceGenerator layout="vertical" />
           </div>
 
           {/* 可拖动分隔条 */}
