@@ -27,9 +27,11 @@ function getApiKey(type = 'anthropic') {
  * @returns {Anthropic} 客户端实例
  */
 function createClient() {
+  const apiKey = getApiKey('anthropic');
   return new Anthropic({
-    apiKey: getApiKey('anthropic'),
-    baseURL: BASE_URL
+    apiKey,
+    baseURL: BASE_URL,
+    defaultHeaders: { 'api-key': apiKey }
   });
 }
 
@@ -80,11 +82,12 @@ ${itemsText}
     ]
   });
 
-  if (!message?.content?.[0]?.text) {
+  const textBlock = message.content.find(b => b.type === 'text');
+  if (!textBlock?.text) {
     throw new Error('MiMo API 返回内容为空');
   }
 
-  return message.content[0].text;
+  return textBlock.text;
 }
 
 /**
@@ -182,17 +185,20 @@ ${text}`;
   const message = await client.messages.create({
     model: 'mimo-v2.5',
     max_tokens: 4000,
+    thinking: { type: 'disabled' },
     system: '你是一个文本切分助手，只输出 JSON 数组格式。',
     messages: [
       { role: 'user', content: prompt }
     ]
   });
 
-  if (!message?.content?.[0]?.text) {
+  // MiMo 可能返回 thinking + text 两种 content block，提取 text 类型
+  const textBlock = message.content.find(b => b.type === 'text');
+  if (!textBlock?.text) {
     throw new Error('MiMo API 返回内容为空');
   }
 
-  const rawText = message.content[0].text.trim();
+  const rawText = textBlock.text.trim();
 
   // 尝试解析 JSON，处理可能的 markdown 代码块包裹
   let jsonStr = rawText;
