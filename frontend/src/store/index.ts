@@ -355,6 +355,15 @@ export const useStore = create<AppState>((set) => ({
       ),
     }));
     try {
+      // 先同步最新音色配置到后端
+      const { voiceConfig } = useStore.getState();
+      await broadcastApi.updateVoiceConfig(broadcastId, {
+        voiceType: voiceConfig.voiceType,
+        voice: voiceConfig.voiceType === 'preset' ? voiceConfig.voice : undefined,
+        voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
+        voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
+        stylePrompt: voiceConfig.stylePrompt || undefined,
+      });
       const response = await broadcastApi.regenerateSegment(broadcastId, segId);
       const updated = response.data.segment;
       set((state) => ({
@@ -381,6 +390,15 @@ export const useStore = create<AppState>((set) => ({
       ),
     }));
     try {
+      // 先同步最新音色配置到后端
+      const { voiceConfig } = useStore.getState();
+      await broadcastApi.updateVoiceConfig(broadcastId, {
+        voiceType: voiceConfig.voiceType,
+        voice: voiceConfig.voiceType === 'preset' ? voiceConfig.voice : undefined,
+        voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
+        voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
+        stylePrompt: voiceConfig.stylePrompt || undefined,
+      });
       const response = await broadcastApi.batchGenerateSegments(broadcastId);
       const { segments, results } = response.data;
       set({ segments });
