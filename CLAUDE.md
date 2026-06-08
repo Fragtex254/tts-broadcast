@@ -94,12 +94,33 @@ SQLite 数据库包含 4 张表：
 - `segments.text`：该段稿件文本
 - `segments.audio_path`：该段音频路径
 - `segments.status`：该段状态
+- `voice_presets`：音色预设，含克隆和设计两种类型，支持保存试听音频和原始参考音频
+- `voice_presets.type`：`clone`（克隆）或 `design`（设计）
+- `voice_presets.trial_audio_path`：试听音频路径
+- `voice_presets.original_audio_path`：克隆原始音频路径（仅 clone 类型）
+- `voice_presets.design_prompt`：音色描述（仅 design 类型）
 
 ## 外部 API
 
 - **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
 - **MiMo LLM API**（`https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
+
+### MiMo API 模型与限速
+
+完整文档见 `docs/mimo-api-models-limits.md` 和 `docs/ttsSeries.md`。
+
+**限流规则**：RPM（每分钟请求数）上限 100，TPM（每分钟 Token 数）上限 10M。超出会返回 `429 Too Many Requests`。批量生成语音时必须注意并发控制，避免触发限流。
+
+**TTS 模型**：
+
+| 模型 ID | 用途 |
+|---------|------|
+| `mimo-v2.5-tts` | 预置音色语音合成 |
+| `mimo-v2.5-tts-voiceclone` | 音色克隆（需上传音频样本的 base64） |
+| `mimo-v2.5-tts-voicedesign` | 音色设计（文本描述生成音色） |
+
+**LLM 模型**：`mimo-v2.5`（稿件改写与文本切分）
 
 ## 前端开发规范
 
