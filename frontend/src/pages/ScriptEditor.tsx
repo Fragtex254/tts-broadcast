@@ -7,8 +7,6 @@ import { SegmentEditor } from '../components/Dashboard/SegmentEditor';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import useStore from '../store';
 
-const MIN_LEFT_WIDTH = 200;
-const MAX_LEFT_WIDTH = 400;
 const DEFAULT_LEFT_WIDTH = 260;
 
 export const ScriptEditor: React.FC = () => {
@@ -17,6 +15,20 @@ export const ScriptEditor: React.FC = () => {
   const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [widthLimits, setWidthLimits] = useState({ min: 200, max: 600 });
+
+  // 动态计算面板宽度限制（视口 25%-75%）
+  useEffect(() => {
+    const updateLimits = () => {
+      setWidthLimits({
+        min: window.innerWidth * 0.25,
+        max: window.innerWidth * 0.75,
+      });
+    };
+    updateLimits();
+    window.addEventListener('resize', updateLimits);
+    return () => window.removeEventListener('resize', updateLimits);
+  }, []);
 
   const audioUrl = currentBroadcast?.audio_path
     ? `/api/broadcast/${currentBroadcast.id}/audio`
@@ -37,7 +49,7 @@ export const ScriptEditor: React.FC = () => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const newWidth = e.clientX - rect.left;
-      const clamped = Math.min(MAX_LEFT_WIDTH, Math.max(MIN_LEFT_WIDTH, newWidth));
+      const clamped = Math.min(widthLimits.max, Math.max(widthLimits.min, newWidth));
       setLeftWidth(clamped);
     };
 
@@ -56,7 +68,7 @@ export const ScriptEditor: React.FC = () => {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging]);
+  }, [isDragging, widthLimits]);
 
   // 空状态：无口播稿时引导回信源收集
   if (!script && !currentBroadcast) {
