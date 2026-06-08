@@ -241,7 +241,6 @@ router.post('/', createUpload, (req, res) => {
     const files = req.files || {};
     let finalTrialAudioPath = trial_audio_path || null;
     let finalOriginalAudioPath = null;
-    let tmpTrialPath = null;
 
     // 试听音频：优先使用上传的文件
     if (files.trial_audio && files.trial_audio[0]) {
@@ -274,11 +273,6 @@ router.post('/', createUpload, (req, res) => {
       finalOriginalAudioPath,
       design_prompt || null
     );
-
-    // 清理试听接口生成的临时文件（如果已被复制到预设目录则跳过）
-    if (tmpTrialPath && tmpTrialPath !== finalTrialAudioPath) {
-      cleanFile(path.join(__dirname, '../..', tmpTrialPath));
-    }
 
     const preset = db.prepare('SELECT * FROM voice_presets WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ preset });
