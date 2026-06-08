@@ -301,18 +301,14 @@ export const useStore = create<AppState>((set) => ({
 
   // ============ Segment 操作 ============
 
-  /** 切分口播稿：创建 broadcast 记录 + AI 切分为短句 */
+  /** 切分口播稿：创建 broadcast 记录 + AI 切分为短句（不依赖音色配置） */
   splitScriptAction: async (text) => {
     set({ isSplitting: true });
     try {
-      const { voiceConfig } = useStore.getState();
       const genResponse = await broadcastApi.generate({
         text,
-        voice: voiceConfig.voiceType === 'preset' ? voiceConfig.voice : undefined,
-        voiceType: voiceConfig.voiceType,
-        voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
-        voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
-        stylePrompt: voiceConfig.stylePrompt || undefined,
+        voiceType: 'preset',
+        voice: '冰糖',
         mode: 'segmented',
       });
       const { broadcast } = genResponse.data;
