@@ -301,10 +301,16 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       "SELECT * FROM segments WHERE broadcast_id = ? AND status IN ('pending', 'failed') ORDER BY \"index\""
     ).all(broadcastId);
 
-    const results = [];
+    // 先把所有待生成段落标记为 generating
     for (const segment of pendingSegments) {
       db.prepare("UPDATE segments SET status = 'generating', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segment.id);
+    }
 
+    // 并发池：最多 15 个同时请求
+    const CONCURRENCY = 15;
+    const results = [];
+
+    async function generateOne(segment) {
       try {
         const audioBuffer = await mimo.generateSpeech({
           text: segment.text,
@@ -328,6 +334,12 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
         db.prepare("UPDATE segments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segment.id);
         results.push({ id: segment.id, status: 'failed', error: ttsError.message });
       }
+    }
+
+    // 分批并发执行
+    for (let i = 0; i < pendingSegments.length; i += CONCURRENCY) {
+      const batch = pendingSegments.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(generateOne));
     }
 
     const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
