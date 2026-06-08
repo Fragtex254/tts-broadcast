@@ -64,6 +64,19 @@ export interface Schedule {
   updated_at: string;
 }
 
+/** 音色预设 */
+export interface VoicePreset {
+  id: number;
+  type: 'clone' | 'design';
+  name: string;
+  style_prompt: string;
+  trial_audio_path: string | null;
+  original_audio_path: string | null;
+  design_prompt: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** 应用状态 */
 export interface AppState {
   // 播报状态
@@ -95,6 +108,9 @@ export interface AppState {
 
   // 定时任务状态
   schedules: Schedule[];
+
+  // 音色预设状态
+  presets: VoicePreset[];
 
   // 播报操作
   fetchTodayItems: (params?: { category?: string; take?: number }) => Promise<void>;
@@ -138,6 +154,10 @@ export interface AppState {
   updateSchedule: (id: number, data: { name?: string; cron_expression?: string; content_types?: string }) => Promise<Schedule>;
   deleteSchedule: (id: number) => Promise<void>;
   toggleSchedule: (id: number) => Promise<Schedule>;
+
+  // 音色预设操作
+  fetchPresets: () => Promise<void>;
+  deletePreset: (id: number) => Promise<void>;
 }
 
 // ============ 默认设置 ============
@@ -182,6 +202,9 @@ export const useStore = create<AppState>((set) => ({
 
   // 定时任务状态
   schedules: [],
+
+  // 音色预设状态
+  presets: [],
 
   // ============ 播报操作 ============
 
@@ -548,6 +571,31 @@ export const useStore = create<AppState>((set) => ({
       return updated;
     } catch (error) {
       console.error('切换任务状态失败:', error);
+      throw error;
+    }
+  },
+
+  // ============ 音色预设操作 ============
+
+  fetchPresets: async () => {
+    try {
+      const { voicePresetApi } = await import('../services/api');
+      const response = await voicePresetApi.getAll();
+      set({ presets: response.data.presets });
+    } catch (error) {
+      console.error('获取预设列表失败:', error);
+    }
+  },
+
+  deletePreset: async (id) => {
+    try {
+      const { voicePresetApi } = await import('../services/api');
+      await voicePresetApi.delete(id);
+      set((state) => ({
+        presets: state.presets.filter((p) => p.id !== id),
+      }));
+    } catch (error) {
+      console.error('删除预设失败:', error);
       throw error;
     }
   },

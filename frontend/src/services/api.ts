@@ -93,4 +93,24 @@ export const scheduleApi = {
     api.post(`/schedules/${id}/toggle`),
 };
 
+// 音色预设 API
+export const voicePresetApi = {
+  getAll: () => api.get('/voice-presets'),
+
+  create: (formData: FormData) =>
+    api.post('/voice-presets', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  delete: (id: number) => api.delete(`/voice-presets/${id}`),
+
+  trialClone: (formData: FormData) =>
+    api.post('/voice-presets/trial/clone', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  trialDesign: (data: { design_prompt: string; trial_text: string; style_prompt?: string }) =>
+    api.post('/voice-presets/trial/design', data),
+};
+
 export default api;
