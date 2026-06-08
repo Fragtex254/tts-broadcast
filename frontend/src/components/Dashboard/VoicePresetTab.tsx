@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore, type VoicePreset } from '../../store';
+import MiniAudioPlayer from './MiniAudioPlayer';
 
 // ============ 接口定义 ============
 
@@ -169,7 +170,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {preset.type === 'clone' && preset.original_audio_path && (
                     <div>
                       <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40">参考音频</span>
-                      <audio controls src={preset.original_audio_path} className="w-full h-7 mt-0.5" />
+                      <div className="mt-0.5"><MiniAudioPlayer src={preset.original_audio_path} /></div>
                     </div>
                   )}
 
@@ -177,7 +178,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {preset.trial_audio_path && (
                     <div>
                       <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40">试听音频</span>
-                      <audio controls src={preset.trial_audio_path} className="w-full h-7 mt-0.5" />
+                      <div className="mt-0.5"><MiniAudioPlayer src={preset.trial_audio_path} /></div>
                     </div>
                   )}
                 </div>
@@ -185,13 +186,8 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
 
               {/* 内联播放器（非展开态的快速试听） */}
               {!isExpanded && playingId === preset.id && preset.trial_audio_path && (
-                <div className="px-3 pb-2 animate-fade-in">
-                  <audio
-                    controls
-                    src={preset.trial_audio_path}
-                    className="w-full h-7"
-                    onEnded={() => setPlayingId(null)}
-                  />
+                <div className="px-3 pb-2">
+                  <MiniAudioPlayer src={preset.trial_audio_path} onEnded={() => setPlayingId(null)} />
                 </div>
               )}
             </div>

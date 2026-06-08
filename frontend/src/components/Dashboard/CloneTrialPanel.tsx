@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { voicePresetApi } from '../../services/api';
 import { useStore } from '../../store';
 import AudioUploader from './AudioUploader';
+import MiniAudioPlayer from './MiniAudioPlayer';
 
 // ============ 接口定义 ============
 
@@ -192,11 +193,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
       </div>
 
       {/* 试听音频播放器 */}
-      {trialAudioUrl && (
-        <div className="animate-fade-in">
-          <audio controls src={trialAudioUrl} className="w-full h-8" />
-        </div>
-      )}
+      <MiniAudioPlayer src={trialAudioUrl} />
 
       {/* 保存对话框 */}
       {showSaveDialog && (
