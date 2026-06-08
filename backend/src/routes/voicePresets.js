@@ -106,7 +106,7 @@ router.post('/trial/clone', upload.single('reference_audio'), async (req, res) =
       return res.status(400).json({ error: '请上传参考音频文件' });
     }
 
-    const text = req.body.text || '你好，我是你的专属语音助手。';
+    const text = req.body.trial_text || '你好，我是你的专属语音助手。';
     const stylePrompt = req.body.style_prompt || '';
 
     // 转为 base64 data URI
