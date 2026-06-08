@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useStore, VoicePreset } from '../../store';
+import { useStore, type VoicePreset } from '../../store';
 import { broadcastApi } from '../../services/api';
 import { CloneTrialPanel } from './CloneTrialPanel';
 import { DesignTrialPanel } from './DesignTrialPanel';
