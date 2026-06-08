@@ -47,3 +47,17 @@ CREATE TABLE IF NOT EXISTS segments (
 CREATE INDEX IF NOT EXISTS idx_broadcasts_created_at ON broadcasts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_schedules_is_active ON schedules(is_active);
 CREATE INDEX IF NOT EXISTS idx_segments_broadcast_id ON segments(broadcast_id);
+
+CREATE TABLE IF NOT EXISTS voice_presets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL CHECK(type IN ('clone', 'design')),
+  name TEXT NOT NULL,
+  style_prompt TEXT DEFAULT '',
+  trial_audio_path TEXT,
+  original_audio_path TEXT,
+  design_prompt TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_presets_type ON voice_presets(type);

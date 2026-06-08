@@ -39,6 +39,26 @@ try {
   db.exec("ALTER TABLE broadcasts ADD COLUMN mode TEXT DEFAULT 'whole'");
 }
 
+// 迁移：确保 voice_presets 表存在
+try {
+  db.prepare('SELECT id FROM voice_presets LIMIT 1').get();
+} catch {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS voice_presets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL CHECK(type IN ('clone', 'design')),
+      name TEXT NOT NULL,
+      style_prompt TEXT DEFAULT '',
+      trial_audio_path TEXT,
+      original_audio_path TEXT,
+      design_prompt TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_voice_presets_type ON voice_presets(type);
+  `);
+}
+
 // 默认设置
 const defaultSettings = {
   mimo_api_key: '',
