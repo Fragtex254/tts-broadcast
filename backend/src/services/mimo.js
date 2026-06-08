@@ -135,17 +135,25 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
       audioConfig = { format: 'wav', voice };
   }
 
-  const response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
-    model,
-    messages,
-    audio: audioConfig
-  }, {
-    headers: {
-      'api-key': ttsApiKey,
-      'Content-Type': 'application/json'
-    },
-    timeout: 0 // 不设置超时限制，TTS 生成可能需要较长时间
-  });
+  let response;
+  try {
+    response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
+      model,
+      messages,
+      audio: audioConfig
+    }, {
+      headers: {
+        'api-key': ttsApiKey,
+        'Content-Type': 'application/json'
+      },
+      timeout: 0
+    });
+  } catch (err) {
+    if (err.response?.status === 429) {
+      throw new Error('MiMo API 请求过于频繁，请稍后再试');
+    }
+    throw new Error(`MiMo TTS API 调用失败: ${err.response?.data?.error?.message || err.message}`);
+  }
 
   const audioBase64 = response.data?.choices?.[0]?.message?.audio?.data;
   if (!audioBase64) {
