@@ -1,98 +1,112 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件为 Claude Code（claude.ai/code）在本仓库中工作时提供指引。
 
-## Project Overview
+## 项目概述
 
-TTS Broadcast is a full-stack application for automated AI news broadcasting using Xiaomi MiMo TTS API. It fetches daily AI news from AI HOT, rewrites them into broadcast scripts using MiMo LLM, and generates TTS audio.
+TTS Broadcast 是一个全栈应用，用于自动化 AI 新闻播报。它从 AI HOT 抓取每日 AI 新闻，使用 MiMo LLM 将其改写为播报稿件，并通过 MiMo TTS API 生成语音音频。
 
-## Tech Stack
+## 技术栈
 
-**Backend (Node.js)**
-- Express 5 web framework
-- better-sqlite3 for embedded database
-- OpenAI SDK (compatible with MiMo API)
-- node-cron for scheduled tasks
-- Jest for testing
+**后端（Node.js）**
+- Express 5 Web 框架
+- better-sqlite3 嵌入式数据库
+- Anthropic SDK（LLM 稿件改写与文本切分）
+- Axios（TTS 语音合成 HTTP 请求）
+- OpenAI SDK（仅用于 TTS Key 有效性测试）
+- node-cron 定时任务
+- Jest 测试框架
 
-**Frontend (React + TypeScript)**
-- React 19 with TypeScript
-- Vite 8 build tool
-- Tailwind CSS 4 for styling
-- Zustand for state management
-- React Router 7 for routing
+**前端（React + TypeScript）**
+- React 19 + TypeScript
+- Vite 8 构建工具
+- Tailwind CSS 4 样式
+- Zustand 状态管理
+- React Router 7 路由
 
-## Common Commands
+## 常用命令
 
-### Backend (from `tts-broadcast/backend/`)
-
-```bash
-npm run dev          # Start dev server with hot reload (port 3001)
-npm start            # Start production server
-npm test             # Run all tests with Jest
-npm test -- --watch  # Run tests in watch mode
-```
-
-### Frontend (from `tts-broadcast/frontend/`)
+### 后端（在 `backend/` 目录下执行）
 
 ```bash
-npm run dev          # Start dev server (port 5173)
-npm run build        # Build for production (runs tsc + vite build)
-npm run lint         # Run ESLint
-npm run preview      # Preview production build
+npm run dev          # 启动开发服务器，支持热重载（端口 3001）
+npm start            # 启动生产服务器
+npm test             # 运行所有测试
+npm test -- --watch  # 监听模式运行测试
 ```
 
-## Architecture
+### 前端（在 `frontend/` 目录下执行）
+
+```bash
+npm run dev          # 启动开发服务器（端口 5173）
+npm run build        # 构建生产版本（tsc + vite build）
+npm run lint         # 运行 ESLint
+npm run preview      # 预览生产构建
+```
+
+## 目录结构
 
 ```
 tts-broadcast/
 ├── backend/
 │   ├── src/
-│   │   ├── app.js            # Express app entry, middleware setup, route mounting
-│   │   ├── db/               # SQLite initialization and schema
-│   │   ├── routes/           # Express routes (broadcast, settings, schedule)
-│   │   └── services/         # Business logic (aihot, mimo, scheduler)
-│   ├── tests/                # Jest tests mirroring src/ structure
-│   ├── audio/                # Generated audio files (gitignored)
-│   └── data/                 # SQLite database files (gitignored)
+│   │   ├── app.js            # Express 应用入口，中间件配置，路由挂载
+│   │   ├── db/               # SQLite 初始化与 schema
+│   │   ├── routes/           # Express 路由（broadcast, settings, schedule）
+│   │   └── services/         # 业务逻辑（aihot, audio, mimo, scheduler）
+│   ├── tests/                # Jest 测试，镜像 src/ 结构
+│   ├── audio/                # 生成的音频文件（已 gitignore）
+│   └── data/                 # SQLite 数据库文件（已 gitignore）
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/            # Route components (Dashboard, History, Settings)
-│   │   ├── components/       # Reusable UI components
-│   │   ├── services/         # API client layer
-│   │   └── store/            # Zustand state management
+│   │   ├── pages/            # 路由页面（SourceCollection, ScriptEditor, History, Settings）
+│   │   ├── components/       # 可复用 UI 组件
+│   │   ├── services/         # API 客户端层
+│   │   └── store/            # Zustand 状态管理
 │   └── vite.config.ts
+├── docs/                     # 项目文档
+├── start.sh                  # 一键启动脚本
+├── README.md
 └── .gitignore
 ```
 
-## Database Schema
+## 数据库结构
 
-SQLite with 3 tables:
-- `broadcasts`: Generated broadcasts with audio paths, status tracking
-- `settings`: Key-value store for API keys, voice preferences, scripts
-- `schedules`: Cron-based scheduled tasks for automated broadcasting
+SQLite 数据库包含 4 张表：
 
-## External APIs
+- `broadcasts`：播报记录，含稿件内容、音频路径、状态、模式（整篇/分段）
+- `segments`：分段记录，关联 broadcast（外键 `ON DELETE CASCADE`），每段独立生成音频
+- `settings`：键值存储，保存 API Key、音色偏好、脚本等配置
+- `schedules`：定时任务，基于 cron 表达式自动播报
 
-- **MiMo TTS API** (`https://api.xiaomimimo.com/v1`): Text-to-speech synthesis
-- **MiMo LLM API**: Text rewriting for broadcast scripts
-- **AI HOT API**: Daily AI news data source
+关键字段说明：
 
-## Environment Variables
+- `broadcasts.title`：播报标题（必填）
+- `broadcasts.content`：播报稿件正文（必填）
+- `broadcasts.audio_path`：音频文件路径
+- `broadcasts.status`：播报状态（如 `pending`、`completed`）
+- `broadcasts.mode`：`whole`（整篇生成）或 `segmented`（分段生成）
+- `broadcasts.saved`：是否已保存（0/1），决定音频生命周期
+- `broadcasts.voice_type`：音色类型（简单值，如音色名称）
+- `broadcasts.voice_config`：音色配置 JSON（详细参数）
+- `segments.broadcast_id`：外键关联 broadcasts，级联删除
+- `segments.index`：段序号
+- `segments.text`：该段稿件文本
+- `segments.audio_path`：该段音频路径
+- `segments.status`：该段状态
 
-Backend requires `.env` file in `tts-broadcast/backend/`:
-```env
-MIMO_API_KEY=your_api_key_here
-PORT=3001
-NODE_ENV=development
-```
+## 外部 API
 
-## Frontend Development Conventions
+- **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
+- **MiMo LLM API**（`https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分
+- **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
+
+## 前端开发规范
 
 **所有前端开发必须严格遵守 `frontend/FRONTEND_CONVENTIONS.md` 中的规范。** 这是一份完整的前端开发规范文档，涵盖：
 
-- **设计系统** — Soft Editorial 风格（暖纸色背景、Cormorant Garamond 标题、粉彩色系、毛玻璃卡片）
-- **色彩/字体/卡片/按钮/输入框** — 全部有统一的 Tailwind class 模板，不允许硬编码颜色值或使用旧的 `gray-*` / `blue-*` / `purple-*` 暗色主题
+- **设计系统** — Soft Editorial 风格
+- **色彩/字体/卡片/按钮/输入框** — 统一 Tailwind class 模板
 - **组件规范** — 文件结构、Props interface 命名、导出方式、入场动画延迟分配
 - **加载状态** — 使用骨架屏（`animate-pulse`），不使用 spinner
 - **错误状态** — 使用 `animate-shake` + `bg-pink/10`
@@ -101,14 +115,14 @@ NODE_ENV=development
 
 新增页面或组件时，务必对照文档末尾的 Checklist 逐项检查。
 
-## Key Patterns
+## 关键开发模式
 
-- Backend uses OpenAI SDK with custom base_url for MiMo API compatibility
-- Frontend uses Zustand store pattern for global state
-- Tests use supertest for HTTP endpoint testing
-- Audio files are served as static files from `/audio` route
+- 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM，通过 Axios 直接请求 MiMo TTS API
+- 前端使用 Zustand store 模式管理全局状态
+- 测试使用 supertest 进行 HTTP 端点测试
+- 音频文件通过 `/audio` 路由作为静态文件提供服务
 
-## Persistence Development Spec
+## 数据持久化开发规范
 
 ### 原则
 
