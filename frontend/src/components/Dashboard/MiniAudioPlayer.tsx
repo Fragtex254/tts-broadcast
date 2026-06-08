@@ -23,16 +23,20 @@ const BARS = generateBars(20);
 
 export const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ src, onEnded }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const onEndedRef = useRef(onEnded);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // 始终指向最新的 onEnded，避免 effect 依赖变化
+  useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     const onTime = () => setCurrentTime(audio.currentTime);
     const onMeta = () => setDuration(audio.duration);
-    const onEnd = () => { setIsPlaying(false); onEnded?.(); };
+    const onEnd = () => { setIsPlaying(false); onEndedRef.current?.(); };
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onMeta);
     audio.addEventListener('ended', onEnd);
@@ -41,13 +45,17 @@ export const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ src, onEnded }
       audio.removeEventListener('loadedmetadata', onMeta);
       audio.removeEventListener('ended', onEnd);
     };
-  }, [src, onEnded]);
+  }, [src]); // 只在 src 变化时重新绑定
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !src) return;
-    if (isPlaying) { audio.pause(); } else { audio.play(); }
-    setIsPlaying(!isPlaying);
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
   }, [isPlaying, src]);
 
   const formatTime = (s: number) => {
