@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useStore } from '../../store';
+import { useStore, VoicePreset } from '../../store';
 import { broadcastApi } from '../../services/api';
+import { CloneTrialPanel } from './CloneTrialPanel';
+import { DesignTrialPanel } from './DesignTrialPanel';
+import { VoicePresetTab } from './VoicePresetTab';
 
 interface VoiceGeneratorProps {
   layout?: 'horizontal' | 'vertical';
@@ -19,9 +22,10 @@ const VOICE_OPTIONS = [
 ];
 
 const VOICE_TYPES = [
-  { value: 'preset', label: '预设' },
+  { value: 'builtin', label: '内置' },
   { value: 'clone', label: '克隆' },
   { value: 'design', label: '设计' },
+  { value: 'preset', label: '预设' },
 ];
 
 export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizontal' }) => {
@@ -31,7 +35,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
     settings, voiceConfig, updateVoiceConfig,
   } = useStore();
 
-  const [voiceType, setVoiceType] = useState(voiceConfig.voiceType || 'preset');
+  const [voiceType, setVoiceType] = useState(voiceConfig.voiceType === 'preset' ? 'builtin' : (voiceConfig.voiceType || 'builtin'));
   const [selectedVoice, setSelectedVoice] = useState(voiceConfig.voice || settings.default_voice || '冰糖');
   const [voiceClone, setVoiceClone] = useState(voiceConfig.voiceClone || '');
   const [voiceDesign, setVoiceDesign] = useState(voiceConfig.voiceDesign || '');
@@ -40,9 +44,10 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
 
   // 同步本地状态到 store（供 splitScriptAction 读取）
   useEffect(() => {
+    const mappedType = voiceType === 'builtin' ? 'preset' : voiceType;
     updateVoiceConfig({
       voice: selectedVoice,
-      voiceType,
+      voiceType: mappedType,
       voiceDesign,
       voiceClone,
       stylePrompt,
@@ -57,14 +62,27 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       return;
     }
     if (!currentBroadcast) return;
+    const mappedType = voiceType === 'builtin' ? 'preset' : voiceType;
     broadcastApi.updateVoiceConfig(currentBroadcast.id, {
-      voiceType,
-      voice: voiceType === 'preset' ? selectedVoice : undefined,
+      voiceType: mappedType,
+      voice: voiceType === 'builtin' ? selectedVoice : undefined,
       voiceDesign: voiceType === 'design' ? voiceDesign : undefined,
       voiceClone: voiceType === 'clone' ? voiceClone : undefined,
       stylePrompt: stylePrompt || undefined,
     }).catch(() => {/* 静默失败 */});
   }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast]);
+
+  const handleApplyPreset = (preset: VoicePreset) => {
+    if (preset.type === 'clone') {
+      setVoiceType('clone');
+      setVoiceClone(preset.original_audio_path || '');
+      setStylePrompt(preset.style_prompt || '');
+    } else {
+      setVoiceType('design');
+      setVoiceDesign(preset.design_prompt || '');
+      setStylePrompt(preset.style_prompt || '');
+    }
+  };
 
   const handleBatchGenerate = async () => {
     if (!currentBroadcast) {
@@ -115,7 +133,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
         </div>
 
         {/* 预设音色列表（纵向） */}
-        {voiceType === 'preset' && (
+        {voiceType === 'builtin' && (
           <div className="flex-1 overflow-y-auto mb-3 animate-fade-in min-h-0">
             <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">选择音色</label>
             <div className="flex flex-col gap-1">
@@ -139,43 +157,27 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
 
         {/* 声音克隆输入 */}
         {voiceType === 'clone' && (
-          <div className="mb-3 animate-fade-in flex-shrink-0">
-            <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">克隆声音 ID</label>
-            <input
-              type="text"
-              value={voiceClone}
-              onChange={(e) => setVoiceClone(e.target.value)}
-              placeholder="输入已克隆的声音 ID"
-              className="w-full bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors"
-            />
-          </div>
+          <CloneTrialPanel
+            voiceClone={voiceClone}
+            stylePrompt={stylePrompt}
+            onVoiceCloneChange={setVoiceClone}
+            onStylePromptChange={setStylePrompt}
+          />
         )}
 
         {/* 音色设计输入 */}
         {voiceType === 'design' && (
-          <div className="mb-3 animate-fade-in flex-shrink-0">
-            <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">音色设计描述</label>
-            <textarea
-              value={voiceDesign}
-              onChange={(e) => setVoiceDesign(e.target.value)}
-              placeholder="描述你想要的音色..."
-              className="w-full h-20 bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[11px] transition-colors"
-            />
-          </div>
+          <DesignTrialPanel
+            voiceDesign={voiceDesign}
+            stylePrompt={stylePrompt}
+            onVoiceDesignChange={setVoiceDesign}
+            onStylePromptChange={setStylePrompt}
+          />
         )}
 
-        {/* 风格提示词 */}
-        {voiceType !== 'preset' && (
-          <div className="mb-3 animate-fade-in flex-shrink-0">
-            <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">风格提示词（可选）</label>
-            <input
-              type="text"
-              value={stylePrompt}
-              onChange={(e) => setStylePrompt(e.target.value)}
-              placeholder="语速稍快，情绪饱满..."
-              className="w-full bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors"
-            />
-          </div>
+        {/* 预设管理 */}
+        {voiceType === 'preset' && (
+          <VoicePresetTab onApplyPreset={handleApplyPreset} />
         )}
 
         {/* 生成按钮 */}
@@ -232,7 +234,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
             </button>
           ))}
         </div>
-        {voiceType === 'preset' && (
+        {voiceType === 'builtin' && (
           <div className="flex gap-1 animate-fade-in">
             {VOICE_OPTIONS.map((voice) => (
               <button
@@ -257,7 +259,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
           <input type="text" value={voiceDesign} onChange={(e) => setVoiceDesign(e.target.value)} placeholder="音色描述"
             className="w-40 bg-white/70 text-ink rounded-lg px-3 py-1.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors animate-fade-in" />
         )}
-        {voiceType !== 'preset' && (
+        {(voiceType === 'clone' || voiceType === 'design') && (
           <input type="text" value={stylePrompt} onChange={(e) => setStylePrompt(e.target.value)} placeholder="风格提示词（可选）"
             className="w-36 bg-white/70 text-ink rounded-lg px-3 py-1.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors animate-fade-in" />
         )}
