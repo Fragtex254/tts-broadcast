@@ -146,7 +146,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
 
               {/* 展开的详情 */}
               {isExpanded && (
-                <div className="px-3 pb-2.5 animate-fade-in space-y-1.5">
+                <div className="px-3 pb-2.5 animate-fade-in space-y-1.5" onClick={(e) => e.stopPropagation()}>
                   {/* 分隔线 */}
                   <div className="border-t border-card-border" />
 
