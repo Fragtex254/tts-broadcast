@@ -14,6 +14,27 @@ if (!fs.existsSync(audioDir)) {
 }
 
 /**
+ * 解析 voiceClone：如果是文件路径则读取并转为 base64 data URI，
+ * 如果已经是 base64 data URI 则直接返回
+ */
+async function resolveVoiceClone(voiceClone) {
+  if (!voiceClone) return voiceClone;
+  // 已经是 base64 data URI
+  if (voiceClone.startsWith('data:')) return voiceClone;
+  // 是文件路径，读取并转 base64
+  if (voiceClone.startsWith('/audio/')) {
+    const filePath = path.join(__dirname, '../..', voiceClone);
+    if (fs.existsSync(filePath)) {
+      const buffer = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = ext === '.mp3' ? 'audio/mpeg' : 'audio/wav';
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    }
+  }
+  return voiceClone;
+}
+
+/**
  * GET /api/broadcast/today
  * 获取今日 AI HOT 精选资讯
  */
@@ -275,6 +296,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     }
 
     const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
+    const resolvedVoiceClone = await resolveVoiceClone(voiceConfig.voiceClone);
     const pendingSegments = db.prepare(
       "SELECT * FROM segments WHERE broadcast_id = ? AND status IN ('pending', 'failed') ORDER BY \"index\""
     ).all(broadcastId);
@@ -289,7 +311,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           voice: voiceConfig.voice,
           voiceType: broadcast.voice_type,
           voiceDesign: voiceConfig.voiceDesign,
-          voiceClone: voiceConfig.voiceClone,
+          voiceClone: resolvedVoiceClone,
           stylePrompt: voiceConfig.stylePrompt
         });
 
@@ -450,6 +472,7 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
 
     const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
     const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
+    const resolvedVoiceClone = await resolveVoiceClone(voiceConfig.voiceClone);
 
     db.prepare("UPDATE segments SET status = 'generating', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segId);
 
@@ -459,7 +482,7 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
         voice: voiceConfig.voice,
         voiceType: broadcast.voice_type,
         voiceDesign: voiceConfig.voiceDesign,
-        voiceClone: voiceConfig.voiceClone,
+        voiceClone: resolvedVoiceClone,
         stylePrompt: voiceConfig.stylePrompt
       });
 
