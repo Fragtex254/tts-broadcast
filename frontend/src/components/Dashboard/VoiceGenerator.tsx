@@ -39,18 +39,21 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
   const [voiceClone, setVoiceClone] = useState(voiceConfig.voiceClone || '');
   const [voiceDesign, setVoiceDesign] = useState(voiceConfig.voiceDesign || '');
   const [stylePrompt, setStylePrompt] = useState(voiceConfig.stylePrompt || '');
+  // 预设选中时的真实音色类型（不切换 UI tab）
+  const [activePresetType, setActivePresetType] = useState<string | null>(null);
 
-  // 同步本地状态到 store（供 splitScriptAction 读取）
+  // 同步本地状态到 store
   useEffect(() => {
-    const mappedType = voiceType === 'builtin' ? 'preset' : voiceType;
+    // 如果有选中的预设，使用预设的真实类型；否则用本地 voiceType
+    const effectiveType = activePresetType || (voiceType === 'builtin' ? 'preset' : voiceType);
     updateVoiceConfig({
       voice: selectedVoice,
-      voiceType: mappedType,
+      voiceType: effectiveType,
       voiceDesign,
       voiceClone,
       stylePrompt,
     });
-  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, updateVoiceConfig]);
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, updateVoiceConfig, activePresetType]);
 
   // 切换音色后同步到后端（影响段落重新生成），跳过首次渲染
   const isInitialMount = useRef(true);
@@ -60,41 +63,36 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       return;
     }
     if (!currentBroadcast) return;
-    const mappedType = voiceType === 'builtin' ? 'preset' : voiceType;
+    const effectiveType = activePresetType || (voiceType === 'builtin' ? 'preset' : voiceType);
     broadcastApi.updateVoiceConfig(currentBroadcast.id, {
-      voiceType: mappedType,
-      voice: voiceType === 'builtin' ? selectedVoice : undefined,
-      voiceDesign: voiceType === 'design' ? voiceDesign : undefined,
-      voiceClone: voiceType === 'clone' ? voiceClone : undefined,
+      voiceType: effectiveType,
+      voice: effectiveType === 'preset' ? selectedVoice : undefined,
+      voiceDesign: effectiveType === 'design' ? voiceDesign : undefined,
+      voiceClone: effectiveType === 'clone' ? voiceClone : undefined,
       stylePrompt: stylePrompt || undefined,
     }).catch(() => {/* 静默失败 */});
-  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast]);
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast, activePresetType]);
 
   const handleApplyPreset = (preset: VoicePreset) => {
-    // 保持在预设页签，直接更新 store 中的音色配置
+    // 设定预设的真实类型，useEffect 会用它来同步 store 和后端
+    setActivePresetType(preset.type);
     if (preset.type === 'clone') {
       setVoiceClone(preset.original_audio_path || '');
       setVoiceDesign('');
-      updateVoiceConfig({
-        voiceType: 'clone',
-        voice: '',
-        voiceClone: preset.original_audio_path || '',
-        voiceDesign: '',
-        stylePrompt: preset.style_prompt || '',
-      });
     } else {
       setVoiceDesign(preset.design_prompt || '');
       setVoiceClone('');
-      updateVoiceConfig({
-        voiceType: 'design',
-        voice: '',
-        voiceClone: '',
-        voiceDesign: preset.design_prompt || '',
-        stylePrompt: preset.style_prompt || '',
-      });
     }
     setStylePrompt(preset.style_prompt || '');
-    // voiceType 本地状态保持 'preset'，不切换页签
+    // voiceType 保持 'preset'，UI 不切换 tab
+  };
+
+  // 切换到非预设 tab 时，清除预设选中状态
+  const handleVoiceTypeChange = (type: string) => {
+    setVoiceType(type);
+    if (type !== 'preset') {
+      setActivePresetType(null);
+    }
   };
 
   const isVertical = layout === 'vertical';
@@ -116,7 +114,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
             {VOICE_TYPES.map((type) => (
               <button
                 key={type.value}
-                onClick={() => setVoiceType(type.value)}
+                onClick={() => handleVoiceTypeChange(type.value)}
                 className={`flex-1 px-2 py-1.5 rounded-lg font-body text-[11px] font-medium transition-all duration-150 ${
                   voiceType === type.value
                     ? 'bg-white/60 text-ink shadow-card border border-card-border'
@@ -193,7 +191,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
           {VOICE_TYPES.map((type) => (
             <button
               key={type.value}
-              onClick={() => setVoiceType(type.value)}
+              onClick={() => handleVoiceTypeChange(type.value)}
               className={`px-2.5 py-1 rounded-lg font-body text-[11px] font-medium transition-all duration-150 ${
                 voiceType === type.value
                   ? 'bg-white/60 text-ink shadow-card border border-card-border'
