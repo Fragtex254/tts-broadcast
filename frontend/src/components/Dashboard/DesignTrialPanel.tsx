@@ -50,8 +50,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
         trial_text: trialText,
         style_prompt: stylePrompt.trim() || undefined,
       });
-      const audioPath = response.data.audio_path as string;
-      setTrialAudioUrl(audioPath);
+      setTrialAudioUrl(response.data.audioUrl);
     } catch {
       setError('试听生成失败，请检查描述或稍后重试');
     } finally {
