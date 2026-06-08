@@ -8,31 +8,6 @@ description: "一次购买，畅用 MiMo-V2-Pro/Omni 两款全新顶级旗舰模
 tags:
   - "clippings"
 ---
-产品定价
-
-Token Plan
-
-新闻
-
-往期新闻
-
-API 文档
-
-集成扩展
-
-使用指南
-
-工具调用
-
-多模态理解
-
-精彩活动
-
-更新日志
-
-条款与协议
-
-开发者交流群
 
 ## 语音合成（MiMo-V2.5-TTS 系列）
 
@@ -99,7 +74,7 @@ API 文档
 
 **示例：**
 
-```bash
+```
 角色：百年门阀岑家的现任大当家。自出生便被过继给祖庙的守门老人抚养，被塑造成一尊完美无瑕、绝情断欲的家族图腾。常年深居简出，对人有着极强的阶级疏离感。
 
 场景：在祠堂的阴影里，看着那个不顾一切冲破保安防线来找她、企图带她私奔的男人。她要用最冷硬的阶级壁垒，绞杀对方，也绞杀自己刚刚萌芽、却足以燎原的感情。
@@ -108,8 +83,8 @@ API 文档
 冰冷、慵懒却极具威压的低音御姐。发声通道非常松弛，没有任何剑拔弩张，却有着让人骨里生寒的压迫感。
 
 - 语速与顿挫：极慢，每个字都像是在舌尖滚过才吐出来，带着上位者漫不经心的傲慢。句与句之间留下极长的、令人不安的空白。
-- 气声与实声：大部分时间，她的声音没有明显的声调起伏，实音重且硬，像是一条平缓却冰冷的暗河。但一定要在某些尾音处（如“真心”），加入极其轻微的气音收束，透出一丝连她自己都没察觉到的疲惫与渴望。
-- 咬字肌理：文白杂糅的用词带着旧时代的痕迹，唇齿音发得极轻但极清晰（如“冲撞”“廉价”），显得既清雅又锋利，刀刀见血。
+- 气声与实声：大部分时间，她的声音没有明显的声调起伏，实音重且硬，像是一条平缓却冰冷的暗河。但一定要在某些尾音处（如"真心"），加入极其轻微的气音收束，透出一丝连她自己都没察觉到的疲惫与渴望。
+- 咬字肌理：文白杂糅的用词带着旧时代的痕迹，唇齿音发得极轻但极清晰（如"冲撞""廉价"），显得既清雅又锋利，刀刀见血。
 ```
 
 导演模式适合对语音表演要求较高的场景，例如角色配音、影视级内容生成等。
@@ -151,7 +126,7 @@ API 文档
 - `(粤语)呢个真係好正啊！食过一次就唔会忘记！`
 - `(唱歌)原谅我这一生不羁放纵爱自由，也会怕有一天会跌倒，Oh no。背弃了理想，谁人都可以，哪会怕有一天只你共我。`
 
-在此基础上，我们还支持在文本中任意位置插入 `[音频标签]` 。通过 \[音频标签\] ，你可以对声音进行细粒度控制，精准调节语气、情绪和表达风格——无论是低声耳语、放声大笑，还是带点小情绪的小吐槽，也可以灵活插入呼吸声，停顿，咳嗽等，都能轻松实现。语速同样可以灵活调整，让每句话都有它该有的节奏。
+在此基础上，我们还支持在文本中任意位置插入 `[音频标签]` 。通过 `[音频标签]` ，你可以对声音进行细粒度控制，精准调节语气、情绪和表达风格——无论是低声耳语、放声大笑，还是带点小情绪的小吐槽，也可以灵活插入呼吸声，停顿，咳嗽等，都能轻松实现。语速同样可以灵活调整，让每句话都有它该有的节奏。
 
 | **风格类型** | **风格示例** |
 | --- | --- |
@@ -178,7 +153,17 @@ API 文档
 
 使用时，可在 `{"audio": {"voice": "mimo_default"}}` 中设置预置音色。
 
-<table><colgroup><col> <col> <col> <col></colgroup><thead><tr><th><strong>音色名</strong></th><th><strong>Voice ID</strong></th><th>语言</th><th>性别</th></tr></thead><tbody><tr><td>MiMo-默认</td><td>mimo_default</td><td colspan="2">因部署集群而异，中国集群默认为 <code>冰糖</code> ，其他集群默认为 <code>Mia</code></td></tr><tr><td>冰糖</td><td>冰糖</td><td>中文</td><td>女性</td></tr><tr><td>茉莉</td><td>茉莉</td><td>中文</td><td>女性</td></tr><tr><td>苏打</td><td>苏打</td><td>中文</td><td>男性</td></tr><tr><td>白桦</td><td>白桦</td><td>中文</td><td>男性</td></tr><tr><td>Mia</td><td>Mia</td><td>英文</td><td>女性</td></tr><tr><td>Chloe</td><td>Chloe</td><td>英文</td><td>女性</td></tr><tr><td>Milo</td><td>Milo</td><td>英文</td><td>男性</td></tr><tr><td>Dean</td><td>Dean</td><td>英文</td><td>男性</td></tr></tbody></table>
+| **音色名** | **Voice ID** | **语言** | **性别** |
+| --- | --- | --- | --- |
+| MiMo-默认 | `mimo_default` | 因部署集群而异，中国集群默认为 `冰糖` ，其他集群默认为 `Mia` |  |
+| 冰糖 | `冰糖` | 中文 | 女性 |
+| 茉莉 | `茉莉` | 中文 | 女性 |
+| 苏打 | `苏打` | 中文 | 男性 |
+| 白桦 | `白桦` | 中文 | 男性 |
+| Mia | `Mia` | 英文 | 女性 |
+| Chloe | `Chloe` | 英文 | 女性 |
+| Milo | `Milo` | 英文 | 男性 |
+| Dean | `Dean` | 英文 | 男性 |
 
 ### 调用示例
 
@@ -361,17 +346,17 @@ print("Audio saved to tmp/output.wav")
 
 **简洁描述型** -- 用关键词或一句话快速勾勒声音轮廓
 
-```bash
+```
 Heavy Russian accent, gruff middle-aged male, blunt and matter-of-fact.
 ```
 
 **专业描述型** -- 通过场景、人设或多维度细节立体刻画声音
 
-```bash
+```
 Young female, extreme close-up with a binaural, ear-to-ear ASMR feel. Audible breathing, subtle swallowing, and soft natural lip sounds. She speaks very slowly, creating a deeply relaxing and immersive experience.
 ```
 
-```bash
+```
 一位年迈的老先生，说带北方口音的普通话，语速缓慢而沉稳，嗓音略带沙哑和沧桑感，仿佛一位饱经风霜的老爷爷在讲故事，充满岁月的智慧。
 ```
 
@@ -605,7 +590,7 @@ completion = client.chat.completions.create(
             "content": ""
         },
         {
-            "role": "assistant", 
+            "role": "assistant",
             "content": "Yes, I had a sandwich."
         }
     ],
@@ -679,7 +664,7 @@ completion = client.chat.completions.create(
             "content": ""
         },
         {
-            "role": "assistant", 
+            "role": "assistant",
             "content": "Yes, I had a sandwich."
         }
     ],
@@ -720,35 +705,3 @@ print("Audio saved to tmp/output.wav")
 - 查看账单：您可以在控制台的 [账单明细](https://platform.xiaomimimo.com/#/console/usage) 页面查看用量。
 
 更新时间 2026 年 05 月 11 日
-
-### 目录
-
-支持的模型列表
-
-准备工作
-
-通用注意事项
-
-风格控制
-
-自然语言控制
-
-音频标签控制
-
-使用预置音色进行语音合成
-
-预置音色列表
-
-调用示例
-
-使用文本设计音色进行语音合成
-
-如何写好音色描述（voice design prompt）
-
-调用示例
-
-使用音色复刻进行语音合成
-
-调用示例
-
-计费说明
