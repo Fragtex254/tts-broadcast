@@ -114,9 +114,14 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
       formData.append('reference_audio', blob, fileName || 'reference.wav');
       formData.append('name', presetName.trim());
       formData.append('type', 'clone');
-      formData.append('trial_text', trialText);
       if (stylePrompt.trim()) {
         formData.append('style_prompt', stylePrompt);
+      }
+      // 附带试听音频
+      if (trialAudioUrl) {
+        const audioRes = await fetch(trialAudioUrl);
+        const audioBlob = await audioRes.blob();
+        formData.append('trial_audio', audioBlob, 'trial.wav');
       }
 
       await voicePresetApi.create(formData);
