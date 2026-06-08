@@ -84,8 +84,8 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
 
       const response = await voicePresetApi.trialClone(formData);
       setTrialAudioUrl(response.data.audioUrl);
-    } catch {
-      setError('试听生成失败，请检查音频或稍后重试');
+    } catch (err: any) {
+      setError(err.response?.data?.error || '试听生成失败，请检查音频或稍后重试');
     } finally {
       setIsTrialLoading(false);
     }

@@ -52,8 +52,8 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
         style_prompt: stylePrompt.trim() || undefined,
       });
       setTrialAudioUrl(response.data.audioUrl);
-    } catch {
-      setError('试听生成失败，请检查描述或稍后重试');
+    } catch (err: any) {
+      setError(err.response?.data?.error || '试听生成失败，请检查描述或稍后重试');
     } finally {
       setIsTrialLoading(false);
     }
