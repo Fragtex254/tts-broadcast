@@ -30,8 +30,7 @@ const VOICE_TYPES = [
 
 export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizontal' }) => {
   const {
-    currentBroadcast, segments,
-    batchGenerateSegments, isGenerating, isSplitting,
+    currentBroadcast,
     settings, voiceConfig, updateVoiceConfig,
   } = useStore();
 
@@ -40,7 +39,6 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
   const [voiceClone, setVoiceClone] = useState(voiceConfig.voiceClone || '');
   const [voiceDesign, setVoiceDesign] = useState(voiceConfig.voiceDesign || '');
   const [stylePrompt, setStylePrompt] = useState(voiceConfig.stylePrompt || '');
-  const [error, setError] = useState<string | null>(null);
 
   // 同步本地状态到 store（供 splitScriptAction 读取）
   useEffect(() => {
@@ -84,22 +82,6 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
     }
   };
 
-  const handleBatchGenerate = async () => {
-    if (!currentBroadcast) {
-      setError('请先切分口播稿');
-      return;
-    }
-    setError(null);
-    try {
-      await batchGenerateSegments(currentBroadcast.id);
-    } catch {
-      setError('生成语音失败，请检查 API Key 或稍后重试');
-    }
-  };
-
-  const isBusy = isGenerating || isSplitting;
-  const hasSegments = currentBroadcast?.mode === 'segmented' && segments.length > 0;
-  const hasPending = segments.some((s) => s.status === 'pending' || s.status === 'failed');
   const isVertical = layout === 'vertical';
 
   if (isVertical) {
@@ -178,33 +160,6 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
         {/* 预设管理 */}
         {voiceType === 'preset' && (
           <VoicePresetTab onApplyPreset={handleApplyPreset} />
-        )}
-
-        {/* 生成按钮 */}
-        <button
-          onClick={handleBatchGenerate}
-          disabled={isBusy || !hasSegments}
-          className="flex-shrink-0 w-full bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider flex items-center justify-center gap-2"
-        >
-          {isBusy ? (
-            <>
-              <span className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden">
-                <span className="block h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} />
-              </span>
-              生成中...
-            </>
-          ) : hasSegments ? (
-            hasPending ? '生成语音' : '✓ 已全部生成'
-          ) : (
-            '请先切分口播稿'
-          )}
-        </button>
-
-        {/* 错误提示 */}
-        {error && (
-          <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-2.5 text-ink text-[11px] font-body animate-shake flex-shrink-0">
-            {error}
-          </div>
         )}
       </div>
     );
