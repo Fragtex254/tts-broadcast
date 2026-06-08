@@ -71,15 +71,30 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
   }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast]);
 
   const handleApplyPreset = (preset: VoicePreset) => {
+    // 保持在预设页签，直接更新 store 中的音色配置
     if (preset.type === 'clone') {
-      setVoiceType('clone');
       setVoiceClone(preset.original_audio_path || '');
-      setStylePrompt(preset.style_prompt || '');
+      setVoiceDesign('');
+      updateVoiceConfig({
+        voiceType: 'clone',
+        voice: '',
+        voiceClone: preset.original_audio_path || '',
+        voiceDesign: '',
+        stylePrompt: preset.style_prompt || '',
+      });
     } else {
-      setVoiceType('design');
       setVoiceDesign(preset.design_prompt || '');
-      setStylePrompt(preset.style_prompt || '');
+      setVoiceClone('');
+      updateVoiceConfig({
+        voiceType: 'design',
+        voice: '',
+        voiceClone: '',
+        voiceDesign: preset.design_prompt || '',
+        stylePrompt: preset.style_prompt || '',
+      });
     }
+    setStylePrompt(preset.style_prompt || '');
+    // voiceType 本地状态保持 'preset'，不切换页签
   };
 
   const isVertical = layout === 'vertical';
