@@ -2,7 +2,8 @@
 // 支持订阅和取消订阅 SSE 事件
 
 import { useEffect, useRef, useCallback } from 'react';
-import { SSEClient, createSSEClient, SSEProgressEvent, SSECompleteEvent, SSEErrorEvent } from '../services/sseClient';
+import { SSEClient, createSSEClient } from '../services/sseClient';
+import type { SSEProgressEvent, SSECompleteEvent, SSEErrorEvent } from '../services/sseClient';
 
 interface UseSSEOptions {
   taskId: string | null;
