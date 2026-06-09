@@ -1,0 +1,139 @@
+// SSE 客户端封装
+// 提供类型安全的 SSE 连接管理
+
+export interface SSEProgressEvent {
+  segmentId?: number;
+  status: 'generating' | 'generated' | 'failed';
+  audioPath?: string;
+  error?: string;
+  current?: number;
+  total?: number;
+  text?: string;
+}
+
+export interface SSECompleteEvent {
+  segments: any[];
+  results: any[];
+  timestamp: number;
+}
+
+export interface SSEErrorEvent {
+  error: string;
+}
+
+export type SSEEventHandler<T = any> = (data: T) => void;
+
+export class SSEClient {
+  private eventSource: EventSource | null = null;
+  private taskId: string;
+  private handlers: Map<string, Set<SSEEventHandler>> = new Map();
+
+  constructor(taskId: string) {
+    this.taskId = taskId;
+  }
+
+  /**
+   * 建立 SSE 连接
+   */
+  connect(): void {
+    if (this.eventSource) {
+      this.close();
+    }
+
+    this.eventSource = new EventSource(`/api/sse/${this.taskId}`);
+
+    // 连接成功事件
+    this.eventSource.addEventListener('connected', (event) => {
+      console.log(`SSE 连接成功: ${this.taskId}`);
+    });
+
+    // 进度事件
+    this.eventSource.addEventListener('progress', (event) => {
+      const data = JSON.parse(event.data) as SSEProgressEvent;
+      this.emit('progress', data);
+    });
+
+    // 完成事件
+    this.eventSource.addEventListener('complete', (event) => {
+      const data = JSON.parse(event.data) as SSECompleteEvent;
+      this.emit('complete', data);
+    });
+
+    // 错误事件
+    this.eventSource.addEventListener('error', (event) => {
+      if (event instanceof MessageEvent) {
+        const data = JSON.parse(event.data) as SSEErrorEvent;
+        this.emit('error', data);
+      } else {
+        // EventSource 连接错误
+        this.emit('error', { error: 'SSE 连接错误' });
+      }
+    });
+
+    // 默认错误处理（连接断开）
+    this.eventSource.onerror = (error) => {
+      console.error(`SSE 连接错误: ${this.taskId}`, error);
+    };
+  }
+
+  /**
+   * 注册事件处理器
+   */
+  on<T = any>(eventType: string, handler: SSEEventHandler<T>): void {
+    if (!this.handlers.has(eventType)) {
+      this.handlers.set(eventType, new Set());
+    }
+    this.handlers.get(eventType)!.add(handler);
+  }
+
+  /**
+   * 移除事件处理器
+   */
+  off<T = any>(eventType: string, handler: SSEEventHandler<T>): void {
+    const handlers = this.handlers.get(eventType);
+    if (handlers) {
+      handlers.delete(handler);
+    }
+  }
+
+  /**
+   * 触发事件
+   */
+  private emit(eventType: string, data: any): void {
+    const handlers = this.handlers.get(eventType);
+    if (handlers) {
+      for (const handler of handlers) {
+        try {
+          handler(data);
+        } catch (error) {
+          console.error(`SSE 事件处理错误: ${eventType}`, error);
+        }
+      }
+    }
+  }
+
+  /**
+   * 关闭 SSE 连接
+   */
+  close(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    this.handlers.clear();
+  }
+
+  /**
+   * 获取任务 ID
+   */
+  getTaskId(): string {
+    return this.taskId;
+  }
+}
+
+/**
+ * 创建 SSE 客户端实例
+ */
+export function createSSEClient(taskId: string): SSEClient {
+  return new SSEClient(taskId);
+}
