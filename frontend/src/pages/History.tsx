@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import useStore from '../store';
 import type { Broadcast } from '../store';
 
@@ -39,13 +40,87 @@ const getStatusBadge = (status: string) => {
 };
 
 export const History: React.FC = () => {
-  const { broadcasts, fetchBroadcasts, currentBroadcast, setCurrentBroadcast, saveBroadcast, fetchSegments } = useStore();
+  const { broadcasts, fetchBroadcasts, currentBroadcast, setCurrentBroadcast, saveBroadcast, fetchSegments, batchDeleteBroadcasts, isBatchDeleting } = useStore();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
+
+  // 多选模式状态
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // 进入多选模式
+  const handleEnterMultiSelect = () => {
+    setIsMultiSelectMode(true);
+    setSelectedIds(new Set());
+  };
+
+  // 退出多选模式
+  const handleExitMultiSelect = () => {
+    setIsMultiSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  // 切换选择状态
+  const handleToggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // 全选/取消全选当前页
+  const handleToggleSelectAll = () => {
+    const currentPageIds = broadcasts.map((b) => b.id);
+    const allSelected = currentPageIds.every((id) => selectedIds.has(id));
+
+    if (allSelected) {
+      // 取消全选当前页
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        currentPageIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      // 全选当前页
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        currentPageIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  // 点击删除按钮
+  const handleDeleteClick = () => {
+    if (selectedIds.size === 0) return;
+    setShowConfirmDialog(true);
+  };
+
+  // 确认删除
+  const handleConfirmDelete = async () => {
+    try {
+      const ids = Array.from(selectedIds);
+      await batchDeleteBroadcasts(ids);
+      setShowConfirmDialog(false);
+      handleExitMultiSelect();
+      await loadBroadcasts(page);
+    } catch (error) {
+      console.error('批量删除失败:', error);
+    }
+  };
+
+  // 计算已选中的已保存记录数量
+  const savedCount = broadcasts.filter((b) => selectedIds.has(b.id) && b.saved === 1).length;
 
   const loadBroadcasts = async (pageNum: number) => {
     setIsLoading(true);
@@ -78,7 +153,48 @@ export const History: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header title="播报历史" subtitle={`共 ${total} 条播报记录`} />
+      <Header
+        title="播报历史"
+        subtitle={`共 ${total} 条播报记录`}
+        actions={
+          isMultiSelectMode ? (
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={broadcasts.length > 0 && broadcasts.every((b) => selectedIds.has(b.id))}
+                  onChange={handleToggleSelectAll}
+                  className="w-4 h-4 rounded border-card-border text-pink focus:ring-pink/30"
+                />
+                <span className="font-body text-[12px] text-ink-soft">全选当前页</span>
+              </label>
+              <span className="font-body text-[12px] text-ink-soft">
+                已选 {selectedIds.size} 项
+              </span>
+              <button
+                onClick={handleDeleteClick}
+                disabled={selectedIds.size === 0 || isBatchDeleting}
+                className="px-3 py-1.5 bg-pink text-white font-body text-[11px] font-medium rounded-lg shadow-btn hover:brightness-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                🗑️ 删除
+              </button>
+              <button
+                onClick={handleExitMultiSelect}
+                className="px-3 py-1.5 bg-white border border-card-border text-ink-soft font-body text-[11px] font-medium rounded-lg hover:bg-paper-2 transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleEnterMultiSelect}
+              className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none"
+            >
+              ✓ 多选
+            </button>
+          )
+        }
+      />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-6xl mx-auto space-y-4">
@@ -112,13 +228,29 @@ export const History: React.FC = () => {
 
             {!isLoading && !error && broadcasts.map((broadcast, index) => {
               const isSelected = currentBroadcast?.id === broadcast.id;
+              const isChecked = selectedIds.has(broadcast.id);
               return (
                 <div
                   key={broadcast.id}
-                  onClick={() => handleSelectBroadcast(broadcast)}
-                  className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border cursor-pointer transition-all duration-200 ${isSelected ? 'bg-sage/10' : 'hover:bg-white/30'}`}
+                  onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast.id) : handleSelectBroadcast(broadcast)}
+                  className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border cursor-pointer transition-all duration-200 ${
+                    isMultiSelectMode && isChecked
+                      ? 'bg-sage/10'
+                      : isSelected
+                      ? 'bg-sage/10'
+                      : 'hover:bg-white/30'
+                  }`}
                   style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.03}s both` }}
                 >
+                  {isMultiSelectMode && (
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => handleToggleSelect(broadcast.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-4 h-4 rounded border-card-border text-pink focus:ring-pink/30"
+                    />
+                  )}
                   <div className="flex-1 min-w-0 flex items-center gap-2">
                     <p className={`font-display text-[15px] font-medium truncate ${isSelected ? 'text-ink' : 'text-ink/80'}`}>{broadcast.title}</p>
                     {broadcast.saved === 1 && (
@@ -130,12 +262,14 @@ export const History: React.FC = () => {
                   <span className="font-body text-[12px] text-ink-soft/60 min-w-[80px]">{formatDate(broadcast.created_at)}</span>
                   <span className="font-body text-[12px] text-ink-soft/60 min-w-[50px]">{formatDuration(broadcast.duration)}</span>
                   {getStatusBadge(broadcast.status)}
-                  <button
-                    onClick={(e) => handleReEdit(broadcast, e)}
-                    className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none whitespace-nowrap"
-                  >
-                    ✏️ 重新编辑
-                  </button>
+                  {!isMultiSelectMode && (
+                    <button
+                      onClick={(e) => handleReEdit(broadcast, e)}
+                      className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none whitespace-nowrap"
+                    >
+                      ✏️ 重新编辑
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -175,6 +309,17 @@ export const History: React.FC = () => {
           />
         </div>
       </main>
+
+      {/* 确认删除对话框 */}
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        title="确认删除"
+        message={`确定要删除选中的 ${selectedIds.size} 条记录吗？`}
+        warningMessage={savedCount > 0 ? `其中包含 ${savedCount} 条已保存记录` : undefined}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setShowConfirmDialog(false)}
+        isLoading={isBatchDeleting}
+      />
     </div>
   );
 };
