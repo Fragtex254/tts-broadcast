@@ -161,6 +161,12 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           total: pendingSegments.length
         });
       }
+
+      // 请求间隔，避免触发 MiMo API 限流（RPM 100）
+      // 每个请求间隔 1 秒，确保不超过每分钟 100 个请求
+      if (i < pendingSegments.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
 
     const segments = segmentStore.getByBroadcastId(idCheck.id);
