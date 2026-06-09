@@ -337,7 +337,7 @@ export const History: React.FC = () => {
 
       {/* 删除失败错误提示 */}
       {deleteError && (
-        <div className="fixed bottom-4 right-4 z-50 bg-pink/10 border border-pink/30 text-pink px-4 py-3 rounded-lg animate-fade-in">
+        <div className="fixed bottom-4 right-4 z-50 bg-pink/10 border border-pink/30 text-pink px-4 py-3 rounded-lg animate-shake">
           {deleteError}
         </div>
       )}
