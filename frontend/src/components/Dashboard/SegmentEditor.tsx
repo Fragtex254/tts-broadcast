@@ -142,11 +142,39 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
         <h3 className="font-display italic text-[14px] font-medium text-ink-soft">段落编辑器</h3>
       </div>
 
+      {/* 生成进度指示器 */}
+      {segments.some(s => s.status === 'generating') && (
+        <div className="mb-3 bg-lilac/10 rounded-xl p-3 border border-lilac/20">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-body text-[11px] text-ink-soft">正在生成语音...</span>
+            <span className="font-body text-[11px] text-lilac">
+              {segments.filter(s => s.status === 'generated').length} / {segments.length}
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-ink/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-lilac rounded-full transition-all duration-300"
+              style={{
+                width: `${(segments.filter(s => s.status === 'generated').length / segments.length) * 100}%`
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2 mb-4">
         {segments.map((seg, index) => (
           <div
             key={seg.id}
-            className="bg-white/45 rounded-2xl p-3 border border-card-border flex items-center gap-3"
+            className={`bg-white/45 rounded-2xl p-3 border flex items-center gap-3 transition-all duration-300 ${
+              seg.status === 'generating'
+                ? 'border-lilac/40 bg-lilac/5 animate-pulse'
+                : seg.status === 'generated'
+                ? 'border-sage/30'
+                : seg.status === 'failed'
+                ? 'border-pink/30 bg-pink/5'
+                : 'border-card-border'
+            }`}
             style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both` }}
           >
             <span className="font-display italic text-[18px] font-medium text-lilac min-w-[22px]">
