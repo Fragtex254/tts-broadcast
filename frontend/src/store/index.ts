@@ -452,6 +452,7 @@ export const useStore = create<AppState>((set) => ({
     return new Promise((resolve, reject) => {
       const { createSSEClient } = require('../services/sseClient');
       const client = createSSEClient(String(broadcastId));
+      let settled = false;
 
       // 注册进度事件
       client.on('progress', (event: any) => {
@@ -471,15 +472,21 @@ export const useStore = create<AppState>((set) => ({
 
       // 注册完成事件
       client.on('complete', (event: any) => {
-        set({ segments: event.segments });
-        client.close();
-        resolve({ segments: event.segments, results: event.results });
+        if (!settled) {
+          settled = true;
+          set({ segments: event.segments });
+          client.close();
+          resolve({ segments: event.segments, results: event.results });
+        }
       });
 
       // 注册错误事件
       client.on('error', (event: any) => {
-        client.close();
-        reject(new Error(event.error));
+        if (!settled) {
+          settled = true;
+          client.close();
+          reject(new Error(event.error));
+        }
       });
 
       // 建立 SSE 连接
@@ -487,8 +494,11 @@ export const useStore = create<AppState>((set) => ({
 
       // 同时发送 HTTP 请求触发批量生成
       broadcastApi.batchGenerateSegments(broadcastId).catch((error) => {
-        client.close();
-        reject(error);
+        if (!settled) {
+          settled = true;
+          client.close();
+          reject(error);
+        }
       });
     });
   },
