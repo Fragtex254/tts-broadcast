@@ -99,6 +99,9 @@ export interface AppState {
     voiceDesign: string;
     voiceClone: string;
     stylePrompt: string;
+    speed: { speed_ratio: number; style?: string } | null;
+    emotion: string | { emotion: string; weight: number }[] | null;
+    pitch: { pitch_ratio: number; style?: string } | null;
   };
   updateVoiceConfig: (config: Partial<AppState['voiceConfig']>) => void;
 
@@ -194,6 +197,9 @@ export const useStore = create<AppState>((set) => ({
     voiceDesign: '',
     voiceClone: '',
     stylePrompt: '',
+    speed: null,
+    emotion: null,
+    pitch: null,
   },
 
   // 设置状态

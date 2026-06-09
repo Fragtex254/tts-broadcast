@@ -20,6 +20,9 @@ export const broadcastApi = {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    speed?: { speed_ratio: number; style?: string } | null;
+    emotion?: string | { emotion: string; weight: number }[] | null;
+    pitch?: { pitch_ratio: number; style?: string } | null;
     mode?: 'whole' | 'segmented';
   }) => api.post('/broadcast/generate', data),
 
@@ -63,6 +66,9 @@ export const broadcastApi = {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    speed?: { speed_ratio: number; style?: string } | null;
+    emotion?: string | { emotion: string; weight: number }[] | null;
+    pitch?: { pitch_ratio: number; style?: string } | null;
   }) => api.patch(`/broadcast/${broadcastId}/voice-config`, data),
 };
 
