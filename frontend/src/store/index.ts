@@ -77,6 +77,19 @@ export interface VoicePreset {
   updated_at: string;
 }
 
+/** 确认对话框 */
+export interface ConfirmDialogProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  warningMessage?: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+}
+
 /** 应用状态 */
 export interface AppState {
   // 播报状态

@@ -1,16 +1,5 @@
 import React from 'react';
-
-interface ConfirmDialogProps {
-  isOpen: boolean;
-  title: string;
-  message: string;
-  warningMessage?: string;
-  confirmText?: string;
-  cancelText?: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  isLoading?: boolean;
-}
+import type { ConfirmDialogProps } from '../store';
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
@@ -34,9 +23,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       />
 
       {/* 对话框 */}
-      <div className="relative bg-white rounded-2xl shadow-xl border border-card-border p-6 max-w-md w-full mx-4 animate-fade-in">
+      <div className="relative bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border max-w-md w-full mx-4 animate-fade-in">
         {/* 标题 */}
-        <h3 className="font-display text-[18px] font-semibold text-ink mb-2">
+        <h3 className="font-display italic text-[18px] font-medium text-ink mb-2">
           {title}
         </h3>
 
@@ -57,16 +46,16 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="px-4 py-2 bg-white border border-card-border text-ink-soft font-body text-[13px] font-medium rounded-lg hover:bg-paper-2 transition-colors disabled:opacity-50"
+            className="text-ink-soft hover:text-ink font-body text-[12px] transition-colors disabled:opacity-40"
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="px-4 py-2 bg-pink text-white font-body text-[13px] font-medium rounded-lg shadow-btn hover:brightness-105 transition-all disabled:opacity-50"
+            className="px-5 py-2 bg-pink text-white font-body text-[12px] font-medium rounded-full shadow-btn hover:-translate-y-px active:translate-y-0 active:shadow-none hover:brightness-105 transition-all disabled:opacity-40"
           >
-            {isLoading ? '删除中...' : confirmText}
+            {isLoading ? confirmText.replace(/确认/, '正在') + '...' : confirmText}
           </button>
         </div>
       </div>
