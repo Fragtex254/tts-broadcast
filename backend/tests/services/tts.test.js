@@ -106,6 +106,12 @@ describe('TTS 服务', () => {
         .rejects.toThrow('请提供合成文本');
       await expect(tts.generateSpeech({ text: null }))
         .rejects.toThrow('请提供合成文本');
+      await expect(tts.generateSpeech({}))
+        .rejects.toThrow('请提供合成文本');
+      await expect(tts.generateSpeech({ text: '   ' }))
+        .rejects.toThrow('请提供合成文本');
+      await expect(tts.generateSpeech({ text: 123 }))
+        .rejects.toThrow('请提供合成文本');
     });
 
     test('clone 模式缺少 voiceClone 时抛出校验错误', async () => {
