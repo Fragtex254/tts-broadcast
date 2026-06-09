@@ -2,6 +2,34 @@
 
 本文件为 Claude Code（claude.ai/code）在本仓库中工作时提供指引。
 
+## ⚠️ 开发规范强制要求
+
+**每次开发都必须严格遵守前后端开发规范，这不是建议，而是硬性要求。**
+
+### 开发前
+
+1. **先读规范文档** — 开始任何开发前，先阅读对应的规范文档：
+   - 后端：`backend/BACKEND_CONVENTIONS.md`
+   - 前端：`frontend/FRONTEND_CONVENTIONS.md`
+2. **对照 Checklist** — 每个规范文档末尾都有 Checklist，新增代码必须逐项检查
+
+### 开发中
+
+3. **遵循现有模式** — 代码风格、命名、错误处理、测试模式必须与现有代码一致
+4. **使用 DAL 层** — 后端路由不直接写 SQL，通过 `*Store.js` 操作数据库
+5. **使用共享工具** — ID 校验用 `validateId()`，文件删除用 `cleanAudioFile()`，不要内联重复逻辑
+
+### 开发后
+
+6. **同步规范文档** — **如果有新增功能、新模式、或架构变更，必须第一时间更新对应的规范文档**：
+   - 新增路由/服务 → 更新 `BACKEND_CONVENTIONS.md` 的目录结构和服务职责表
+   - 新增组件/页面 → 更新 `FRONTEND_CONVENTIONS.md` 的相关章节
+   - 新增数据库字段 → 更新 `CLAUDE.md` 的数据库结构和持久化规范
+   - 新增外部 API → 更新 `CLAUDE.md` 的外部 API 章节
+7. **提交规范更新** — 规范文档的更新应与代码变更一起提交，不要留到以后
+
+---
+
 ## 项目概述
 
 TTS Broadcast 是一个全栈应用，用于自动化 AI 新闻播报。它从 AI HOT 抓取每日 AI 新闻，使用 MiMo LLM 将其改写为播报稿件，并通过 MiMo TTS API 生成语音音频。
@@ -12,8 +40,7 @@ TTS Broadcast 是一个全栈应用，用于自动化 AI 新闻播报。它从 A
 - Express 5 Web 框架
 - better-sqlite3 嵌入式数据库
 - Anthropic SDK（LLM 稿件改写与文本切分）
-- Axios（TTS 语音合成 HTTP 请求）
-- OpenAI SDK（仅用于 TTS Key 有效性测试）
+- Axios（TTS 语音合成 HTTP 请求 + API Key 测试）
 - node-cron 定时任务
 - Jest 测试框架
 
@@ -52,8 +79,9 @@ tts-broadcast/
 │   ├── src/
 │   │   ├── app.js            # Express 应用入口，中间件配置，路由挂载
 │   │   ├── db/               # SQLite 初始化与 schema
-│   │   ├── routes/           # Express 路由（broadcast, settings, schedule）
-│   │   └── services/         # 业务逻辑（aihot, audio, mimo, scheduler）
+│   │   ├── routes/           # Express 路由（broadcast, segments, settings, schedule, voicePresets）
+│   │   ├── services/         # 业务逻辑 + 数据访问层（aihot, audio, mimo, tts, broadcastStore, segmentStore, scheduler）
+│   │   └── utils/            # 共享工具函数（validation）
 │   ├── tests/                # Jest 测试，镜像 src/ 结构
 │   ├── audio/                # 生成的音频文件（已 gitignore）
 │   └── data/                 # SQLite 数据库文件（已 gitignore）
@@ -136,9 +164,28 @@ SQLite 数据库包含 4 张表：
 
 新增页面或组件时，务必对照文档末尾的 Checklist 逐项检查。
 
+## 后端开发规范
+
+**所有后端开发必须严格遵守 `backend/BACKEND_CONVENTIONS.md` 中的规范。** 这是一份完整的后端开发规范文档，涵盖：
+
+- **命名规范** — 文件/变量/常量/数据库/API 路径命名规则
+- **代码风格** — 缩进、引号、分号、require 顺序、函数风格、注释语言
+- **路由规范** — 路由定义模式、JSDoc 注释、async/await 使用规则
+- **服务层规范** — 职责边界、解构参数、避免全局变量
+- **数据库规范** — 迁移模式、参数化 SQL、事务使用
+- **错误处理** — 统一 try-catch 模式、状态码使用、错误信息暴露策略
+- **参数校验** — ID 校验、必填参数、业务规则校验
+- **响应格式** — 成功/失败响应结构规范
+- **测试规范** — 文件组织、命名、mock 策略、数据库清理策略
+- **已知技术债** — 已识别的问题清单
+
+新增路由、服务或测试时，务必对照文档末尾的 Checklist 逐项检查。
+
 ## 关键开发模式
 
-- 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM，通过 Axios 直接请求 MiMo TTS API
+- 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM（`services/mimo.js`），通过 Axios 调用 MiMo TTS API（`services/tts.js`）
+- 路由层通过 DAL 层（`services/broadcastStore.js`、`services/segmentStore.js`）操作数据库，不直接写 SQL
+- ID 校验使用 `utils/validation.js` 中的 `validateId()`，文件删除使用 `cleanAudioFile()`
 - 前端使用 Zustand store 模式管理全局状态
 - 测试使用 supertest 进行 HTTP 端点测试
 - 音频文件通过 `/audio` 路由作为静态文件提供服务
@@ -207,7 +254,8 @@ App 启动 → useEffect → fetchSettings() → 写入 Zustand store
 
 1. `backend/src/db/schema.sql` — 更新表定义
 2. `backend/src/db/index.js` — 添加迁移代码（ALTER TABLE）
-3. `backend/src/routes/*.js` — CRUD 接口
-4. `frontend/src/services/api.ts` — 新增 API 调用
-5. `frontend/src/store/index.ts` — 更新接口类型 + store action
-6. `frontend/src/pages/*.tsx` 或 `components/*.tsx` — UI 展示与交互
+3. `backend/src/services/*Store.js` — 在 DAL 层添加新的 CRUD 函数（如已有对应 Store）
+4. `backend/src/routes/*.js` — CRUD 接口（通过 DAL 操作数据库）
+5. `frontend/src/services/api.ts` — 新增 API 调用
+6. `frontend/src/store/index.ts` — 更新接口类型 + store action
+7. `frontend/src/pages/*.tsx` 或 `components/*.tsx` — UI 展示与交互
