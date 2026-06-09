@@ -50,29 +50,33 @@ export const History: React.FC = () => {
 
   // 多选模式状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedBroadcasts, setSelectedBroadcasts] = useState<Map<number, boolean>>(new Map());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // 从 selectedBroadcasts 派生 selectedIds
+  const selectedIds = new Set(selectedBroadcasts.keys());
 
   // 进入多选模式
   const handleEnterMultiSelect = () => {
     setIsMultiSelectMode(true);
-    setSelectedIds(new Set());
+    setSelectedBroadcasts(new Map());
   };
 
   // 退出多选模式
   const handleExitMultiSelect = () => {
     setIsMultiSelectMode(false);
-    setSelectedIds(new Set());
+    setSelectedBroadcasts(new Map());
   };
 
   // 切换选择状态
-  const handleToggleSelect = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
+  const handleToggleSelect = (broadcast: Broadcast) => {
+    setSelectedBroadcasts((prev) => {
+      const next = new Map(prev);
+      if (next.has(broadcast.id)) {
+        next.delete(broadcast.id);
       } else {
-        next.add(id);
+        next.set(broadcast.id, broadcast.saved === 1);
       }
       return next;
     });
@@ -80,21 +84,20 @@ export const History: React.FC = () => {
 
   // 全选/取消全选当前页
   const handleToggleSelectAll = () => {
-    const currentPageIds = broadcasts.map((b) => b.id);
-    const allSelected = currentPageIds.every((id) => selectedIds.has(id));
+    const allSelected = broadcasts.every((b) => selectedBroadcasts.has(b.id));
 
     if (allSelected) {
       // 取消全选当前页
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        currentPageIds.forEach((id) => next.delete(id));
+      setSelectedBroadcasts((prev) => {
+        const next = new Map(prev);
+        broadcasts.forEach((b) => next.delete(b.id));
         return next;
       });
     } else {
       // 全选当前页
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        currentPageIds.forEach((id) => next.add(id));
+      setSelectedBroadcasts((prev) => {
+        const next = new Map(prev);
+        broadcasts.forEach((b) => next.set(b.id, b.saved === 1));
         return next;
       });
     }
@@ -102,13 +105,14 @@ export const History: React.FC = () => {
 
   // 点击删除按钮
   const handleDeleteClick = () => {
-    if (selectedIds.size === 0) return;
+    if (selectedBroadcasts.size === 0) return;
     setShowConfirmDialog(true);
   };
 
   // 确认删除
   const handleConfirmDelete = async () => {
     try {
+      setDeleteError(null);
       const ids = Array.from(selectedIds);
       await batchDeleteBroadcasts(ids);
       setShowConfirmDialog(false);
@@ -116,11 +120,12 @@ export const History: React.FC = () => {
       await loadBroadcasts(page);
     } catch (error) {
       console.error('批量删除失败:', error);
+      setDeleteError('删除失败，请稍后重试');
     }
   };
 
-  // 计算已选中的已保存记录数量
-  const savedCount = broadcasts.filter((b) => selectedIds.has(b.id) && b.saved === 1).length;
+  // 计算已选中的已保存记录数量（跨页准确统计）
+  const savedCount = Array.from(selectedBroadcasts.values()).filter(Boolean).length;
 
   const loadBroadcasts = async (pageNum: number) => {
     setIsLoading(true);
@@ -232,7 +237,7 @@ export const History: React.FC = () => {
               return (
                 <div
                   key={broadcast.id}
-                  onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast.id) : handleSelectBroadcast(broadcast)}
+                  onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast) : handleSelectBroadcast(broadcast)}
                   className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border cursor-pointer transition-all duration-200 ${
                     isMultiSelectMode && isChecked
                       ? 'bg-sage/10'
@@ -246,7 +251,7 @@ export const History: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={isChecked}
-                      onChange={() => handleToggleSelect(broadcast.id)}
+                      onChange={() => handleToggleSelect(broadcast)}
                       onClick={(e) => e.stopPropagation()}
                       className="w-4 h-4 rounded border-card-border text-pink focus:ring-pink/30"
                     />
@@ -314,12 +319,19 @@ export const History: React.FC = () => {
       <ConfirmDialog
         isOpen={showConfirmDialog}
         title="确认删除"
-        message={`确定要删除选中的 ${selectedIds.size} 条记录吗？`}
+        message={`确定要删除选中的 ${selectedBroadcasts.size} 条记录吗？`}
         warningMessage={savedCount > 0 ? `其中包含 ${savedCount} 条已保存记录` : undefined}
         onConfirm={handleConfirmDelete}
         onCancel={() => setShowConfirmDialog(false)}
         isLoading={isBatchDeleting}
       />
+
+      {/* 删除失败错误提示 */}
+      {deleteError && (
+        <div className="fixed bottom-4 right-4 z-50 bg-pink/10 border border-pink/30 text-pink px-4 py-3 rounded-lg animate-fade-in">
+          {deleteError}
+        </div>
+      )}
     </div>
   );
 };
