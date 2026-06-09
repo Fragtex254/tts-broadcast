@@ -159,6 +159,51 @@ router.get('/history', (req, res) => {
 });
 
 /**
+ * POST /api/broadcast/batch-delete
+ * 批量删除播报记录
+ */
+router.post('/batch-delete', (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: '请提供要删除的记录 ID 列表' });
+    }
+
+    // 获取要删除的记录，用于清理音频文件
+    const records = [];
+    for (const id of ids) {
+      const record = broadcastStore.getById(id);
+      if (record) {
+        records.push(record);
+      }
+    }
+
+    // 清理音频文件
+    for (const record of records) {
+      if (record.audio_path) {
+        cleanAudioFile(record.audio_path);
+      }
+      // 清理关联的 segment 音频文件
+      const segments = segmentStore.getByBroadcastId(record.id);
+      for (const seg of segments) {
+        if (seg.audio_path) {
+          cleanAudioFile(seg.audio_path);
+        }
+      }
+    }
+
+    // 批量删除数据库记录（含级联删除 segments）
+    const result = broadcastStore.batchDeleteByIds(ids);
+
+    res.json(result);
+  } catch (error) {
+    console.error('批量删除失败:', error);
+    res.status(500).json({ error: '批量删除失败' });
+  }
+});
+
+/**
  * GET /api/broadcast/:id
  * 获取单条播报详情
  */
