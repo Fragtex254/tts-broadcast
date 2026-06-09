@@ -100,10 +100,9 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
 
-  // SSE 监听批量生成进度
-  const { isConnected } = useBatchGenerateSSE(broadcastId, {
+  // SSE 监听批量生成进度（始终启用）
+  useBatchGenerateSSE(broadcastId, {
     onSegmentProgress: useCallback((segmentId: number, status: string, audioPath?: string) => {
       // 实时更新单个 segment 状态
       useStore.setState((state) => ({
@@ -122,13 +121,11 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
     onSegmentComplete: useCallback((newSegments: any[]) => {
       // 所有 segment 生成完成
       useStore.setState({ segments: newSegments });
-      setIsGenerating(false);
     }, []),
     onError: useCallback((errorMsg: string) => {
       setError(errorMsg);
-      setIsGenerating(false);
     }, []),
-    enabled: isGenerating,
+    enabled: true, // 始终启用
   });
 
   useEffect(() => {
@@ -152,13 +149,10 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const handleDelete = async (segId: number) => { setError(null); try { await deleteSegment(broadcastId, segId); } catch { setError('删除失败'); } };
   const handleBatchGenerate = async () => {
     setError(null);
-    setIsGenerating(true);
     try {
       await batchGenerateSegments(broadcastId);
     } catch {
       setError('批量生成失败');
-    } finally {
-      setIsGenerating(false);
     }
   };
   const handleMerge = async () => { setError(null); try { await mergeSegments(broadcastId); onMerged?.(); } catch { setError('合并失败'); } };
