@@ -41,6 +41,116 @@ tags:
 - `user` 角色的消息为可选参数，可以传入指令来调整语音合成的语气与风格，也可以是对话历史（消息内容不会出现在合成的语音中）。使用 `mimo-v2.5-tts-voicedesign` 模型时，为必填参数。
 - 采用流式调用时，输出音频的格式请指定为 `pcm16` ，以便拼接成完整音频。拼接示例可参考各章节的 Python 调用方式。
 
+## 音频输出格式配置
+
+通过 `audio` 对象控制输出格式和参数：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `format` | string | `wav` | 输出格式：`wav`（推荐）、`pcm`、`mp3`、`ogg` |
+| `sample_rate` | int | `24000` | 采样率：8000 / 16000 / 24000 / 32000 / 44100 |
+| `speed_ratio` | float | `1.0` | 语速倍率：0.5 - 2.0 |
+| `voice` | string | — | 音色 ID（预置模式）或 base64 音频（克隆模式） |
+| `optimize_text_preview` | bool | — | 音色设计模式的试听优化 |
+
+**推荐配置**：
+
+| 场景 | 配置 |
+|------|------|
+| 生产环境 | `{ "format": "wav" }` |
+| 流式播放 | `{ "format": "mp3" }` 或 `{ "format": "ogg" }` |
+| 精细控制 | `{ "format": "wav", "sample_rate": 44100, "speed_ratio": 0.9 }` |
+
+> 本项目统一使用 `format: 'wav'`，通过 `mergeWavFiles()` 合并分段音频。
+
+## 精细控制参数
+
+通过 `speed_ratio`、`emotion`、`pitch_ratio` 精确控制语音效果，仅适用于**预置音色模式**（`mimo-v2.5-tts`）。
+
+> ⚠️ **精细参数和自然语言提示不要同时使用**，避免冲突导致效果不确定。精细参数的优先级高于自然语言提示。详见下方 [风格控制](#风格控制) 章节。
+
+### 速度控制
+
+| 参数 | 范围 | 说明 |
+|------|------|------|
+| `speed_ratio` | 0.5 - 2.0 | 1.0 = 原速，< 1.0 = 减速，> 1.0 = 加速 |
+| `style` | `"固定"` / `"随机"` | 随机时在 speed_ratio 基础上随机波动 |
+
+```json
+{
+  "audio": {
+    "format": "wav",
+    "voice": "冰糖",
+    "speed": {
+      "speed_ratio": 0.9,
+      "style": "固定"
+    }
+  }
+}
+```
+
+### 情感控制
+
+通过 `emotion` 参数控制语音情感，支持单情感或多情感混合：
+
+**单情感示例**：
+
+```json
+{
+  "audio": {
+    "format": "wav",
+    "voice": "冰糖",
+    "emotion": "happy"
+  }
+}
+```
+
+**多情感混合示例**（开心 60% + 惊喜 40%，总权重需 = 1.0）：
+
+```json
+{
+  "audio": {
+    "format": "wav",
+    "voice": "冰糖",
+    "emotion_weights": [
+      {"emotion": "happy", "weight": 0.6},
+      {"emotion": "surprised", "weight": 0.4}
+    ]
+  }
+}
+```
+
+**支持的情感类型**：
+
+| 类型 | 英文标签 | 中文标签 |
+|------|---------|---------|
+| 默认/专业 | `default` | — |
+| 开心 | `happy` | `开心` |
+| 悲伤 | `sad` | `悲伤` |
+| 生气 | `angry` | `生气` |
+| 害怕 | `fearful` | `害怕` |
+| 厌恶 | `disgusted` | — |
+| 惊喜 | `surprised` | `惊喜` |
+| 平静 | `calm` | `冷静` |
+| 恳求 | `pleading` | `恳求` |
+| 嘲讽 | `sarcasm` | `嘲讽` |
+| 愤怒 | `furious` | `暴怒` |
+| 难过 | `depressed` | `沮丧` |
+| 吝啬 | `stingy` | `吝啬` |
+| 傲慢 | `arrogant` | `傲慢` |
+| 悲痛 | `grief` | `悲痛` |
+| 诱惑 | `seductive` | `诱惑` |
+| 害羞 | `embarrassed` | `害羞` |
+| 怀疑 | `suspicious` | `怀疑` |
+| 心疼 | `heartbroken` | `心疼` |
+
+### 音调控制
+
+| 参数 | 范围 | 说明 |
+|------|------|------|
+| `pitch_ratio` | 0.5 - 2.0 | 1.0 = 原调，< 1.0 = 低沉，> 1.0 = 高亢 |
+| `style` | `"固定"` / `"随机"` | 随机时在 pitch_ratio 基础上随机波动 |
+
 ## 风格控制
 
 模型的指令遵循能力足以 cover 以下这些复杂控制（一条自然语言指令即可生效）：
@@ -142,6 +252,16 @@ tags:
 - 如果我当时……（沉默片刻）哪怕再坚持一秒钟，结果是不是就不一样了？（苦笑）呵，没如果了。
 - （寒冷导致的急促呼吸）呼——呼——这、这大兴安岭的雪……（咳嗽）简直能把人骨头冻透了……别、别停下，走，快走。
 - （提高音量喊话）大姐！这鱼新鲜着呢！早上刚捞上来的！哎！那个谁，别乱翻，压坏了你赔啊？！
+
+### 风格控制优先级
+
+当多种控制方式并存时，优先级从高到低为：
+
+1. **精细参数**（`speed_ratio`、`emotion`、`pitch_ratio`）— 优先级最高
+2. **自然语言提示**（user 消息）— 在无精细参数时生效
+3. **风格标签**（assistant 消息中的标签）— 与自然语言配合使用
+
+> ⚠️ 精细参数和自然语言提示**不要同时使用**，避免冲突导致效果不确定。
 
 ## 使用预置音色进行语音合成
 
@@ -699,9 +819,85 @@ sf.write("tmp/output.wav", collected_chunks, samplerate=24000)
 print("Audio saved to tmp/output.wav")
 ```
 
+## 参考音频要求（克隆模式）
+
+参考音频的质量直接决定克隆效果，需满足以下要求：
+
+| 要求 | 说明 |
+|------|------|
+| **语言匹配** | 参考音频语种与合成语种一致 |
+| **时长** | 10 - 20 秒，最长不超过 60 秒 |
+| **音质** | 清晰，无杂音、回声、电流声、底噪 |
+| **格式** | WAV / MP3 / M4A / OGG |
+| **编码** | 推荐 PCM 16-bit、采样率 16000Hz+、单声道 |
+| **内容** | 避免重复性内容、大段停顿、非语言声音 |
+| **说话人** | 单一说话人，避免多人对话 |
+| **节奏** | 节奏平稳，避免过快或过慢 |
+| **风格** | 风格稳定，避免情绪 / 音量大幅波动 |
+| **大小** | Base64 编码后不超过 10 MB |
+
+> **提示**：语音风格由参考音频决定，无法通过文本内容控制。建议使用风格自然、吐字清晰的高质量录音。
+
+## 项目中的实际使用
+
+### 代码调用路径
+
+```
+前端 VoiceGenerator (voiceConfig state)
+  → broadcastApi.generate / updateVoiceConfig
+    → 后端 routes/broadcast.js, routes/segments.js
+      → services/tts.js: generateSpeech()
+        → POST https://api.xiaomimimo.com/v1/chat/completions
+```
+
+**核心函数**：`backend/src/services/tts.js` — `generateSpeech({ text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch, format })`
+
+**新增参数说明**：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `speed` | Object | — | 速度控制，如 `{ speed_ratio: 0.9, style: '固定' }` |
+| `emotion` | string/Array | — | 情感控制，字符串如 `'happy'`，或数组 `[{ emotion, weight }]` |
+| `pitch` | Object | — | 音调控制，如 `{ pitch_ratio: 1.2, style: '随机' }` |
+| `format` | string | `'wav'` | 输出格式：`wav`/`pcm`/`mp3`/`ogg` |
+
+> ⚠️ speed/emotion/pitch 与 stylePrompt **互斥**：有精细参数时自动清除 stylePrompt，避免 API 行为不确定。
+
+**音色模式映射**：
+
+| voiceType | model | user message 内容 | audio.voice |
+|-----------|-------|-------------------|-------------|
+| `preset` | `mimo-v2.5-tts` | stylePrompt（默认："用专业新闻主播的语气，语速适中，沉稳大气"） | 音色名称 |
+| `design` | `mimo-v2.5-tts-voicedesign` | voiceDesign（音色描述） | 无 |
+| `clone` | `mimo-v2.5-tts-voiceclone` | stylePrompt | 参考音频 base64 |
+
+**音频获取方式**：
+
+```js
+const audioBase64 = response.data?.choices?.[0]?.message?.audio?.data;
+return Buffer.from(audioBase64, 'base64');
+```
+
+### 默认风格配置
+
+项目中 preset 模式的默认 stylePrompt：
+
+```
+用专业新闻主播的语气，语速适中，沉稳大气
+```
+
+可通过前端 VoiceGenerator 的风格提示词输入框自定义。
+
+### 限流规则
+
+- **RPM**（每分钟请求数）：100
+- **TPM**（每分钟 Token 数）：10M
+- 超出返回 `429 Too Many Requests`
+- 批量生成语音时（分段模式）需注意串行调用，项目中已采用逐个生成策略
+
 ## 计费说明
 
 - 计费：限时免费。
 - 查看账单：您可以在控制台的 [账单明细](https://platform.xiaomimimo.com/#/console/usage) 页面查看用量。
 
-更新时间 2026 年 05 月 11 日
+更新时间 2026 年 06 月 09 日
