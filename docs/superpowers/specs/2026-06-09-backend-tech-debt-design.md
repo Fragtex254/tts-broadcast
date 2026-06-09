@@ -264,7 +264,7 @@ Express 支持同一前缀挂载多个 router，segment 路由路径不变。
 | 风险 | 缓解措施 |
 |------|---------|
 | DAL 返回格式与原来 db.prepare().get() 不一致 | store 函数原样返回 SQLite 行对象，不做转换 |
-| broadcast.js 拆分后路由顺序影响匹配 | segments.js 的具体路径（如 `/:id/segments/...`）在 broadcast.js 的 `/:id` 之前注册 |
+| 路由注册顺序导致 segment 路径被 broadcast 的 `/:id` 拦截 | 无实际风险。Express Router 按全路径匹配，`/:id` 仅匹配单段路径（如 `/5`），不匹配多段路径（如 `/5/split`、`/:id/segments/batch-generate`）。即使 broadcast.js 先注册，segment 路由仍能正确匹配。但建议 segments.js 在 app.js 中先注册以提高可读性 |
 | 测试覆盖期间发现隐藏 bug | 第三波独立补测试，发现问题即时修复 |
 | resolveVoiceClone 从路由移到服务后引用路径变化 | 使用相对路径从 services/audio.js 引用 audio/ 目录 |
 
