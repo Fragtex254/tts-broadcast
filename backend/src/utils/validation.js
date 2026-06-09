@@ -20,7 +20,7 @@ function validateId(idStr, label = 'ID') {
 
 /**
  * 安全删除音频文件
- * @param {string} audioPath - 文件路径（绝对路径或以 /audio/ 开头的相对路径）
+ * @param {string|null|undefined} audioPath - 文件路径（绝对路径或以 /audio/ 开头的相对路径）
  */
 function cleanAudioFile(audioPath) {
   if (!audioPath) return;
@@ -28,6 +28,8 @@ function cleanAudioFile(audioPath) {
   if (audioPath.startsWith('/audio/')) {
     fp = path.join(__dirname, '../..', audioPath);
   }
+  // 安全检查：仅允许删除 audioDir 下的文件
+  if (!fp.startsWith(audioDir)) return;
   if (fs.existsSync(fp)) {
     fs.unlinkSync(fp);
   }

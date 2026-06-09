@@ -46,22 +46,44 @@ describe('validation 工具', () => {
   });
 
   describe('cleanAudioFile', () => {
-    let tmpDir;
-
-    beforeEach(() => {
-      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-audio-'));
-    });
+    const testFiles = [];
 
     afterEach(() => {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
+      // 清理测试创建的文件
+      for (const fp of testFiles) {
+        if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      }
+      testFiles.length = 0;
     });
 
-    test('删除存在的文件', () => {
-      const fp = path.join(tmpDir, 'test.wav');
+    test('删除存在的绝对路径文件（audioDir 内）', () => {
+      const fp = path.join(audioDir, `_test_${Date.now()}.wav`);
       fs.writeFileSync(fp, 'data');
+      testFiles.push(fp);
       expect(fs.existsSync(fp)).toBe(true);
       cleanAudioFile(fp);
       expect(fs.existsSync(fp)).toBe(false);
+    });
+
+    test('通过 /audio/ 前缀删除文件', () => {
+      const filename = `_test_prefix_${Date.now()}.wav`;
+      const fp = path.join(audioDir, filename);
+      fs.writeFileSync(fp, 'data');
+      testFiles.push(fp);
+      expect(fs.existsSync(fp)).toBe(true);
+      cleanAudioFile(`/audio/${filename}`);
+      expect(fs.existsSync(fp)).toBe(false);
+    });
+
+    test('不删除 audioDir 外的文件（路径安全）', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-safe-'));
+      const fp = path.join(tmpDir, 'outside.wav');
+      fs.writeFileSync(fp, 'data');
+      cleanAudioFile(fp);
+      // 文件不应被删除（在 audioDir 外）
+      expect(fs.existsSync(fp)).toBe(true);
+      fs.unlinkSync(fp);
+      fs.rmdirSync(tmpDir);
     });
 
     test('文件不存在时静默跳过', () => {
