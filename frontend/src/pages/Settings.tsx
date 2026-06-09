@@ -27,8 +27,9 @@ export const Settings: React.FC = () => {
   const [formData, setFormData] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState(false);
-  const [testResult, setTestResult] = useState<{ valid: boolean; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ type: string; valid: boolean; error?: string } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [savingField, setSavingField] = useState<string | null>(null);
 
   const [scheduleForm, setScheduleForm] = useState({ name: '', cron_expression: '', content_types: '' });
   const [isCreatingSchedule, setIsCreatingSchedule] = useState(false);
@@ -53,9 +54,19 @@ export const Settings: React.FC = () => {
   const handleTestKey = async (type: 'llm' | 'tts') => {
     setIsTestingKey(true);
     setTestResult(null);
-    try { setTestResult(await testApiKey(type)); }
-    catch (e) { setTestResult({ valid: false, error: (e as Error).message }); }
+    try { const result = await testApiKey(type); setTestResult({ type, ...result }); }
+    catch (e) { setTestResult({ type, valid: false, error: (e as Error).message }); }
     finally { setIsTestingKey(false); }
+  };
+
+  const handleSaveField = async (field: string) => {
+    setSavingField(field);
+    try {
+      await updateSettings({ [field]: formData[field as keyof typeof formData] } as any);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (e) { console.error('保存失败:', e); }
+    finally { setSavingField(null); }
   };
 
   const handleCreateSchedule = async () => {
@@ -138,7 +149,19 @@ export const Settings: React.FC = () => {
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
                       ) : '测试连接'}
                     </button>
+                    <button
+                      onClick={() => handleSaveField('mimo_api_key')}
+                      disabled={savingField === 'mimo_api_key'}
+                      className="px-4 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 whitespace-nowrap"
+                    >
+                      {savingField === 'mimo_api_key' ? '保存中...' : '保存'}
+                    </button>
                   </div>
+                  {testResult?.type === 'llm' && (
+                    <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
+                      {testResult.valid ? '✓ LLM API Key 验证成功！' : `✕ 验证失败${testResult.error ? `: ${testResult.error}` : '，请检查 API Key 是否正确'}`}
+                    </div>
+                  )}
                 </div>
 
                 {/* 分隔线 */}
@@ -167,25 +190,19 @@ export const Settings: React.FC = () => {
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
                       ) : '测试连接'}
                     </button>
+                    <button
+                      onClick={() => handleSaveField('mimo_tts_api_key')}
+                      disabled={savingField === 'mimo_tts_api_key'}
+                      className="px-4 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 whitespace-nowrap"
+                    >
+                      {savingField === 'mimo_tts_api_key' ? '保存中...' : '保存'}
+                    </button>
                   </div>
-                </div>
-
-                {/* 测试结果 */}
-                {testResult && (
-                  <div className={`p-3 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
-                    {testResult.valid ? '✓ API Key 验证成功！' : `✕ 验证失败${testResult.error ? `: ${testResult.error}` : '，请检查 API Key 是否正确'}`}
-                  </div>
-                )}
-
-                {/* API 配置保存按钮 */}
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="px-5 py-2 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body font-medium text-[11px] shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 uppercase tracking-wider"
-                  >
-                    {isSaving ? '保存中...' : '保存 API 配置'}
-                  </button>
+                  {testResult?.type === 'tts' && (
+                    <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
+                      {testResult.valid ? '✓ TTS API Key 验证成功！' : `✕ 验证失败${testResult.error ? `: ${testResult.error}` : '，请检查 API Key 是否正确'}`}
+                    </div>
+                  )}
                 </div>
               </div>
             </SectionCard>
