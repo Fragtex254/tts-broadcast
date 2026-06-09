@@ -83,6 +83,17 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
     const pendingSegments = segmentStore.getPendingByBroadcastId(idCheck.id);
 
+    // 如果没有待生成的 segments，直接返回完成
+    if (pendingSegments.length === 0) {
+      const segments = segmentStore.getByBroadcastId(idCheck.id);
+      sseManager.sendComplete(String(idCheck.id), {
+        segments,
+        results: [],
+        timestamp: Date.now()
+      });
+      return res.json({ segments, results: [] });
+    }
+
     // 发送开始事件
     sseManager.send(String(idCheck.id), 'batch-generate-start', {
       total: pendingSegments.length,
