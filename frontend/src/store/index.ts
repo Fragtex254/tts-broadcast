@@ -161,6 +161,12 @@ export interface AppState {
   // 音色预设操作
   fetchPresets: () => Promise<void>;
   deletePreset: (id: number) => Promise<void>;
+
+  // 批量删除状态
+  isBatchDeleting: boolean;
+
+  // 批量删除操作
+  batchDeleteBroadcasts: (ids: number[]) => Promise<{ deleted: number; failed: number }>;
 }
 
 // ============ 默认设置 ============
@@ -211,6 +217,9 @@ export const useStore = create<AppState>((set) => ({
 
   // 音色预设状态
   presets: [],
+
+  // 批量删除状态
+  isBatchDeleting: false,
 
   // ============ 播报操作 ============
 
@@ -598,6 +607,23 @@ export const useStore = create<AppState>((set) => ({
       }));
     } catch (error) {
       console.error('删除预设失败:', error);
+      throw error;
+    }
+  },
+
+  // ============ 批量删除操作 ============
+
+  /** 批量删除播报记录 */
+  batchDeleteBroadcasts: async (ids) => {
+    set({ isBatchDeleting: true });
+    try {
+      const response = await broadcastApi.batchDelete(ids);
+      const result = response.data;
+      set({ isBatchDeleting: false });
+      return result;
+    } catch (error) {
+      set({ isBatchDeleting: false });
+      console.error('批量删除失败:', error);
       throw error;
     }
   },

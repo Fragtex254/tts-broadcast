@@ -70,6 +70,10 @@ export const broadcastApi = {
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
   }) => api.patch(`/broadcast/${broadcastId}/voice-config`, data),
+
+  /** 批量删除播报记录 */
+  batchDelete: (ids: number[]) =>
+    api.post('/broadcast/batch-delete', { ids }),
 };
 
 // 设置相关 API
