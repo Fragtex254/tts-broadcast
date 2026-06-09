@@ -27,7 +27,7 @@ export const Settings: React.FC = () => {
   const [formData, setFormData] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ type: string; valid: boolean; error?: string } | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { valid: boolean; error?: string }>>({});
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
 
@@ -53,12 +53,11 @@ export const Settings: React.FC = () => {
 
   const handleTestKey = async (type: 'llm' | 'tts') => {
     setIsTestingKey(type)
-    setTestResult(null)
     try {
       const result = await testApiKey(type)
-      setTestResult({ type, ...result })
+      setTestResults((prev) => ({ ...prev, [type]: result }))
     } catch (e) {
-      setTestResult({ type, valid: false, error: (e as Error).message })
+      setTestResults((prev) => ({ ...prev, [type]: { valid: false, error: (e as Error).message } }))
     } finally {
       setIsTestingKey(null)
     }
@@ -162,9 +161,9 @@ export const Settings: React.FC = () => {
                       {savingField === 'mimo_api_key' ? '保存中...' : '保存'}
                     </button>
                   </div>
-                  {testResult?.type === 'llm' && (
-                    <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
-                      {testResult.valid ? '✓ LLM API Key 验证成功！' : `✕ 验证失败${testResult.error ? `: ${testResult.error}` : '，请检查 API Key 是否正确'}`}
+                  {testResults.llm && (
+                    <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.llm.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
+                      {testResults.llm.valid ? '✓ LLM API Key 验证成功！' : `✕ 验证失败${testResults.llm.error ? `: ${testResults.llm.error}` : '，请检查 API Key 是否正确'}`}
                     </div>
                   )}
                 </div>
@@ -203,9 +202,9 @@ export const Settings: React.FC = () => {
                       {savingField === 'mimo_tts_api_key' ? '保存中...' : '保存'}
                     </button>
                   </div>
-                  {testResult?.type === 'tts' && (
-                    <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
-                      {testResult.valid ? '✓ TTS API Key 验证成功！' : `✕ 验证失败${testResult.error ? `: ${testResult.error}` : '，请检查 API Key 是否正确'}`}
+                  {testResults.tts && (
+                    <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.tts.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
+                      {testResults.tts.valid ? '✓ TTS API Key 验证成功！' : `✕ 验证失败${testResults.tts.error ? `: ${testResults.tts.error}` : '，请检查 API Key 是否正确'}`}
                     </div>
                   )}
                 </div>
