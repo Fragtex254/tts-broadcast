@@ -173,9 +173,20 @@ export const Settings: React.FC = () => {
                 {/* 测试结果 */}
                 {testResult && (
                   <div className={`p-3 rounded-xl font-body text-[12px] animate-fade-in ${testResult.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
-                    {testResult.valid ? '✓ API Key 验证成功！' : `✕ 验证失败: ${testResult.error}`}
+                    {testResult.valid ? '✓ API Key 验证成功！' : `✕ 验证失败${testResult.error ? `: ${testResult.error}` : '，请检查 API Key 是否正确'}`}
                   </div>
                 )}
+
+                {/* API 配置保存按钮 */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="px-5 py-2 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body font-medium text-[11px] shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 uppercase tracking-wider"
+                  >
+                    {isSaving ? '保存中...' : '保存 API 配置'}
+                  </button>
+                </div>
               </div>
             </SectionCard>
           )}
