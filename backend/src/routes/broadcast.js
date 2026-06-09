@@ -199,7 +199,7 @@ router.post('/batch-delete', (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('批量删除失败:', error);
-    res.status(500).json({ error: '批量删除失败' });
+    res.status(500).json({ error: error.message || '批量删除失败' });
   }
 });
 
