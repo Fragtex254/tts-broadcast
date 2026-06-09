@@ -5,7 +5,8 @@ const broadcastStore = require('../../src/services/broadcastStore');
 
 describe('POST /api/broadcast/batch-delete', () => {
   beforeEach(() => {
-    db.exec('DELETE FROM broadcasts');
+    db.prepare('DELETE FROM segments').run();
+    db.prepare('DELETE FROM broadcasts').run();
   });
 
   test('应该批量删除多条记录', async () => {
