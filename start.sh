@@ -42,16 +42,6 @@ install_deps() {
 install_deps "$ROOT_DIR/backend" "后端"
 install_deps "$ROOT_DIR/frontend" "前端"
 
-# 检查 .env
-if [ ! -f "$ROOT_DIR/backend/.env" ]; then
-    echo -e "${YELLOW}警告: 未找到 backend/.env 文件${NC}"
-    if [ -f "$ROOT_DIR/backend/.env.example" ]; then
-        echo -e "${YELLOW}正在从 .env.example 创建 .env...${NC}"
-        cp "$ROOT_DIR/backend/.env.example" "$ROOT_DIR/backend/.env"
-        echo -e "${RED}请编辑 backend/.env 填入你的 MIMO_API_KEY${NC}"
-    fi
-fi
-
 echo -e "${GREEN}启动后端服务...${NC}"
 cd "$ROOT_DIR/backend" && npm run dev &
 BACKEND_PID=$!
