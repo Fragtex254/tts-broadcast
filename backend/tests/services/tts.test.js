@@ -100,5 +100,22 @@ describe('TTS 服务', () => {
       await tts.generateSpeech({ text: '测试' });
       expect(mimo.getApiKey).toHaveBeenCalledWith('tts');
     });
+
+    test('text 为空时抛出校验错误', async () => {
+      await expect(tts.generateSpeech({ text: '' }))
+        .rejects.toThrow('请提供合成文本');
+      await expect(tts.generateSpeech({ text: null }))
+        .rejects.toThrow('请提供合成文本');
+    });
+
+    test('clone 模式缺少 voiceClone 时抛出校验错误', async () => {
+      await expect(tts.generateSpeech({ text: '测试', voiceType: 'clone' }))
+        .rejects.toThrow('clone 模式需要提供 voiceClone');
+    });
+
+    test('design 模式缺少 voiceDesign 时抛出校验错误', async () => {
+      await expect(tts.generateSpeech({ text: '测试', voiceType: 'design' }))
+        .rejects.toThrow('design 模式需要提供 voiceDesign');
+    });
   });
 });

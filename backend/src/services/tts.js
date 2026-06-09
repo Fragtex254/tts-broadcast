@@ -13,6 +13,17 @@ const { getApiKey } = require('./mimo');
  * @returns {Promise<Buffer>} 音频 Buffer
  */
 async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', voiceDesign, voiceClone, stylePrompt }) {
+  // 输入校验
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    throw new Error('请提供合成文本');
+  }
+  if (voiceType === 'clone' && !voiceClone) {
+    throw new Error('clone 模式需要提供 voiceClone');
+  }
+  if (voiceType === 'design' && !voiceDesign) {
+    throw new Error('design 模式需要提供 voiceDesign');
+  }
+
   const ttsApiKey = getApiKey('tts');
 
   let model, messages, audioConfig;
