@@ -1,0 +1,298 @@
+// 口播句子（segment）路由
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+const mimo = require('../services/mimo');
+const tts = require('../services/tts');
+const audio = require('../services/audio');
+const broadcastStore = require('../services/broadcastStore');
+const segmentStore = require('../services/segmentStore');
+const { validateId, cleanAudioFile, audioDir } = require('../utils/validation');
+
+/**
+ * POST /api/broadcast/:id/split
+ * AI 切分口播稿为短句
+ */
+router.post('/:id/split', async (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    // 若已有 segments，先删除旧的及其音频文件
+    const oldSegments = segmentStore.getByBroadcastId(idCheck.id);
+    for (const seg of oldSegments) {
+      cleanAudioFile(seg.audio_path);
+    }
+    segmentStore.deleteByBroadcastId(idCheck.id);
+
+    // 调用 AI 切分
+    const sentences = await mimo.splitScript(broadcast.content);
+
+    // 创建 segment 记录
+    segmentStore.createMany(idCheck.id, sentences);
+
+    // 更新广播 mode，删除旧的整段音频文件
+    cleanAudioFile(broadcast.audio_path);
+    broadcastStore.clearAudioAndSetMode(idCheck.id, 'segmented');
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+    res.json({ segments });
+  } catch (error) {
+    console.error('切分失败:', error);
+    res.status(500).json({ error: error.message || '切分失败' });
+  }
+});
+
+/**
+ * GET /api/broadcast/:id/segments
+ * 获取 segments 列表
+ */
+router.get('/:id/segments', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+    res.json({ segments });
+  } catch (error) {
+    console.error('获取 segments 失败:', error);
+    res.status(500).json({ error: '获取 segments 失败' });
+  }
+});
+
+/**
+ * POST /api/broadcast/:id/segments/batch-generate
+ * 批量生成 segment 音频
+ */
+router.post('/:id/segments/batch-generate', async (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
+    const resolvedVoiceClone = await audio.resolveVoiceClone(voiceConfig.voiceClone);
+    const pendingSegments = segmentStore.getPendingByBroadcastId(idCheck.id);
+
+    const results = [];
+    for (const segment of pendingSegments) {
+      segmentStore.updateStatus(segment.id, 'generating');
+
+      try {
+        const audioBuffer = await tts.generateSpeech({
+          text: segment.text,
+          voice: voiceConfig.voice,
+          voiceType: broadcast.voice_type,
+          voiceDesign: voiceConfig.voiceDesign,
+          voiceClone: resolvedVoiceClone,
+          stylePrompt: voiceConfig.stylePrompt
+        });
+
+        const filename = `segment_${idCheck.id}_${segment.index}.wav`;
+        const filepath = path.join(audioDir, filename);
+        fs.writeFileSync(filepath, audioBuffer);
+
+        segmentStore.updateStatus(segment.id, 'generated', `/audio/${filename}`);
+        results.push({ id: segment.id, status: 'generated' });
+      } catch (ttsError) {
+        segmentStore.updateStatus(segment.id, 'failed');
+        results.push({ id: segment.id, status: 'failed', error: ttsError.message });
+      }
+    }
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+    res.json({ segments, results });
+  } catch (error) {
+    console.error('批量生成失败:', error);
+    res.status(500).json({ error: '批量生成失败' });
+  }
+});
+
+/**
+ * POST /api/broadcast/:id/segments/merge
+ * 合并所有 segment 音频
+ */
+router.post('/:id/segments/merge', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+
+    if (segments.length === 0) {
+      return res.status(400).json({ error: '没有可合并的句子' });
+    }
+
+    const notGenerated = segments.filter(s => s.status !== 'generated');
+    if (notGenerated.length > 0) {
+      return res.status(400).json({
+        error: `还有 ${notGenerated.length} 个句子未生成音频，请先完成所有句子的生成`
+      });
+    }
+
+    const audioPaths = segments.map(s => path.join(__dirname, '../..', s.audio_path));
+    const mergedBuffer = audio.mergeWavFiles(audioPaths);
+
+    cleanAudioFile(broadcast.audio_path);
+
+    const filename = `broadcast_${idCheck.id}_merged.wav`;
+    const filepath = path.join(audioDir, filename);
+    fs.writeFileSync(filepath, mergedBuffer);
+
+    broadcastStore.updateAudioPath(idCheck.id, `/audio/${filename}`);
+    broadcastStore.updateStatus(idCheck.id, 'generated');
+
+    const updated = broadcastStore.getById(idCheck.id);
+    res.json({ broadcast: updated });
+  } catch (error) {
+    console.error('合并失败:', error);
+    res.status(500).json({ error: error.message || '合并失败' });
+  }
+});
+
+/**
+ * POST /api/broadcast/:id/segments/reorder
+ * 重排序 segments
+ */
+router.post('/:id/segments/reorder', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const { segmentIds } = req.body;
+    if (!Array.isArray(segmentIds)) {
+      return res.status(400).json({ error: '请提供 segmentIds 数组' });
+    }
+
+    // 验证所有 segment 都属于当前 broadcast
+    const ownedCount = segmentStore.countByIds(idCheck.id, segmentIds);
+    if (ownedCount !== segmentIds.length) {
+      return res.status(400).json({ error: '部分句子不属于当前播报' });
+    }
+
+    segmentStore.reorder(idCheck.id, segmentIds);
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+    res.json({ segments });
+  } catch (error) {
+    console.error('重排序失败:', error);
+    res.status(500).json({ error: '重排序失败' });
+  }
+});
+
+/**
+ * PUT /api/broadcast/:id/segments/:segId
+ * 编辑单个 segment 文本
+ */
+router.put('/:id/segments/:segId', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+    const segIdCheck = validateId(req.params.segId, '句子 ID');
+    if (!segIdCheck.valid) return res.status(400).json({ error: segIdCheck.error });
+
+    const { text } = req.body;
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: '请提供有效的文本内容' });
+    }
+
+    const segment = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
+    if (!segment) return res.status(404).json({ error: '句子不存在' });
+
+    cleanAudioFile(segment.audio_path);
+    segmentStore.updateText(segIdCheck.id, text.trim());
+
+    const updated = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
+    res.json({ segment: updated });
+  } catch (error) {
+    console.error('编辑句子失败:', error);
+    res.status(500).json({ error: '编辑句子失败' });
+  }
+});
+
+/**
+ * POST /api/broadcast/:id/segments/:segId/regenerate
+ * 重新生成单个 segment 音频
+ */
+router.post('/:id/segments/:segId/regenerate', async (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+    const segIdCheck = validateId(req.params.segId, '句子 ID');
+    if (!segIdCheck.valid) return res.status(400).json({ error: segIdCheck.error });
+
+    const segment = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
+    if (!segment) return res.status(404).json({ error: '句子不存在' });
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
+    const resolvedVoiceClone = await audio.resolveVoiceClone(voiceConfig.voiceClone);
+
+    segmentStore.updateStatus(segIdCheck.id, 'generating');
+
+    try {
+      const audioBuffer = await tts.generateSpeech({
+        text: segment.text,
+        voice: voiceConfig.voice,
+        voiceType: broadcast.voice_type,
+        voiceDesign: voiceConfig.voiceDesign,
+        voiceClone: resolvedVoiceClone,
+        stylePrompt: voiceConfig.stylePrompt
+      });
+
+      const filename = `segment_${idCheck.id}_${segment.index}.wav`;
+      const filepath = path.join(audioDir, filename);
+      fs.writeFileSync(filepath, audioBuffer);
+
+      segmentStore.updateStatus(segIdCheck.id, 'generated', `/audio/${filename}`);
+    } catch (ttsError) {
+      segmentStore.updateStatus(segIdCheck.id, 'failed');
+      return res.status(500).json({ error: '语音生成失败: ' + ttsError.message });
+    }
+
+    const updated = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
+    res.json({ segment: updated });
+  } catch (error) {
+    console.error('重新生成失败:', error);
+    res.status(500).json({ error: '重新生成失败' });
+  }
+});
+
+/**
+ * DELETE /api/broadcast/:id/segments/:segId
+ * 删除单个 segment（含后续重索引）
+ */
+router.delete('/:id/segments/:segId', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+    const segIdCheck = validateId(req.params.segId, '句子 ID');
+    if (!segIdCheck.valid) return res.status(400).json({ error: segIdCheck.error });
+
+    const segment = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
+    if (!segment) return res.status(404).json({ error: '句子不存在' });
+
+    cleanAudioFile(segment.audio_path);
+    segmentStore.deleteAndReindex(idCheck.id, segIdCheck.id);
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+    res.json({ segments });
+  } catch (error) {
+    console.error('删除句子失败:', error);
+    res.status(500).json({ error: '删除句子失败' });
+  }
+});
+
+module.exports = router;

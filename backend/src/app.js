@@ -16,6 +16,7 @@ app.use('/audio', express.static(path.join(__dirname, '../audio')));
 
 // API 路由
 app.use('/api/broadcast', require('./routes/broadcast'));
+app.use('/api/broadcast', require('./routes/segments'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/schedules', require('./routes/schedule'));
 app.use('/api/voice-presets', require('./routes/voicePresets'));

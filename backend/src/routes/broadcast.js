@@ -1,38 +1,13 @@
+// 播报路由
 const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const aihot = require('../services/aihot');
-const mimo = require('../services/mimo');
-const audio = require('../services/audio');
 const db = require('../db');
-
-// 确保音频目录存在
-const audioDir = path.join(__dirname, '../../audio');
-if (!fs.existsSync(audioDir)) {
-  fs.mkdirSync(audioDir, { recursive: true });
-}
-
-/**
- * 解析 voiceClone：如果是文件路径则读取并转为 base64 data URI，
- * 如果已经是 base64 data URI 则直接返回
- */
-async function resolveVoiceClone(voiceClone) {
-  if (!voiceClone) return voiceClone;
-  // 已经是 base64 data URI
-  if (voiceClone.startsWith('data:')) return voiceClone;
-  // 是文件路径，读取并转 base64
-  if (voiceClone.startsWith('/audio/')) {
-    const filePath = path.join(__dirname, '../..', voiceClone);
-    if (fs.existsSync(filePath)) {
-      const buffer = fs.readFileSync(filePath);
-      const ext = path.extname(filePath).toLowerCase();
-      const mime = ext === '.mp3' ? 'audio/mpeg' : 'audio/wav';
-      return `data:${mime};base64,${buffer.toString('base64')}`;
-    }
-  }
-  return voiceClone;
-}
+const broadcastStore = require('../services/broadcastStore');
+const segmentStore = require('../services/segmentStore');
+const { validateId, cleanAudioFile, audioDir } = require('../utils/validation');
 
 /**
  * GET /api/broadcast/today
@@ -46,7 +21,7 @@ router.get('/today', async (req, res) => {
     const items = await aihot.getSelectedItems({
       category,
       since,
-      take: Math.min(parseInt(take, 10) || 30, 100) // 限制最大值为 100
+      take: Math.min(parseInt(take, 10) || 30, 100)
     });
 
     res.json({ items });
@@ -72,6 +47,7 @@ router.post('/rewrite', async (req, res) => {
     const defaultOpening = db.prepare('SELECT value FROM settings WHERE key = ?').get('opening_script');
     const defaultClosing = db.prepare('SELECT value FROM settings WHERE key = ?').get('closing_script');
 
+    const mimo = require('../services/mimo');
     const script = await mimo.rewriteToScript({
       items,
       opening: opening || JSON.parse(defaultOpening?.value || '""'),
@@ -98,25 +74,21 @@ router.post('/generate', async (req, res) => {
     }
 
     if (mode === 'segmented') {
-      const result = db.prepare(`
-        INSERT INTO broadcasts (title, content, voice_type, voice_config, source_items, status, mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        text.substring(0, 50) + '...',
-        text,
-        voiceType || 'preset',
-        JSON.stringify({ voice, voiceDesign, voiceClone, stylePrompt }),
-        sourceItems ? JSON.stringify(sourceItems) : null,
-        'pending',
-        'segmented'
-      );
-
-      const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(result.lastInsertRowid);
+      const broadcast = broadcastStore.create({
+        title: text.substring(0, 50) + '...',
+        content: text,
+        voiceType: voiceType || 'preset',
+        voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt },
+        sourceItems,
+        status: 'pending',
+        mode: 'segmented'
+      });
       return res.json({ broadcast });
     }
 
-    // Original whole-script flow
-    const audioBuffer = await mimo.generateSpeech({
+    // 整篇生成
+    const tts = require('../services/tts');
+    const audioBuffer = await tts.generateSpeech({
       text,
       voice,
       voiceType,
@@ -129,38 +101,24 @@ router.post('/generate', async (req, res) => {
     const filepath = path.join(audioDir, filename);
     fs.writeFileSync(filepath, audioBuffer);
 
-    const result = db.prepare(`
-      INSERT INTO broadcasts (title, content, audio_path, voice_type, voice_config, source_items, status, mode)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      text.substring(0, 50) + '...',
-      text,
-      `/audio/${filename}`,
-      voiceType || 'preset',
-      JSON.stringify({ voice, voiceDesign, voiceClone, stylePrompt }),
-      sourceItems ? JSON.stringify(sourceItems) : null,
-      'generated',
-      'whole'
-    );
+    const broadcast = broadcastStore.create({
+      title: text.substring(0, 50) + '...',
+      content: text,
+      audioPath: `/audio/${filename}`,
+      voiceType: voiceType || 'preset',
+      voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt },
+      sourceItems,
+      status: 'generated',
+      mode: 'whole'
+    });
 
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(result.lastInsertRowid);
-
-    // 清理旧的未保存记录，保留最近10条未保存的
-    const unsavedCount = db.prepare('SELECT COUNT(*) as count FROM broadcasts WHERE saved = 0').get().count;
+    // 清理旧的未保存记录，保留最近10条
+    const unsavedCount = broadcastStore.countUnsaved();
     if (unsavedCount > 10) {
-      const toDelete = db.prepare(
-        'SELECT id, audio_path FROM broadcasts WHERE saved = 0 ORDER BY created_at ASC LIMIT ?'
-      ).all(unsavedCount - 10);
-
-      const deleteStmt = db.prepare('DELETE FROM broadcasts WHERE id = ?');
+      const toDelete = broadcastStore.getOldestUnsaved(unsavedCount - 10);
       for (const item of toDelete) {
-        deleteStmt.run(item.id);
-        if (item.audio_path) {
-          const fp = path.join(__dirname, '../..', item.audio_path);
-          if (fs.existsSync(fp)) {
-            fs.unlinkSync(fp);
-          }
-        }
+        broadcastStore.deleteById(item.id);
+        cleanAudioFile(item.audio_path);
       }
     }
 
@@ -184,387 +142,16 @@ router.get('/history', (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 20;
     const offset = (page - 1) * limit;
 
-    const broadcasts = db.prepare(`
-      SELECT * FROM broadcasts ORDER BY created_at DESC LIMIT ? OFFSET ?
-    `).all(limit, offset);
-
-    const total = db.prepare('SELECT COUNT(*) as count FROM broadcasts').get().count;
+    const broadcasts = broadcastStore.getHistory({ limit, offset });
+    const total = broadcastStore.countAll();
 
     res.json({
       broadcasts,
-      pagination: {
-        page,
-        limit,
-        total
-      }
+      pagination: { page, limit, total }
     });
   } catch (error) {
     console.error('获取历史记录失败:', error);
     res.status(500).json({ error: '获取历史记录失败' });
-  }
-});
-
-// ============ Segment API ============
-
-router.post('/:id/split', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
-
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
-    if (!broadcast) {
-      return res.status(404).json({ error: '播报记录不存在' });
-    }
-
-    // 若已有 segments，先删除旧的及其音频文件
-    const oldSegments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ?').all(id);
-    for (const seg of oldSegments) {
-      if (seg.audio_path) {
-        const fp = path.join(__dirname, '../..', seg.audio_path);
-        if (fs.existsSync(fp)) fs.unlinkSync(fp);
-      }
-    }
-    db.prepare('DELETE FROM segments WHERE broadcast_id = ?').run(id);
-
-    // 调用 AI 切分
-    const sentences = await mimo.splitScript(broadcast.content);
-
-    // 创建 segment 记录
-    const insertStmt = db.prepare(
-      'INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)'
-    );
-    const insertMany = db.transaction((items) => {
-      for (const item of items) {
-        insertStmt.run(item.broadcastId, item.index, item.text, 'pending');
-      }
-    });
-
-    insertMany(sentences.map((text, index) => ({
-      broadcastId: id,
-      index,
-      text
-    })));
-
-    // 更新广播 mode，删除旧的整段音频文件
-    if (broadcast.audio_path) {
-      const oldAudioPath = path.join(__dirname, '../..', broadcast.audio_path);
-      if (fs.existsSync(oldAudioPath)) fs.unlinkSync(oldAudioPath);
-    }
-    db.prepare("UPDATE broadcasts SET mode = 'segmented', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
-
-    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(id);
-    res.json({ segments });
-  } catch (error) {
-    console.error('切分失败:', error);
-    res.status(500).json({ error: error.message || '切分失败' });
-  }
-});
-
-router.get('/:id/segments', (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
-
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
-    if (!broadcast) {
-      return res.status(404).json({ error: '播报记录不存在' });
-    }
-
-    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(id);
-    res.json({ segments });
-  } catch (error) {
-    console.error('获取 segments 失败:', error);
-    res.status(500).json({ error: '获取 segments 失败' });
-  }
-});
-
-router.post('/:id/segments/batch-generate', async (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-
-    if (!Number.isInteger(broadcastId) || broadcastId <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
-
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
-    if (!broadcast) {
-      return res.status(404).json({ error: '播报记录不存在' });
-    }
-
-    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
-    const resolvedVoiceClone = await resolveVoiceClone(voiceConfig.voiceClone);
-    const pendingSegments = db.prepare(
-      "SELECT * FROM segments WHERE broadcast_id = ? AND status IN ('pending', 'failed') ORDER BY \"index\""
-    ).all(broadcastId);
-
-    const results = [];
-    for (const segment of pendingSegments) {
-      db.prepare("UPDATE segments SET status = 'generating', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segment.id);
-
-      try {
-        const audioBuffer = await mimo.generateSpeech({
-          text: segment.text,
-          voice: voiceConfig.voice,
-          voiceType: broadcast.voice_type,
-          voiceDesign: voiceConfig.voiceDesign,
-          voiceClone: resolvedVoiceClone,
-          stylePrompt: voiceConfig.stylePrompt
-        });
-
-        const filename = `segment_${broadcastId}_${segment.index}.wav`;
-        const filepath = path.join(audioDir, filename);
-        fs.writeFileSync(filepath, audioBuffer);
-
-        db.prepare(
-          "UPDATE segments SET audio_path = ?, status = 'generated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-        ).run(`/audio/${filename}`, segment.id);
-
-        results.push({ id: segment.id, status: 'generated' });
-      } catch (ttsError) {
-        db.prepare("UPDATE segments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segment.id);
-        results.push({ id: segment.id, status: 'failed', error: ttsError.message });
-      }
-    }
-
-    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
-    res.json({ segments, results });
-  } catch (error) {
-    console.error('批量生成失败:', error);
-    res.status(500).json({ error: '批量生成失败' });
-  }
-});
-
-router.post('/:id/segments/merge', (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
-    if (!broadcast) {
-      return res.status(404).json({ error: '播报记录不存在' });
-    }
-
-    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
-
-    if (segments.length === 0) {
-      return res.status(400).json({ error: '没有可合并的句子' });
-    }
-
-    const notGenerated = segments.filter(s => s.status !== 'generated');
-    if (notGenerated.length > 0) {
-      return res.status(400).json({
-        error: `还有 ${notGenerated.length} 个句子未生成音频，请先完成所有句子的生成`
-      });
-    }
-
-    const audioPaths = segments.map(s => path.join(__dirname, '../..', s.audio_path));
-    const mergedBuffer = audio.mergeWavFiles(audioPaths);
-
-    if (broadcast.audio_path) {
-      const oldPath = path.join(__dirname, '../..', broadcast.audio_path);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-    }
-
-    const filename = `broadcast_${broadcastId}_merged.wav`;
-    const filepath = path.join(audioDir, filename);
-    fs.writeFileSync(filepath, mergedBuffer);
-
-    db.prepare(
-      "UPDATE broadcasts SET audio_path = ?, status = 'generated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(`/audio/${filename}`, broadcastId);
-
-    const updated = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
-    res.json({ broadcast: updated });
-  } catch (error) {
-    console.error('合并失败:', error);
-    res.status(500).json({ error: error.message || '合并失败' });
-  }
-});
-
-router.post('/:id/segments/reorder', (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-    const { segmentIds } = req.body;
-
-    if (!Array.isArray(segmentIds)) {
-      return res.status(400).json({ error: '请提供 segmentIds 数组' });
-    }
-
-    // 验证所有 segment 都属于当前 broadcast
-    const ownedCount = db.prepare(
-      `SELECT COUNT(*) as count FROM segments WHERE broadcast_id = ? AND id IN (${segmentIds.map(() => '?').join(',')})`
-    ).get(broadcastId, ...segmentIds).count;
-    if (ownedCount !== segmentIds.length) {
-      return res.status(400).json({ error: '部分句子不属于当前播报' });
-    }
-
-    const updateStmt = db.prepare(
-      'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
-    );
-
-    const reorder = db.transaction((ids) => {
-      for (let i = 0; i < ids.length; i++) {
-        updateStmt.run(i, ids[i], broadcastId);
-      }
-    });
-
-    reorder(segmentIds);
-
-    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
-    res.json({ segments });
-  } catch (error) {
-    console.error('重排序失败:', error);
-    res.status(500).json({ error: '重排序失败' });
-  }
-});
-
-router.put('/:id/segments/:segId', (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-    const segId = parseInt(req.params.segId, 10);
-
-    if (!Number.isInteger(broadcastId) || broadcastId <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
-    if (!Number.isInteger(segId) || segId <= 0) {
-      return res.status(400).json({ error: '无效的句子 ID' });
-    }
-
-    const { text } = req.body;
-
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
-      return res.status(400).json({ error: '请提供有效的文本内容' });
-    }
-
-    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
-    if (!segment) {
-      return res.status(404).json({ error: '句子不存在' });
-    }
-
-    if (segment.audio_path) {
-      const fp = path.join(__dirname, '../..', segment.audio_path);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-
-    db.prepare(
-      "UPDATE segments SET text = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(text.trim(), segId);
-
-    const updated = db.prepare('SELECT * FROM segments WHERE id = ?').get(segId);
-    res.json({ segment: updated });
-  } catch (error) {
-    console.error('编辑句子失败:', error);
-    res.status(500).json({ error: '编辑句子失败' });
-  }
-});
-
-router.post('/:id/segments/:segId/regenerate', async (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-    const segId = parseInt(req.params.segId, 10);
-
-    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
-    if (!segment) {
-      return res.status(404).json({ error: '句子不存在' });
-    }
-
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(broadcastId);
-    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
-    const resolvedVoiceClone = await resolveVoiceClone(voiceConfig.voiceClone);
-
-    db.prepare("UPDATE segments SET status = 'generating', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segId);
-
-    try {
-      const audioBuffer = await mimo.generateSpeech({
-        text: segment.text,
-        voice: voiceConfig.voice,
-        voiceType: broadcast.voice_type,
-        voiceDesign: voiceConfig.voiceDesign,
-        voiceClone: resolvedVoiceClone,
-        stylePrompt: voiceConfig.stylePrompt
-      });
-
-      const filename = `segment_${broadcastId}_${segment.index}.wav`;
-      const filepath = path.join(audioDir, filename);
-      fs.writeFileSync(filepath, audioBuffer);
-
-      db.prepare(
-        "UPDATE segments SET audio_path = ?, status = 'generated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-      ).run(`/audio/${filename}`, segId);
-    } catch (ttsError) {
-      db.prepare("UPDATE segments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(segId);
-      return res.status(500).json({ error: '语音生成失败: ' + ttsError.message });
-    }
-
-    const updated = db.prepare('SELECT * FROM segments WHERE id = ?').get(segId);
-    res.json({ segment: updated });
-  } catch (error) {
-    console.error('重新生成失败:', error);
-    res.status(500).json({ error: '重新生成失败' });
-  }
-});
-
-router.delete('/:id/segments/:segId', (req, res) => {
-  try {
-    const broadcastId = parseInt(req.params.id, 10);
-    const segId = parseInt(req.params.segId, 10);
-
-    if (!Number.isInteger(broadcastId) || broadcastId <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
-    if (!Number.isInteger(segId) || segId <= 0) {
-      return res.status(400).json({ error: '无效的句子 ID' });
-    }
-
-    const segment = db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
-    if (!segment) {
-      return res.status(404).json({ error: '句子不存在' });
-    }
-
-    if (segment.audio_path) {
-      const fp = path.join(__dirname, '../..', segment.audio_path);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-
-    const deletedIndex = segment.index;
-
-    const deleteAndReindex = db.transaction(() => {
-      db.prepare('DELETE FROM segments WHERE id = ?').run(segId);
-
-      const laterSegments = db.prepare(
-        'SELECT * FROM segments WHERE broadcast_id = ? AND "index" > ? ORDER BY "index"'
-      ).all(broadcastId, deletedIndex);
-
-      for (const seg of laterSegments) {
-        const newIndex = seg.index - 1;
-
-        if (seg.audio_path) {
-          const oldPath = path.join(__dirname, '../..', seg.audio_path);
-          const newFilename = `segment_${broadcastId}_${newIndex}.wav`;
-          const newPath = path.join(audioDir, newFilename);
-          if (fs.existsSync(oldPath)) {
-            fs.renameSync(oldPath, newPath);
-          }
-          db.prepare(
-            'UPDATE segments SET "index" = ?, audio_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-          ).run(newIndex, `/audio/${newFilename}`, seg.id);
-        } else {
-          db.prepare(
-            'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-          ).run(newIndex, seg.id);
-        }
-      }
-    });
-
-    deleteAndReindex();
-
-    const segments = db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
-    res.json({ segments });
-  } catch (error) {
-    console.error('删除句子失败:', error);
-    res.status(500).json({ error: '删除句子失败' });
   }
 });
 
@@ -574,16 +161,11 @@ router.delete('/:id/segments/:segId', (req, res) => {
  */
 router.get('/:id', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
-
-    if (!broadcast) {
-      return res.status(404).json({ error: '播报记录不存在' });
-    }
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
 
     res.json({ broadcast });
   } catch (error) {
@@ -594,23 +176,19 @@ router.get('/:id', (req, res) => {
 
 /**
  * PATCH /api/broadcast/:id/voice-config
- * 更新播报的音色配置（用于段落重新生成时使用新音色）
+ * 更新播报的音色配置
  */
 router.patch('/:id/voice-config', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     const { voiceType, voice, voiceDesign, voiceClone, stylePrompt } = req.body;
     const voiceConfig = JSON.stringify({ voice, voiceDesign, voiceClone, stylePrompt });
 
-    db.prepare(
-      'UPDATE broadcasts SET voice_type = ?, voice_config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run(voiceType || 'preset', voiceConfig, id);
+    broadcastStore.updateVoiceConfig(idCheck.id, { voiceType, voiceConfig });
 
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
+    const broadcast = broadcastStore.getById(idCheck.id);
     res.json({ broadcast });
   } catch (error) {
     console.error('更新音色配置失败:', error);
@@ -620,56 +198,37 @@ router.patch('/:id/voice-config', (req, res) => {
 
 /**
  * POST /api/broadcast/:id/save
- * 保存/取消保存播报（标记为永久保存）
+ * 保存/取消保存播报
  */
 router.post('/:id/save', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
-    if (!broadcast) {
-      return res.status(404).json({ error: '播报记录不存在' });
-    }
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
 
-    const newSaved = broadcast.saved ? 0 : 1;
+    const result = broadcastStore.toggleSaved(idCheck.id);
+    const { newSaved } = result;
 
     // 如果是保存操作，检查上限（最多50条已保存）
     if (newSaved === 1) {
-      const savedCount = db.prepare('SELECT COUNT(*) as count FROM broadcasts WHERE saved = 1').get().count;
+      const savedCount = broadcastStore.countSaved();
       if (savedCount >= 50) {
-        // 删除最旧的已保存记录（保留最新的49条）
-        const oldest = db.prepare(
-          'SELECT id, audio_path FROM broadcasts WHERE saved = 1 ORDER BY created_at ASC LIMIT ?'
-        ).all(savedCount - 49);
-
-        const deleteStmt = db.prepare('DELETE FROM broadcasts WHERE id = ?');
+        const oldest = broadcastStore.getOldestSaved(savedCount - 49);
         for (const item of oldest) {
-          deleteStmt.run(item.id);
-          // 删除对应的音频文件
-          if (item.audio_path) {
-            const filepath = path.join(__dirname, '../..', item.audio_path);
-            if (fs.existsSync(filepath)) {
-              fs.unlinkSync(filepath);
-            }
-          }
+          broadcastStore.deleteById(item.id);
+          cleanAudioFile(item.audio_path);
           // 清理关联的 segment 音频文件
-          const segs = db.prepare('SELECT audio_path FROM segments WHERE broadcast_id = ?').all(item.id);
+          const segs = segmentStore.getByBroadcastId(item.id);
           for (const seg of segs) {
-            if (seg.audio_path) {
-              const segFp = path.join(__dirname, '../..', seg.audio_path);
-              if (fs.existsSync(segFp)) fs.unlinkSync(segFp);
-            }
+            cleanAudioFile(seg.audio_path);
           }
         }
       }
     }
 
-    db.prepare('UPDATE broadcasts SET saved = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newSaved, id);
-
-    const updated = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
+    const updated = broadcastStore.getById(idCheck.id);
     res.json({ broadcast: updated });
   } catch (error) {
     console.error('保存播报失败:', error);
@@ -683,23 +242,17 @@ router.post('/:id/save', (req, res) => {
  */
 router.get('/:id/audio', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的播报 ID' });
-    }
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const broadcast = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
-
-    if (!broadcast) {
-      return res.status(404).json({ error: '播报记录不存在' });
-    }
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
 
     if (!broadcast.audio_path) {
       return res.status(404).json({ error: '音频文件不存在' });
     }
 
     const filepath = path.join(__dirname, '../..', broadcast.audio_path);
-
     if (!fs.existsSync(filepath)) {
       return res.status(404).json({ error: '音频文件不存在' });
     }
