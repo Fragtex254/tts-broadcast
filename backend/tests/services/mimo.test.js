@@ -42,4 +42,28 @@ describe('MiMo 服务', () => {
       expect(seg.length).toBeGreaterThan(0);
     });
   });
+
+  describe('rewriteToScript 错误路径', () => {
+    test('空 items 抛出错误', async () => {
+      await expect(mimo.rewriteToScript({ items: [] }))
+        .rejects.toThrow('请提供有效的资讯列表');
+    });
+
+    test('非数组 items 抛出错误', async () => {
+      await expect(mimo.rewriteToScript({ items: 'not-array' }))
+        .rejects.toThrow('请提供有效的资讯列表');
+    });
+  });
+
+  describe('splitScript 错误路径', () => {
+    test('空文本抛出错误', async () => {
+      await expect(mimo.splitScript(''))
+        .rejects.toThrow('请提供有效的口播稿文本');
+    });
+
+    test('非字符串抛出错误', async () => {
+      await expect(mimo.splitScript(null))
+        .rejects.toThrow('请提供有效的口播稿文本');
+    });
+  });
 });
