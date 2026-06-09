@@ -8,6 +8,7 @@ const tts = require('../services/tts');
 const audio = require('../services/audio');
 const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
+const sseManager = require('../services/sseManager');
 const { validateId, cleanAudioFile, audioDir } = require('../utils/validation');
 
 /**
@@ -69,7 +70,7 @@ router.get('/:id/segments', (req, res) => {
 
 /**
  * POST /api/broadcast/:id/segments/batch-generate
- * 批量生成 segment 音频
+ * 批量生成 segment 音频（支持 SSE 实时推送）
  */
 router.post('/:id/segments/batch-generate', async (req, res) => {
   try {
@@ -80,16 +81,35 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
 
     const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
-    const resolvedVoiceClone = voiceConfig.voiceClone
-      ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
-      : undefined;
     const pendingSegments = segmentStore.getPendingByBroadcastId(idCheck.id);
 
+    // 发送开始事件
+    sseManager.send(String(idCheck.id), 'batch-generate-start', {
+      total: pendingSegments.length,
+      timestamp: Date.now()
+    });
+
     const results = [];
-    for (const segment of pendingSegments) {
+    for (let i = 0; i < pendingSegments.length; i++) {
+      const segment = pendingSegments[i];
+
+      // 更新状态为生成中
       segmentStore.updateStatus(segment.id, 'generating');
 
+      // 推送进度事件
+      sseManager.sendProgress(String(idCheck.id), {
+        segmentId: segment.id,
+        status: 'generating',
+        current: i + 1,
+        total: pendingSegments.length,
+        text: segment.text
+      });
+
       try {
+        const resolvedVoiceClone = voiceConfig.voiceClone
+          ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
+          : undefined;
+
         const audioBuffer = await tts.generateSpeech({
           text: segment.text,
           voice: voiceConfig.voice,
@@ -108,17 +128,45 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
 
         segmentStore.updateStatus(segment.id, 'generated', `/audio/${filename}`);
         results.push({ id: segment.id, status: 'generated' });
+
+        // 推送成功事件
+        sseManager.sendProgress(String(idCheck.id), {
+          segmentId: segment.id,
+          status: 'generated',
+          audioPath: `/audio/${filename}`,
+          current: i + 1,
+          total: pendingSegments.length
+        });
       } catch (ttsError) {
         segmentStore.updateStatus(segment.id, 'failed');
         results.push({ id: segment.id, status: 'failed', error: ttsError.message });
+
+        // 推送失败事件
+        sseManager.sendProgress(String(idCheck.id), {
+          segmentId: segment.id,
+          status: 'failed',
+          error: ttsError.message,
+          current: i + 1,
+          total: pendingSegments.length
+        });
       }
     }
 
     const segments = segmentStore.getByBroadcastId(idCheck.id);
+
+    // 推送完成事件
+    sseManager.sendComplete(String(idCheck.id), {
+      segments,
+      results,
+      timestamp: Date.now()
+    });
+
+    // 仍然返回 HTTP 响应（向后兼容）
     res.json({ segments, results });
   } catch (error) {
     console.error('批量生成失败:', error);
-    res.status(500).json({ error: '批量生成失败' });
+    sseManager.sendError(String(idCheck.id), error.message || '批量生成失败');
+    res.status(500).json({ error: error.message || '批量生成失败' });
   }
 });
 
