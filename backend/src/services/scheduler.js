@@ -4,6 +4,7 @@ const db = require('../db');
 
 // 存储活跃的 cron 任务
 const activeJobs = new Map();
+let onTriggerCallback = null;
 
 /**
  * 初始化调度器，加载所有活跃任务
@@ -11,7 +12,7 @@ const activeJobs = new Map();
  */
 function init(onTrigger) {
   if (onTrigger) {
-    global.onScheduleTrigger = onTrigger;
+    onTriggerCallback = onTrigger;
   }
   const schedules = db.prepare('SELECT * FROM schedules WHERE is_active = 1').all();
   schedules.forEach(schedule => {
@@ -48,8 +49,8 @@ function startJob(schedule) {
   const job = cron.schedule(schedule.cron_expression, async () => {
     console.log(`执行定时任务: ${schedule.name}`);
     try {
-      if (global.onScheduleTrigger) {
-        await global.onScheduleTrigger(schedule);
+      if (onTriggerCallback) {
+        await onTriggerCallback(schedule);
       }
       // 任务成功后更新时间
       db.prepare('UPDATE schedules SET last_run_at = CURRENT_TIMESTAMP WHERE id = ?').run(schedule.id);
