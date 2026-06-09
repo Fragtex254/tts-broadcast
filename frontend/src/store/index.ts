@@ -437,24 +437,60 @@ export const useStore = create<AppState>((set) => ({
           : s
       ),
     }));
-    try {
-      // 先同步最新音色配置到后端
-      const { voiceConfig } = useStore.getState();
-      await broadcastApi.updateVoiceConfig(broadcastId, {
-        voiceType: voiceConfig.voiceType,
-        voice: voiceConfig.voiceType === 'preset' ? voiceConfig.voice : undefined,
-        voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
-        voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
-        stylePrompt: voiceConfig.stylePrompt || undefined,
+
+    // 先同步最新音色配置到后端
+    const { voiceConfig } = useStore.getState();
+    await broadcastApi.updateVoiceConfig(broadcastId, {
+      voiceType: voiceConfig.voiceType,
+      voice: voiceConfig.voiceType === 'preset' ? voiceConfig.voice : undefined,
+      voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
+      voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
+      stylePrompt: voiceConfig.stylePrompt || undefined,
+    });
+
+    // 使用 SSE 实时获取状态
+    return new Promise((resolve, reject) => {
+      const { createSSEClient } = require('../services/sseClient');
+      const client = createSSEClient(String(broadcastId));
+
+      // 注册进度事件
+      client.on('progress', (event: any) => {
+        set((state) => ({
+          segments: state.segments.map((s) => {
+            if (s.id === event.segmentId) {
+              return {
+                ...s,
+                status: event.status,
+                audio_path: event.audioPath || s.audio_path,
+              };
+            }
+            return s;
+          }),
+        }));
       });
-      const response = await broadcastApi.batchGenerateSegments(broadcastId);
-      const { segments, results } = response.data;
-      set({ segments });
-      return { segments, results };
-    } catch (error) {
-      console.error('批量生成失败:', error);
-      throw error;
-    }
+
+      // 注册完成事件
+      client.on('complete', (event: any) => {
+        set({ segments: event.segments });
+        client.close();
+        resolve({ segments: event.segments, results: event.results });
+      });
+
+      // 注册错误事件
+      client.on('error', (event: any) => {
+        client.close();
+        reject(new Error(event.error));
+      });
+
+      // 建立 SSE 连接
+      client.connect();
+
+      // 同时发送 HTTP 请求触发批量生成
+      broadcastApi.batchGenerateSegments(broadcastId).catch((error) => {
+        client.close();
+        reject(error);
+      });
+    });
   },
 
   deleteSegment: async (broadcastId, segId) => {
