@@ -1,6 +1,6 @@
 const request = require('supertest');
 
-jest.mock('../../src/services/mimo', () => ({
+jest.mock('../../src/services/tts', () => ({
   generateSpeech: jest.fn().mockResolvedValue(Buffer.from('fake-audio-data')),
 }));
 

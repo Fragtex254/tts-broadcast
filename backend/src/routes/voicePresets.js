@@ -4,7 +4,7 @@ const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
 const fs = require('fs');
-const mimo = require('../services/mimo');
+const tts = require('../services/tts');
 const db = require('../db');
 
 // multer：内存存储，仅接受 reference_audio 字段，10MB 上限
@@ -117,7 +117,7 @@ router.post('/trial/clone', upload.single('reference_audio'), async (req, res) =
     );
 
     // 调用 TTS 克隆接口
-    const audioBuffer = await mimo.generateSpeech({
+    const audioBuffer = await tts.generateSpeech({
       text,
       voiceType: 'clone',
       voiceClone,
@@ -160,7 +160,7 @@ router.post('/trial/design', async (req, res) => {
 
     const text = trial_text || '你好，我是你的专属语音助手。';
 
-    const audioBuffer = await mimo.generateSpeech({
+    const audioBuffer = await tts.generateSpeech({
       text,
       voiceType: 'design',
       voiceDesign: design_prompt,
