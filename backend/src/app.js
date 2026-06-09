@@ -20,6 +20,7 @@ app.use('/api/broadcast', require('./routes/segments'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/schedules', require('./routes/schedule'));
 app.use('/api/voice-presets', require('./routes/voicePresets'));
+app.use('/api/sse', require('./routes/sse'));
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
