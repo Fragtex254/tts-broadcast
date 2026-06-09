@@ -56,24 +56,44 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
       audioConfig = { format: 'wav', voice };
   }
 
+  // 带重试的 API 调用（429 限流时最多重试 3 次）
+  const MAX_RETRIES = 3;
   let response;
-  try {
-    response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
-      model,
-      messages,
-      audio: audioConfig
-    }, {
-      headers: {
-        'api-key': ttsApiKey,
-        'Content-Type': 'application/json'
-      },
-      timeout: 120000  // 2 分钟超时，TTS 长文本需要较长时间
-    });
-  } catch (err) {
-    if (err.response?.status === 429) {
-      throw new Error('MiMo API 请求过于频繁，请稍后再试');
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
+        model,
+        messages,
+        audio: audioConfig
+      }, {
+        headers: {
+          'api-key': ttsApiKey,
+          'Content-Type': 'application/json'
+        },
+        timeout: 120000
+      });
+      break; // 成功，跳出重试循环
+    } catch (err) {
+      if (err.response?.status === 429 && attempt < MAX_RETRIES) {
+        // 429 限流，指数退避后重试
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // 非 429 错误或重试耗尽
+      if (err.response?.status === 429) {
+        throw new Error('MiMo API 请求过于频繁，请稍后再试');
+      }
+      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+        throw new Error('MiMo TTS API 请求超时，请稍后再试');
+      }
+      if (!err.response) {
+        throw new Error(`MiMo TTS API 网络错误: ${err.message}`);
+      }
+      throw new Error(`MiMo TTS API 调用失败: ${err.response?.data?.error?.message || err.message}`);
     }
-    throw new Error(`MiMo TTS API 调用失败: ${err.response?.data?.error?.message || err.message}`);
   }
 
   const audioBase64 = response.data?.choices?.[0]?.message?.audio?.data;

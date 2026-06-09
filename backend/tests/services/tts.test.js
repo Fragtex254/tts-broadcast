@@ -68,12 +68,45 @@ describe('TTS 服务', () => {
       );
     });
 
-    test('429 错误抛出友好消息', async () => {
-      axios.post.mockRejectedValue({
-        response: { status: 429 }
-      });
+    test('429 错误最终抛出友好消息', async () => {
+      axios.post.mockRejectedValue({ response: { status: 429 } });
       await expect(tts.generateSpeech({ text: '测试' }))
         .rejects.toThrow('MiMo API 请求过于频繁，请稍后再试');
+      expect(axios.post).toHaveBeenCalledTimes(3);
+    });
+
+    test('429 错误自动重试最多 3 次', async () => {
+      // 前两次 429，第三次成功
+      axios.post
+        .mockRejectedValueOnce({ response: { status: 429 } })
+        .mockRejectedValueOnce({ response: { status: 429 } })
+        .mockResolvedValueOnce({
+          data: { choices: [{ message: { audio: { data: fakeAudioBase64 } } }] }
+        });
+
+      const result = await tts.generateSpeech({ text: '测试' });
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(axios.post).toHaveBeenCalledTimes(3);
+    });
+
+    test('429 重试 3 次后仍失败则抛错', async () => {
+      axios.post.mockRejectedValue({ response: { status: 429 } });
+
+      await expect(tts.generateSpeech({ text: '测试' }))
+        .rejects.toThrow('MiMo API 请求过于频繁，请稍后再试');
+      expect(axios.post).toHaveBeenCalledTimes(3);
+    });
+
+    test('超时错误抛出超时提示', async () => {
+      axios.post.mockRejectedValue({ code: 'ECONNABORTED', message: 'timeout' });
+      await expect(tts.generateSpeech({ text: '测试' }))
+        .rejects.toThrow('MiMo TTS API 请求超时');
+    });
+
+    test('网络错误抛出网络提示', async () => {
+      axios.post.mockRejectedValue({ message: 'getaddrinfo ENOTFOUND', code: 'ENOTFOUND' });
+      await expect(tts.generateSpeech({ text: '测试' }))
+        .rejects.toThrow('MiMo TTS API 网络错误');
     });
 
     test('API 返回无音频数据时抛出错误', async () => {
