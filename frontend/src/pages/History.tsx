@@ -121,6 +121,7 @@ export const History: React.FC = () => {
     } catch (error) {
       console.error('批量删除失败:', error);
       setDeleteError('删除失败，请稍后重试');
+      setShowConfirmDialog(false);
     }
   };
 
@@ -141,6 +142,14 @@ export const History: React.FC = () => {
   };
 
   useEffect(() => { loadBroadcasts(page); }, [page]);
+
+  // 删除失败错误提示自动消失
+  useEffect(() => {
+    if (deleteError) {
+      const timer = setTimeout(() => setDeleteError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [deleteError]);
 
   const handleSelectBroadcast = (broadcast: Broadcast) => setCurrentBroadcast(broadcast);
   const handleReEdit = async (broadcast: Broadcast, e: React.MouseEvent) => {
