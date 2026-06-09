@@ -117,3 +117,25 @@ describe('WAV 合并服务', () => {
     expect(() => mergeWavFiles([tiny])).toThrow(/太小/);
   });
 });
+
+describe('resolveVoiceClone', () => {
+  const { resolveVoiceClone } = require('../../src/services/audio');
+
+  test('data: 前缀的 base64 直接返回', async () => {
+    const input = 'data:audio/wav;base64,AAAA';
+    const result = await resolveVoiceClone(input);
+    expect(result).toBe(input);
+  });
+
+  test('无效输入（非 data: 且非文件路径）抛出校验错误', async () => {
+    await expect(resolveVoiceClone('not-valid-input'))
+      .rejects.toThrow('voiceClone 格式无效');
+  });
+
+  test('空值抛出校验错误', async () => {
+    await expect(resolveVoiceClone(null))
+      .rejects.toThrow('voiceClone 不能为空');
+    await expect(resolveVoiceClone(''))
+      .rejects.toThrow('voiceClone 不能为空');
+  });
+});

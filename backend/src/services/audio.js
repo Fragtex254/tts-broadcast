@@ -53,7 +53,9 @@ function mergeWavFiles(filePaths) {
  * @returns {Promise<string>} base64 data URI
  */
 async function resolveVoiceClone(voiceClone) {
-  if (!voiceClone) return voiceClone;
+  if (!voiceClone) {
+    throw new Error('voiceClone 不能为空');
+  }
   if (voiceClone.startsWith('data:')) return voiceClone;
   if (voiceClone.startsWith('/audio/')) {
     const filePath = path.join(__dirname, '../..', voiceClone);
@@ -64,7 +66,7 @@ async function resolveVoiceClone(voiceClone) {
       return `data:${mime};base64,${buffer.toString('base64')}`;
     }
   }
-  return voiceClone;
+  throw new Error('voiceClone 格式无效，需要 data: 前缀或 /audio/ 文件路径');
 }
 
 module.exports = { mergeWavFiles, resolveVoiceClone };
