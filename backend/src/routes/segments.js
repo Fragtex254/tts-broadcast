@@ -163,9 +163,9 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       }
 
       // 请求间隔，避免触发 MiMo API 限流（RPM 100）
-      // 每个请求间隔 1 秒，确保不超过每分钟 100 个请求
+      // 每个请求间隔 0.7 秒，顶着限制跑
       if (i < pendingSegments.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 700));
       }
     }
 
