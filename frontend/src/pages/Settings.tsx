@@ -142,7 +142,7 @@ export const Settings: React.FC = () => {
                     />
                     <button
                       onClick={() => handleTestKey('llm')}
-                      disabled={isTestingKey !== null || !formData.mimo_api_key}
+                      disabled={isTestingKey === 'llm' || !formData.mimo_api_key}
                       className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'llm' ? (
@@ -183,7 +183,7 @@ export const Settings: React.FC = () => {
                     />
                     <button
                       onClick={() => handleTestKey('tts')}
-                      disabled={isTestingKey !== null || !formData.mimo_tts_api_key}
+                      disabled={isTestingKey === 'tts' || !formData.mimo_tts_api_key}
                       className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'tts' ? (
