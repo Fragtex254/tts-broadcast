@@ -242,5 +242,24 @@ describe('TTS 服务', () => {
       const body = axios.post.mock.calls[0][1];
       expect(body.messages[0].content).toBe('用温柔的语气播报');
     });
+
+    test('可自定义输出格式（如 mp3）', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '测试文本',
+        voice: '冰糖',
+        voiceType: 'preset',
+        format: 'mp3'
+      });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio.format).toBe('mp3');
+    });
+
+    test('不传 format 时默认为 wav', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({ text: '测试文本' });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio.format).toBe('wav');
+    });
   });
 });
