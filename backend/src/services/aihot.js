@@ -1,9 +1,6 @@
 const axios = require('axios');
 const https = require('https');
 
-// 解决部分环境下的 TLS 证书验证问题
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
 const BASE_URL = 'https://aihot.virxact.com';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
