@@ -9,6 +9,7 @@ const audio = require('../services/audio');
 const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
 const sseManager = require('../services/sseManager');
+const ttsQueue = require('../services/ttsQueue');
 const { validateId, cleanAudioFile, audioDir } = require('../utils/validation');
 
 /**
@@ -117,20 +118,23 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       });
 
       try {
-        const resolvedVoiceClone = voiceConfig.voiceClone
-          ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
-          : undefined;
+        // 使用队列管理 TTS 请求，避免触发限流
+        const audioBuffer = await ttsQueue.enqueue(async () => {
+          const resolvedVoiceClone = voiceConfig.voiceClone
+            ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
+            : undefined;
 
-        const audioBuffer = await tts.generateSpeech({
-          text: segment.text,
-          voice: voiceConfig.voice,
-          voiceType: broadcast.voice_type,
-          voiceDesign: voiceConfig.voiceDesign,
-          voiceClone: resolvedVoiceClone,
-          stylePrompt: voiceConfig.stylePrompt,
-          speed: voiceConfig.speed,
-          emotion: voiceConfig.emotion,
-          pitch: voiceConfig.pitch
+          return tts.generateSpeech({
+            text: segment.text,
+            voice: voiceConfig.voice,
+            voiceType: broadcast.voice_type,
+            voiceDesign: voiceConfig.voiceDesign,
+            voiceClone: resolvedVoiceClone,
+            stylePrompt: voiceConfig.stylePrompt,
+            speed: voiceConfig.speed,
+            emotion: voiceConfig.emotion,
+            pitch: voiceConfig.pitch
+          });
         });
 
         const filename = `segment_${idCheck.id}_${segment.index}.wav`;
@@ -160,12 +164,6 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           current: i + 1,
           total: pendingSegments.length
         });
-      }
-
-      // 请求间隔，避免触发 MiMo API 限流（RPM 100）
-      // 每个请求间隔 0.7 秒，顶着限制跑
-      if (i < pendingSegments.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 700));
       }
     }
 
