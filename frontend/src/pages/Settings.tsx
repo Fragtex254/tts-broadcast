@@ -26,7 +26,7 @@ export const Settings: React.FC = () => {
 
   const [formData, setFormData] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [isTestingKey, setIsTestingKey] = useState(false);
+  const [isTestingKey, setIsTestingKey] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ type: string; valid: boolean; error?: string } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -52,11 +52,11 @@ export const Settings: React.FC = () => {
   };
 
   const handleTestKey = async (type: 'llm' | 'tts') => {
-    setIsTestingKey(true);
+    setIsTestingKey(type);
     setTestResult(null);
     try { const result = await testApiKey(type); setTestResult({ type, ...result }); }
     catch (e) { setTestResult({ type, valid: false, error: (e as Error).message }); }
-    finally { setIsTestingKey(false); }
+    finally { setIsTestingKey(null); }
   };
 
   const handleSaveField = async (field: string) => {
@@ -142,10 +142,10 @@ export const Settings: React.FC = () => {
                     />
                     <button
                       onClick={() => handleTestKey('llm')}
-                      disabled={isTestingKey || !formData.mimo_api_key}
+                      disabled={isTestingKey !== null || !formData.mimo_api_key}
                       className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
                     >
-                      {isTestingKey ? (
+                      {isTestingKey === 'llm' ? (
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
                       ) : '测试连接'}
                     </button>
@@ -183,10 +183,10 @@ export const Settings: React.FC = () => {
                     />
                     <button
                       onClick={() => handleTestKey('tts')}
-                      disabled={isTestingKey || !formData.mimo_tts_api_key}
+                      disabled={isTestingKey !== null || !formData.mimo_tts_api_key}
                       className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
                     >
-                      {isTestingKey ? (
+                      {isTestingKey === 'tts' ? (
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
                       ) : '测试连接'}
                     </button>
