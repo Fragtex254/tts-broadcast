@@ -28,6 +28,27 @@ const VOICE_TYPES = [
   { value: 'preset', label: '预设' },
 ];
 
+const EMOTION_OPTIONS = [
+  { value: '', label: '默认' },
+  { value: 'happy', label: '开心' },
+  { value: 'sad', label: '悲伤' },
+  { value: 'angry', label: '生气' },
+  { value: 'fearful', label: '害怕' },
+  { value: 'surprised', label: '惊喜' },
+  { value: 'calm', label: '冷静' },
+  { value: 'pleading', label: '恳求' },
+  { value: 'sarcasm', label: '嘲讽' },
+  { value: 'furious', label: '暴怒' },
+  { value: 'depressed', label: '沮丧' },
+  { value: 'stingy', label: '吝啬' },
+  { value: 'arrogant', label: '傲慢' },
+  { value: 'grief', label: '悲痛' },
+  { value: 'seductive', label: '诱惑' },
+  { value: 'embarrassed', label: '害羞' },
+  { value: 'suspicious', label: '怀疑' },
+  { value: 'heartbroken', label: '心疼' },
+];
+
 export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizontal' }) => {
   const {
     currentBroadcast,
@@ -41,6 +62,11 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
   const [stylePrompt, setStylePrompt] = useState(voiceConfig.stylePrompt || '');
   // 预设选中时的真实音色类型（不切换 UI tab）
   const [activePresetType, setActivePresetType] = useState<string | null>(null);
+  // 精细控制（仅 builtin 模式）
+  const [speedRatio, setSpeedRatio] = useState<number>(1.0);
+  const [emotion, setEmotion] = useState<string>('');
+  const [pitchRatio, setPitchRatio] = useState<number>(1.0);
+  const [showFineControls, setShowFineControls] = useState(false);
 
   // 同步本地状态到 store
   useEffect(() => {
@@ -52,8 +78,11 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       voiceDesign,
       voiceClone,
       stylePrompt,
+      speed: speedRatio === 1.0 ? null : { speed_ratio: speedRatio, style: '固定' },
+      emotion: emotion === '' ? null : emotion,
+      pitch: pitchRatio === 1.0 ? null : { pitch_ratio: pitchRatio, style: '固定' },
     });
-  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, updateVoiceConfig, activePresetType]);
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, updateVoiceConfig, activePresetType, speedRatio, emotion, pitchRatio]);
 
   // 切换音色后同步到后端（影响段落重新生成），跳过首次渲染
   const isInitialMount = useRef(true);
@@ -70,8 +99,11 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       voiceDesign: effectiveType === 'design' ? voiceDesign : undefined,
       voiceClone: effectiveType === 'clone' ? voiceClone : undefined,
       stylePrompt: stylePrompt || undefined,
+      speed: voiceType === 'builtin' && speedRatio !== 1.0 ? { speed_ratio: speedRatio, style: '固定' } : undefined,
+      emotion: voiceType === 'builtin' && emotion !== '' ? emotion : undefined,
+      pitch: voiceType === 'builtin' && pitchRatio !== 1.0 ? { pitch_ratio: pitchRatio, style: '固定' } : undefined,
     }).catch(() => {/* 静默失败 */});
-  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast, activePresetType]);
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast, activePresetType, speedRatio, emotion, pitchRatio]);
 
   const handleApplyPreset = (preset: VoicePreset) => {
     // 设定预设的真实类型，useEffect 会用它来同步 store 和后端
@@ -93,6 +125,13 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
     if (type !== 'preset') {
       setActivePresetType(null);
     }
+  };
+
+  // 重置精细控制参数
+  const handleResetFineControls = () => {
+    setSpeedRatio(1.0);
+    setEmotion('');
+    setPitchRatio(1.0);
   };
 
   const isVertical = layout === 'vertical';
@@ -147,6 +186,76 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* 精细控制（仅内置音色模式） */}
+        {voiceType === 'builtin' && (
+          <div className="mb-3 flex-shrink-0 animate-fade-in">
+            <button
+              onClick={() => setShowFineControls(!showFineControls)}
+              className="flex items-center justify-between w-full mb-1.5 group"
+            >
+              <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 cursor-pointer">精细控制</label>
+              <span className="font-body text-[10px] text-ink-soft/40 transition-transform duration-150"
+                style={{ transform: showFineControls ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                ▸
+              </span>
+            </button>
+            {showFineControls && (
+              <div className="bg-white/60 rounded-xl border border-card-border p-3 space-y-3">
+                {/* 语速 */}
+                <div className="flex items-center gap-2">
+                  <span className="font-body text-[11px] text-ink-soft w-8 flex-shrink-0">语速</span>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={2.0}
+                    step={0.1}
+                    value={speedRatio}
+                    onChange={(e) => setSpeedRatio(Number(e.target.value))}
+                    className="flex-1 h-1 bg-card-border rounded-lg appearance-none cursor-pointer accent-blush"
+                  />
+                  <span className="font-body text-[11px] text-ink w-8 text-right flex-shrink-0">{speedRatio.toFixed(1)}x</span>
+                </div>
+                {/* 情感 */}
+                <div className="flex items-center gap-2">
+                  <span className="font-body text-[11px] text-ink-soft w-8 flex-shrink-0">情感</span>
+                  <select
+                    value={emotion}
+                    onChange={(e) => setEmotion(e.target.value)}
+                    className="flex-1 bg-white/70 text-ink rounded-lg px-2 py-1 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors appearance-none cursor-pointer"
+                  >
+                    {EMOTION_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* 音调 */}
+                <div className="flex items-center gap-2">
+                  <span className="font-body text-[11px] text-ink-soft w-8 flex-shrink-0">音调</span>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={2.0}
+                    step={0.1}
+                    value={pitchRatio}
+                    onChange={(e) => setPitchRatio(Number(e.target.value))}
+                    className="flex-1 h-1 bg-card-border rounded-lg appearance-none cursor-pointer accent-lilac"
+                  />
+                  <span className="font-body text-[11px] text-ink w-8 text-right flex-shrink-0">{pitchRatio.toFixed(1)}x</span>
+                </div>
+                {/* 重置按钮 */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleResetFineControls}
+                    className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 hover:text-ink px-2 py-1 rounded-lg hover:bg-white/50 transition-all duration-150"
+                  >
+                    重置
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
