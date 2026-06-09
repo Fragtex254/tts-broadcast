@@ -94,4 +94,93 @@ describe('播报 API', () => {
     const res = await request(app).get('/api/broadcast/99999/segments');
     expect(res.status).toBe(404);
   });
+
+  // ============ 扩充测试 ============
+
+  describe('POST /api/broadcast/rewrite', () => {
+    test('缺少 items 参数返回 400', async () => {
+      const res = await request(app)
+        .post('/api/broadcast/rewrite')
+        .send({});
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/broadcast/generate (segmented)', () => {
+    test('segmented 模式创建播报记录', async () => {
+      const res = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '测试口播稿内容，足够长以生成标题。',
+          mode: 'segmented'
+        });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('broadcast');
+      expect(res.body.broadcast.mode).toBe('segmented');
+      expect(res.body.broadcast.status).toBe('pending');
+    });
+  });
+
+  describe('POST /api/broadcast/:id/save', () => {
+    let saveTestBroadcastId;
+
+    beforeEach(() => {
+      const result = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode, saved)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
+      `).run('保存测试', '内容', 'preset', '{}', 'generated', 'whole');
+      saveTestBroadcastId = result.lastInsertRowid;
+    });
+
+    test('保存播报', async () => {
+      const res = await request(app)
+        .post(`/api/broadcast/${saveTestBroadcastId}/save`);
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.saved).toBe(1);
+    });
+
+    test('取消保存播报', async () => {
+      await request(app).post(`/api/broadcast/${saveTestBroadcastId}/save`);
+      const res = await request(app)
+        .post(`/api/broadcast/${saveTestBroadcastId}/save`);
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.saved).toBe(0);
+    });
+
+    test('不存在的播报返回 404', async () => {
+      const res = await request(app).post('/api/broadcast/99999/save');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('PATCH /api/broadcast/:id/voice-config', () => {
+    let vcTestBroadcastId;
+
+    beforeEach(() => {
+      const result = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('音色测试', '内容', 'preset', '{"voice":"冰糖"}', 'pending', 'whole');
+      vcTestBroadcastId = result.lastInsertRowid;
+    });
+
+    test('更新音色配置', async () => {
+      const res = await request(app)
+        .patch(`/api/broadcast/${vcTestBroadcastId}/voice-config`)
+        .send({ voiceType: 'design', voiceDesign: '温柔女声' });
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.voice_type).toBe('design');
+    });
+  });
+
+  describe('GET /api/broadcast/:id/audio', () => {
+    test('无音频时返回 404', async () => {
+      const result = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('无音频', '内容', 'preset', '{}', 'pending', 'whole');
+      const res = await request(app).get(`/api/broadcast/${result.lastInsertRowid}/audio`);
+      expect(res.status).toBe(404);
+    });
+  });
 });
