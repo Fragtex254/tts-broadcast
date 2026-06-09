@@ -9,10 +9,13 @@ const { getApiKey } = require('./mimo');
  * @param {string} [params.voiceType='preset'] - 音色类型 (preset/design/clone)
  * @param {string} [params.voiceDesign] - 音色设计描述
  * @param {string} [params.voiceClone] - 音色克隆音频 (base64)
- * @param {string} [params.stylePrompt] - 风格提示
+ * @param {string} [params.stylePrompt] - 风格提示（与精细参数互斥）
+ * @param {Object} [params.speed] - 速度控制 { speed_ratio: 0.5-2.0, style: '固定'|'随机' }
+ * @param {string|Array} [params.emotion] - 情感控制，字符串或 [{ emotion, weight }] 数组
+ * @param {Object} [params.pitch] - 音调控制 { pitch_ratio: 0.5-2.0, style: '固定'|'随机' }
  * @returns {Promise<Buffer>} 音频 Buffer
  */
-async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', voiceDesign, voiceClone, stylePrompt }) {
+async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch }) {
   // 输入校验
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     throw new Error('请提供合成文本');
@@ -23,6 +26,13 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
   if (voiceType === 'design' && !voiceDesign) {
     throw new Error('design 模式需要提供 voiceDesign');
   }
+
+  // 判断是否使用了精细参数（speed/emotion/pitch），若是则清除 stylePrompt 避免冲突
+  const hasFineGrainedParams = speed || emotion || pitch;
+  // 无精细参数且无 stylePrompt 时使用默认风格提示
+  const effectiveStylePrompt = hasFineGrainedParams
+    ? ''
+    : (stylePrompt || '用专业新闻主播的语气，语速适中，沉稳大气');
 
   const ttsApiKey = getApiKey('tts');
 
@@ -41,7 +51,7 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
     case 'clone':
       model = 'mimo-v2.5-tts-voiceclone';
       messages = [
-        { role: 'user', content: stylePrompt || '' },
+        { role: 'user', content: effectiveStylePrompt },
         { role: 'assistant', content: text }
       ];
       audioConfig = { format: 'wav', voice: voiceClone };
@@ -50,10 +60,20 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
     default: // preset
       model = 'mimo-v2.5-tts';
       messages = [
-        { role: 'user', content: stylePrompt || '用专业新闻主播的语气，语速适中，沉稳大气' },
+        { role: 'user', content: effectiveStylePrompt },
         { role: 'assistant', content: text }
       ];
       audioConfig = { format: 'wav', voice };
+      // 精细控制参数
+      if (speed) audioConfig.speed = speed;
+      if (emotion) {
+        if (Array.isArray(emotion)) {
+          audioConfig.emotion_weights = emotion;
+        } else {
+          audioConfig.emotion = emotion;
+        }
+      }
+      if (pitch) audioConfig.pitch = pitch;
   }
 
   // 带重试的 API 调用（429 限流时最多重试 3 次）

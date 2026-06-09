@@ -163,5 +163,84 @@ describe('TTS 服务', () => {
       const config = axios.post.mock.calls[0][2];
       expect(config.timeout).toBeGreaterThan(0);
     });
+
+    test('preset 模式传入 speed 参数到 audioConfig', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '测试文本',
+        voice: '冰糖',
+        voiceType: 'preset',
+        speed: { speed_ratio: 0.9, style: '固定' }
+      });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio.speed).toEqual({ speed_ratio: 0.9, style: '固定' });
+    });
+
+    test('preset 模式传入 emotion 字符串到 audioConfig', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '测试文本',
+        voice: '冰糖',
+        voiceType: 'preset',
+        emotion: 'happy'
+      });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio.emotion).toBe('happy');
+    });
+
+    test('preset 模式传入 emotion 数组映射到 emotion_weights', async () => {
+      mockTtsResponse();
+      const weights = [
+        { emotion: 'happy', weight: 0.6 },
+        { emotion: 'surprised', weight: 0.4 }
+      ];
+      await tts.generateSpeech({
+        text: '测试文本',
+        voice: '冰糖',
+        voiceType: 'preset',
+        emotion: weights
+      });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio.emotion_weights).toEqual(weights);
+      expect(body.audio.emotion).toBeUndefined();
+    });
+
+    test('preset 模式传入 pitch 参数到 audioConfig', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '测试文本',
+        voice: '冰糖',
+        voiceType: 'preset',
+        pitch: { pitch_ratio: 1.2, style: '随机' }
+      });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio.pitch).toEqual({ pitch_ratio: 1.2, style: '随机' });
+    });
+
+    test('有精细参数时清除 stylePrompt 避免冲突', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '测试文本',
+        voice: '冰糖',
+        voiceType: 'preset',
+        stylePrompt: '用温柔的语气',
+        speed: { speed_ratio: 0.9 }
+      });
+      const body = axios.post.mock.calls[0][1];
+      // user message 应为空，避免与精细参数冲突
+      expect(body.messages[0].content).toBe('');
+    });
+
+    test('无精细参数时保留 stylePrompt', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '测试文本',
+        voice: '冰糖',
+        voiceType: 'preset',
+        stylePrompt: '用温柔的语气播报'
+      });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.messages[0].content).toBe('用温柔的语气播报');
+    });
   });
 });
