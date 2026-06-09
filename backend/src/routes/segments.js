@@ -94,7 +94,10 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           voiceType: broadcast.voice_type,
           voiceDesign: voiceConfig.voiceDesign,
           voiceClone: resolvedVoiceClone,
-          stylePrompt: voiceConfig.stylePrompt
+          stylePrompt: voiceConfig.stylePrompt,
+          speed: voiceConfig.speed,
+          emotion: voiceConfig.emotion,
+          pitch: voiceConfig.pitch
         });
 
         const filename = `segment_${idCheck.id}_${segment.index}.wav`;
@@ -249,7 +252,10 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
         voiceType: broadcast.voice_type,
         voiceDesign: voiceConfig.voiceDesign,
         voiceClone: resolvedVoiceClone,
-        stylePrompt: voiceConfig.stylePrompt
+        stylePrompt: voiceConfig.stylePrompt,
+        speed: voiceConfig.speed,
+        emotion: voiceConfig.emotion,
+        pitch: voiceConfig.pitch
       });
 
       const filename = `segment_${idCheck.id}_${segment.index}.wav`;

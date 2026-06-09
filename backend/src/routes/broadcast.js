@@ -67,7 +67,7 @@ router.post('/rewrite', async (req, res) => {
  */
 router.post('/generate', async (req, res) => {
   try {
-    const { text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, sourceItems, mode } = req.body;
+    const { text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch, sourceItems, mode } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: '请提供口播稿内容' });
@@ -78,7 +78,7 @@ router.post('/generate', async (req, res) => {
         title: text.substring(0, 50) + '...',
         content: text,
         voiceType: voiceType || 'preset',
-        voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt },
+        voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch },
         sourceItems,
         status: 'pending',
         mode: 'segmented'
@@ -94,7 +94,10 @@ router.post('/generate', async (req, res) => {
       voiceType,
       voiceDesign,
       voiceClone,
-      stylePrompt
+      stylePrompt,
+      speed,
+      emotion,
+      pitch
     });
 
     const filename = `broadcast_${Date.now()}.wav`;
@@ -106,7 +109,7 @@ router.post('/generate', async (req, res) => {
       content: text,
       audioPath: `/audio/${filename}`,
       voiceType: voiceType || 'preset',
-      voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt },
+      voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch },
       sourceItems,
       status: 'generated',
       mode: 'whole'
@@ -183,8 +186,8 @@ router.patch('/:id/voice-config', (req, res) => {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const { voiceType, voice, voiceDesign, voiceClone, stylePrompt } = req.body;
-    const voiceConfig = JSON.stringify({ voice, voiceDesign, voiceClone, stylePrompt });
+    const { voiceType, voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch } = req.body;
+    const voiceConfig = JSON.stringify({ voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch });
 
     broadcastStore.updateVoiceConfig(idCheck.id, { voiceType, voiceConfig });
 
