@@ -123,5 +123,12 @@ describe('TTS 服务', () => {
       await expect(tts.generateSpeech({ text: '测试', voiceType: 'design' }))
         .rejects.toThrow('design 模式需要提供 voiceDesign');
     });
+
+    test('请求设置了合理的超时时间', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({ text: '测试' });
+      const config = axios.post.mock.calls[0][2];
+      expect(config.timeout).toBeGreaterThan(0);
+    });
   });
 });

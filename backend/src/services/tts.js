@@ -67,7 +67,7 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
         'api-key': ttsApiKey,
         'Content-Type': 'application/json'
       },
-      timeout: 0
+      timeout: 120000  // 2 分钟超时，TTS 长文本需要较长时间
     });
   } catch (err) {
     if (err.response?.status === 429) {
