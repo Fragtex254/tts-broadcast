@@ -171,4 +171,36 @@ describe('broadcastStore', () => {
       expect(updated.status).toBe('generated');
     });
   });
+
+  describe('batchDeleteByIds', () => {
+    test('应该批量删除多条记录', () => {
+      const b1 = insertBroadcast({ title: 'Test 1' });
+      const b2 = insertBroadcast({ title: 'Test 2' });
+      const b3 = insertBroadcast({ title: 'Test 3' });
+
+      const result = broadcastStore.batchDeleteByIds([b1.id, b3.id]);
+
+      expect(result.deleted).toBe(2);
+      expect(result.failed).toBe(0);
+      expect(broadcastStore.getById(b1.id)).toBeUndefined();
+      expect(broadcastStore.getById(b2.id)).toBeDefined();
+      expect(broadcastStore.getById(b3.id)).toBeUndefined();
+    });
+
+    test('应该处理不存在的 ID', () => {
+      const b1 = insertBroadcast({ title: 'Test 1' });
+
+      const result = broadcastStore.batchDeleteByIds([b1.id, 99999]);
+
+      expect(result.deleted).toBe(1);
+      expect(result.failed).toBe(1);
+    });
+
+    test('应该处理空数组', () => {
+      const result = broadcastStore.batchDeleteByIds([]);
+
+      expect(result.deleted).toBe(0);
+      expect(result.failed).toBe(0);
+    });
+  });
 });

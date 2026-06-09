@@ -146,6 +146,35 @@ function deleteById(id) {
 }
 
 /**
+ * 批量删除播报记录（含级联删除 segments）
+ * @param {number[]} ids - 播报 ID 数组
+ * @returns {Object} { deleted: number, failed: number }
+ */
+function batchDeleteByIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { deleted: 0, failed: 0 };
+  }
+
+  let deleted = 0;
+  let failed = 0;
+
+  const deleteTransaction = db.transaction((idList) => {
+    for (const id of idList) {
+      const record = db.prepare('SELECT id FROM broadcasts WHERE id = ?').get(id);
+      if (record) {
+        db.prepare('DELETE FROM broadcasts WHERE id = ?').run(id);
+        deleted++;
+      } else {
+        failed++;
+      }
+    }
+  });
+
+  deleteTransaction(ids);
+  return { deleted, failed };
+}
+
+/**
  * 清空音频路径并设置播报模式（用于重新生成）
  * @param {number} id - 播报 ID
  * @param {string} mode - 新的播报模式
@@ -178,6 +207,7 @@ module.exports = {
   updateVoiceConfig,
   toggleSaved,
   deleteById,
+  batchDeleteByIds,
   clearAudioAndSetMode,
   updateStatus
 };
