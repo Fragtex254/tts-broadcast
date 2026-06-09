@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 
 const WAV_HEADER_SIZE = 44;
 
@@ -45,4 +46,25 @@ function mergeWavFiles(filePaths) {
   return Buffer.concat([header, mergedPcm]);
 }
 
-module.exports = { mergeWavFiles };
+/**
+ * 解析 voiceClone：如果是文件路径则读取并转为 base64 data URI，
+ * 如果已经是 base64 data URI 则直接返回
+ * @param {string} voiceClone - base64 data URI 或 /audio/ 开头的文件路径
+ * @returns {Promise<string>} base64 data URI
+ */
+async function resolveVoiceClone(voiceClone) {
+  if (!voiceClone) return voiceClone;
+  if (voiceClone.startsWith('data:')) return voiceClone;
+  if (voiceClone.startsWith('/audio/')) {
+    const filePath = path.join(__dirname, '../..', voiceClone);
+    if (fs.existsSync(filePath)) {
+      const buffer = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = ext === '.mp3' ? 'audio/mpeg' : 'audio/wav';
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    }
+  }
+  return voiceClone;
+}
+
+module.exports = { mergeWavFiles, resolveVoiceClone };
