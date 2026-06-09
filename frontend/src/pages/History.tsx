@@ -133,7 +133,7 @@ export const History: React.FC = () => {
     try {
       const result = await fetchBroadcasts({ page: pageNum, limit });
       setTotal(result.pagination.total);
-    } catch (err) {
+    } catch {
       setError('加载播报历史失败，请稍后重试');
     } finally {
       setIsLoading(false);
