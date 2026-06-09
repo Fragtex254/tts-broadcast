@@ -80,7 +80,9 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
 
     const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
-    const resolvedVoiceClone = await audio.resolveVoiceClone(voiceConfig.voiceClone);
+    const resolvedVoiceClone = voiceConfig.voiceClone
+      ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
+      : undefined;
     const pendingSegments = segmentStore.getPendingByBroadcastId(idCheck.id);
 
     const results = [];
@@ -241,7 +243,9 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
 
     const broadcast = broadcastStore.getById(idCheck.id);
     const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
-    const resolvedVoiceClone = await audio.resolveVoiceClone(voiceConfig.voiceClone);
+    const resolvedVoiceClone = voiceConfig.voiceClone
+      ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
+      : undefined;
 
     segmentStore.updateStatus(segIdCheck.id, 'generating');
 

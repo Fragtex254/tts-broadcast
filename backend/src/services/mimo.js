@@ -205,13 +205,15 @@ async function testApiKey(type = 'anthropic') {
   }
 }
 
-// Re-export generateSpeech 保持向后兼容（voicePresets.js 等仍通过 mimo 调用）
-const { generateSpeech } = require('./tts');
-
+// 先导出已有函数，再 require('./tts') 避免循环依赖
+// （tts.js 依赖 mimo.getApiKey，如果在 require 之后才赋值 module.exports 会拿到空对象）
 module.exports = {
   getApiKey,
   rewriteToScript,
   splitScript,
   testApiKey,
-  generateSpeech
 };
+
+// Re-export generateSpeech 保持向后兼容
+const { generateSpeech } = require('./tts');
+module.exports.generateSpeech = generateSpeech;
