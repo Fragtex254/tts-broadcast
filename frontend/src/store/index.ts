@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { broadcastApi, settingsApi, scheduleApi } from '../services/api';
+import { broadcastApi, settingsApi, scheduleApi, type NewsItem } from '../services/api';
 
 // ============ 接口定义 ============
 
@@ -130,7 +130,7 @@ export interface AppState {
 
   // 播报操作
   fetchTodayItems: (params?: { category?: string; take?: number }) => Promise<void>;
-  rewriteScript: (data: { items: TodayItem[]; opening?: string; closing?: string }) => Promise<string>;
+  rewriteScript: (data: { items: NewsItem[]; opening?: string; closing?: string }) => Promise<string>;
   generateBroadcast: (data: {
     text: string;
     voice?: string;

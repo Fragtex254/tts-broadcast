@@ -8,9 +8,10 @@ const api = axios.create({
 interface NewsItem {
   id: string;
   title: string;
-  content: string;
-  category: string;
-  published_at: string;
+  content?: string;
+  summary?: string;
+  category?: string;
+  published_at?: string;
   source_url?: string;
   [key: string]: unknown;
 }
