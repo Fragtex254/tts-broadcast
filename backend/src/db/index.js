@@ -49,9 +49,9 @@ try {
       type TEXT NOT NULL CHECK(type IN ('clone', 'design')),
       name TEXT NOT NULL,
       style_prompt TEXT DEFAULT '',
-      trial_audio_path TEXT,
-      original_audio_path TEXT,
-      design_prompt TEXT,
+      trial_audio_path TEXT DEFAULT '',
+      original_audio_path TEXT DEFAULT '',
+      design_prompt TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

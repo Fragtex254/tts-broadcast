@@ -4,6 +4,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const aihot = require('../services/aihot');
+const mimo = require('../services/mimo');
 const db = require('../db');
 const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
@@ -47,7 +48,6 @@ router.post('/rewrite', async (req, res) => {
     const defaultOpening = db.prepare('SELECT value FROM settings WHERE key = ?').get('opening_script');
     const defaultClosing = db.prepare('SELECT value FROM settings WHERE key = ?').get('closing_script');
 
-    const mimo = require('../services/mimo');
     const script = await mimo.rewriteToScript({
       items,
       opening: opening || JSON.parse(defaultOpening?.value || '""'),

@@ -5,12 +5,32 @@ const api = axios.create({
   timeout: 0, // 不设置超时限制，TTS 生成可能需要较长时间
 });
 
+interface NewsItem {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  published_at: string;
+  source_url?: string;
+  [key: string]: unknown;
+}
+
+interface Settings {
+  mimo_api_key?: string;
+  mimo_tts_api_key?: string;
+  default_voice?: string;
+  opening_script?: string;
+  closing_script?: string;
+  content_categories?: string;
+  [key: string]: string | undefined;
+}
+
 // 播报相关 API
 export const broadcastApi = {
   getToday: (params?: { category?: string; take?: number }) =>
     api.get('/broadcast/today', { params }),
 
-  rewrite: (data: { items: any[]; opening?: string; closing?: string }) =>
+  rewrite: (data: { items: NewsItem[]; opening?: string; closing?: string }) =>
     api.post('/broadcast/rewrite', data),
 
   generate: (data: {
@@ -80,7 +100,7 @@ export const broadcastApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
 
-  update: (data: Record<string, any>) =>
+  update: (data: Settings) =>
     api.put('/settings', data),
 
   testKey: (type?: 'llm' | 'tts') => api.post('/settings/test-key', { type }),
@@ -122,5 +142,7 @@ export const voicePresetApi = {
   trialDesign: (data: { design_prompt: string; trial_text: string; style_prompt?: string }) =>
     api.post('/voice-presets/trial/design', data),
 };
+
+export type { NewsItem, Settings };
 
 export default api;

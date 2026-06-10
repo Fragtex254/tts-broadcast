@@ -5,9 +5,18 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// CORS 配置
+const corsOptions = {
+  origin: NODE_ENV === 'production'
+    ? process.env.FRONTEND_URL || 'http://localhost:5173'  // 生产环境限制来源
+    : true,  // 开发环境允许所有来源
+  credentials: true,
+};
 
 // 中间件
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
