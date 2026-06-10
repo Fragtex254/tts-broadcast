@@ -136,9 +136,9 @@ model_list:
     litellm_params:
       model: anthropic/mimo-v2.5
       api_base: https://token-plan-cn.xiaomimimo.com/anthropic/v1
-      api_key: os.environ/MIMO_TOKEN_PLAN_API_KEY
+      api_key: fake-key  # 实际 Key 由后端通过请求 header 动态传入
       extra_headers:
-        api-key: os.environ/MIMO_TOKEN_PLAN_API_KEY
+        api-key: fake-key  # 同上
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
@@ -146,23 +146,21 @@ general_settings:
 
 使用 `anthropic/` 前缀，LiteLLM 自动处理协议转换。
 
+**API Key 传递机制：** LiteLLM Proxy 配置中的 `api_key` 仅为占位符。实际的 MiMo Token Plan API Key 由后端在每次调用时通过 OpenAI SDK 的 `apiKey` 参数传入，LiteLLM Proxy 会将其透传到上游 MiMo API。这样用户在 Settings 页面更新 Key 后，无需重启 LiteLLM Proxy 即可生效。
+
 ### 环境变量
 
 新增 `.env.example` 文件：
 
 ```env
-# MiMo 平台标准服务 Key（TTS + ASR）
-MIMO_API_KEY=
-
-# MiMo Token Plan 订阅 Key（LLM）
-MIMO_TOKEN_PLAN_API_KEY=
-
 # LiteLLM Proxy 管理 Key
 LITELLM_MASTER_KEY=sk-litellm-local
 
 # LiteLLM Proxy 地址（后端使用）
 LITELLM_BASE_URL=http://localhost:4000/v1
 ```
+
+MiMo API Key（`mimo_api_key`）和 Token Plan Key（`mimo_token_plan_api_key`）通过 Settings 页面管理，存储在 SQLite 数据库中，无需配置环境变量。
 
 ### mimo.js 改造
 
