@@ -5,19 +5,15 @@ const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
 const fs = require('fs');
 const tts = require('../services/tts');
-const db = require('../db');
+const voicePresetStore = require('../services/voicePresetStore');
+const audioAsset = require('../services/audioAsset');
+const { cleanAudioFile, audioDir } = require('../utils/validation');
 
 // multer：内存存储，仅接受 reference_audio 字段，10MB 上限
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }
 });
-
-// 音频目录
-const audioDir = path.join(__dirname, '../../audio');
-if (!fs.existsSync(audioDir)) {
-  fs.mkdirSync(audioDir, { recursive: true });
-}
 
 /**
  * 将音频 Buffer 转为 base64 data URI
@@ -43,8 +39,8 @@ function audioBufferToBase64(buffer, originalName, mimetype) {
       ffmpeg(tmpIn)
         .toFormat('wav')
         .on('error', (err) => {
-          cleanFile(tmpIn);
-          cleanFile(tmpOut);
+          cleanAudioFile(tmpIn);
+          cleanAudioFile(tmpOut);
           reject(new Error(`ffmpeg 转换失败: ${err.message}`));
         })
         .on('end', () => {
@@ -54,39 +50,13 @@ function audioBufferToBase64(buffer, originalName, mimetype) {
           } catch (readErr) {
             reject(readErr);
           } finally {
-            cleanFile(tmpIn);
-            cleanFile(tmpOut);
+            cleanAudioFile(tmpIn);
+            cleanAudioFile(tmpOut);
           }
         })
         .save(tmpOut);
     }
   });
-}
-
-/** 同步删除文件（忽略不存在的情况） */
-function cleanFile(filepath) {
-  try {
-    if (filepath && fs.existsSync(filepath)) fs.unlinkSync(filepath);
-  } catch { /* 忽略 */ }
-}
-
-/**
- * 清理旧的试听音频文件，保留最近 maxKeep 个
- */
-function cleanupOldTrials(prefix, maxKeep = 10) {
-  try {
-    const files = fs.readdirSync(audioDir)
-      .filter(f => f.startsWith(prefix))
-      .map(f => ({
-        name: f,
-        time: fs.statSync(path.join(audioDir, f)).mtimeMs
-      }))
-      .sort((a, b) => b.time - a.time);
-
-    for (let i = maxKeep; i < files.length; i++) {
-      cleanFile(path.join(audioDir, files[i].name));
-    }
-  } catch { /* 忽略 */ }
 }
 
 // ==================== 克隆试听 ====================
@@ -124,15 +94,12 @@ router.post('/trial/clone', upload.single('reference_audio'), async (req, res) =
       stylePrompt
     });
 
-    // 保存生成的音频文件
-    const filename = `preset_trial_clone_${Date.now()}.wav`;
-    const filepath = path.join(audioDir, filename);
-    fs.writeFileSync(filepath, audioBuffer);
+    const audioUrl = audioAsset.writeTrialAudio('clone', audioBuffer);
 
     // 清理旧的试听文件
-    cleanupOldTrials('preset_trial_clone_');
+    audioAsset.cleanupOldTrials('preset_trial_clone_');
 
-    res.json({ audioUrl: `/audio/${filename}` });
+    res.json({ audioUrl });
   } catch (error) {
     console.error('克隆试听失败:', error);
     res.status(500).json({ error: error.message || '克隆试听失败' });
@@ -167,13 +134,11 @@ router.post('/trial/design', async (req, res) => {
       stylePrompt: style_prompt || ''
     });
 
-    const filename = `preset_trial_design_${Date.now()}.wav`;
-    const filepath = path.join(audioDir, filename);
-    fs.writeFileSync(filepath, audioBuffer);
+    const audioUrl = audioAsset.writeTrialAudio('design', audioBuffer);
 
-    cleanupOldTrials('preset_trial_design_');
+    audioAsset.cleanupOldTrials('preset_trial_design_');
 
-    res.json({ audioUrl: `/audio/${filename}` });
+    res.json({ audioUrl });
   } catch (error) {
     console.error('设计试听失败:', error);
     res.status(500).json({ error: error.message || '设计试听失败' });
@@ -188,9 +153,7 @@ router.post('/trial/design', async (req, res) => {
  */
 router.get('/', (req, res) => {
   try {
-    const presets = db.prepare(
-      'SELECT * FROM voice_presets ORDER BY created_at DESC'
-    ).all();
+    const presets = voicePresetStore.getAll();
     res.json({ presets });
   } catch (error) {
     console.error('查询预设失败:', error);
@@ -233,49 +196,50 @@ router.post('/', createUpload, (req, res) => {
     }
 
     // 检查上限（20个）
-    const count = db.prepare('SELECT COUNT(*) as count FROM voice_presets').get().count;
+    const count = voicePresetStore.countAll();
     if (count >= 20) {
       return res.status(400).json({ error: '预设数量已达上限（20个），请删除不需要的预设' });
     }
 
     const files = req.files || {};
-    let finalTrialAudioPath = trial_audio_path || null;
-    let finalOriginalAudioPath = null;
+    const preset = voicePresetStore.create({
+      type,
+      name,
+      stylePrompt: style_prompt || '',
+      trialAudioPath: trial_audio_path || null,
+      originalAudioPath: null,
+      designPrompt: design_prompt || null
+    });
+
+    let finalTrialAudioPath = preset.trial_audio_path;
+    let finalOriginalAudioPath = preset.original_audio_path;
 
     // 试听音频：优先使用上传的文件
     if (files.trial_audio && files.trial_audio[0]) {
       const file = files.trial_audio[0];
-      const ext = path.extname(file.originalname) || '.wav';
-      const trialFilename = `preset_trial_${Date.now()}${ext}`;
-      const trialFilepath = path.join(audioDir, trialFilename);
-      fs.writeFileSync(trialFilepath, file.buffer);
-      finalTrialAudioPath = `/audio/${trialFilename}`;
+      finalTrialAudioPath = audioAsset.writePresetUpload({
+        presetId: preset.id,
+        file,
+        kind: 'trial'
+      });
     }
 
     // 参考音频（克隆预设的原始音频）
     if (files.reference_audio && files.reference_audio[0]) {
       const file = files.reference_audio[0];
-      const ext = path.extname(file.originalname) || '.wav';
-      const origFilename = `preset_original_${Date.now()}${ext}`;
-      const origFilepath = path.join(audioDir, origFilename);
-      fs.writeFileSync(origFilepath, file.buffer);
-      finalOriginalAudioPath = `/audio/${origFilename}`;
+      finalOriginalAudioPath = audioAsset.writePresetUpload({
+        presetId: preset.id,
+        file,
+        kind: 'original'
+      });
     }
 
-    const result = db.prepare(`
-      INSERT INTO voice_presets (type, name, style_prompt, trial_audio_path, original_audio_path, design_prompt)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      type,
-      name,
-      style_prompt || '',
-      finalTrialAudioPath,
-      finalOriginalAudioPath,
-      design_prompt || null
-    );
+    const updatedPreset = voicePresetStore.updateAudioPaths(preset.id, {
+      trialAudioPath: finalTrialAudioPath,
+      originalAudioPath: finalOriginalAudioPath
+    });
 
-    const preset = db.prepare('SELECT * FROM voice_presets WHERE id = ?').get(result.lastInsertRowid);
-    res.status(201).json({ preset });
+    res.status(201).json({ preset: updatedPreset });
   } catch (error) {
     console.error('创建预设失败:', error);
     res.status(500).json({ error: error.message || '创建预设失败' });
@@ -293,20 +257,20 @@ router.delete('/:id', (req, res) => {
       return res.status(400).json({ error: '无效的预设 ID' });
     }
 
-    const preset = db.prepare('SELECT * FROM voice_presets WHERE id = ?').get(id);
+    const preset = voicePresetStore.getById(id);
     if (!preset) {
       return res.status(404).json({ error: '预设不存在' });
     }
 
     // 删除关联的音频文件
     if (preset.trial_audio_path) {
-      cleanFile(path.join(__dirname, '../..', preset.trial_audio_path));
+      cleanAudioFile(preset.trial_audio_path);
     }
     if (preset.original_audio_path) {
-      cleanFile(path.join(__dirname, '../..', preset.original_audio_path));
+      cleanAudioFile(preset.original_audio_path);
     }
 
-    db.prepare('DELETE FROM voice_presets WHERE id = ?').run(id);
+    voicePresetStore.deleteById(id);
 
     res.json({ message: '预设已删除', id });
   } catch (error) {

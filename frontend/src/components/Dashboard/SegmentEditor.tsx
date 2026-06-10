@@ -118,7 +118,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
         }),
       }));
     }, []),
-    onSegmentComplete: useCallback((newSegments: any[]) => {
+    onSegmentComplete: useCallback((newSegments: Segment[]) => {
       // 所有 segment 生成完成
       useStore.setState({ segments: newSegments });
     }, []),

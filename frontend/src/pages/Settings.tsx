@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Layout/Header';
-import useStore from '../store';
+import useStore, { type Settings as AppSettings } from '../store';
 
 const voiceOptions = [
   { value: '冰糖', label: '冰糖' },
@@ -63,10 +63,11 @@ export const Settings: React.FC = () => {
     }
   }
 
-  const handleSaveField = async (field: string) => {
+  const handleSaveField = async (field: keyof AppSettings) => {
     setSavingField(field);
     try {
-      await updateSettings({ [field]: formData[field as keyof typeof formData] } as any);
+      const update: Partial<AppSettings> = { [field]: formData[field] };
+      await updateSettings(update);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch (e) { console.error('保存失败:', e); }

@@ -2,15 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const fs = require('fs');
 const mimo = require('../services/mimo');
 const tts = require('../services/tts');
 const audio = require('../services/audio');
+const audioAsset = require('../services/audioAsset');
+const voiceConfigService = require('../services/voiceConfig');
 const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
 const sseManager = require('../services/sseManager');
 const ttsQueue = require('../services/ttsQueue');
-const { validateId, cleanAudioFile, audioDir } = require('../utils/validation');
+const { validateId, cleanAudioFile } = require('../utils/validation');
 
 /**
  * POST /api/broadcast/:id/split
@@ -81,7 +82,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     const broadcast = broadcastStore.getById(idCheck.id);
     if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
 
-    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
+    const { voiceType, voiceConfig } = voiceConfigService.parseBroadcastVoiceConfig(broadcast);
     const pendingSegments = segmentStore.getPendingByBroadcastId(idCheck.id);
 
     // 如果没有待生成的 segments，直接返回完成
@@ -120,35 +121,25 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       try {
         // 使用队列管理 TTS 请求，避免触发限流
         const audioBuffer = await ttsQueue.enqueue(async () => {
-          const resolvedVoiceClone = voiceConfig.voiceClone
-            ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
-            : undefined;
-
-          return tts.generateSpeech({
+          const speechParams = await voiceConfigService.toSpeechParams({
             text: segment.text,
-            voice: voiceConfig.voice,
-            voiceType: broadcast.voice_type,
-            voiceDesign: voiceConfig.voiceDesign,
-            voiceClone: resolvedVoiceClone,
-            stylePrompt: voiceConfig.stylePrompt,
-            speed: voiceConfig.speed,
-            emotion: voiceConfig.emotion,
-            pitch: voiceConfig.pitch
+            voiceType,
+            voiceConfig,
+            resolveClone: true
           });
+          return tts.generateSpeech(speechParams);
         });
 
-        const filename = `segment_${idCheck.id}_${segment.index}.wav`;
-        const filepath = path.join(audioDir, filename);
-        fs.writeFileSync(filepath, audioBuffer);
+        const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
 
-        segmentStore.updateStatus(segment.id, 'generated', `/audio/${filename}`);
+        segmentStore.updateStatus(segment.id, 'generated', audioPath);
         results.push({ id: segment.id, status: 'generated' });
 
         // 推送成功事件
         sseManager.sendProgress(String(idCheck.id), {
           segmentId: segment.id,
           status: 'generated',
-          audioPath: `/audio/${filename}`,
+          audioPath,
           current: i + 1,
           total: pendingSegments.length
         });
@@ -215,11 +206,9 @@ router.post('/:id/segments/merge', (req, res) => {
 
     cleanAudioFile(broadcast.audio_path);
 
-    const filename = `broadcast_${idCheck.id}_merged.wav`;
-    const filepath = path.join(audioDir, filename);
-    fs.writeFileSync(filepath, mergedBuffer);
+    const audioPath = audioAsset.writeMergedBroadcastAudio(idCheck.id, mergedBuffer);
 
-    broadcastStore.updateAudioPath(idCheck.id, `/audio/${filename}`);
+    broadcastStore.updateAudioPath(idCheck.id, audioPath);
     broadcastStore.updateStatus(idCheck.id, 'generated');
 
     const updated = broadcastStore.getById(idCheck.id);
@@ -305,31 +294,22 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
     if (!segment) return res.status(404).json({ error: '句子不存在' });
 
     const broadcast = broadcastStore.getById(idCheck.id);
-    const voiceConfig = JSON.parse(broadcast.voice_config || '{}');
-    const resolvedVoiceClone = voiceConfig.voiceClone
-      ? await audio.resolveVoiceClone(voiceConfig.voiceClone)
-      : undefined;
+    const { voiceType, voiceConfig } = voiceConfigService.parseBroadcastVoiceConfig(broadcast);
 
     segmentStore.updateStatus(segIdCheck.id, 'generating');
 
     try {
-      const audioBuffer = await tts.generateSpeech({
+      const speechParams = await voiceConfigService.toSpeechParams({
         text: segment.text,
-        voice: voiceConfig.voice,
-        voiceType: broadcast.voice_type,
-        voiceDesign: voiceConfig.voiceDesign,
-        voiceClone: resolvedVoiceClone,
-        stylePrompt: voiceConfig.stylePrompt,
-        speed: voiceConfig.speed,
-        emotion: voiceConfig.emotion,
-        pitch: voiceConfig.pitch
+        voiceType,
+        voiceConfig,
+        resolveClone: true
       });
+      const audioBuffer = await tts.generateSpeech(speechParams);
 
-      const filename = `segment_${idCheck.id}_${segment.index}.wav`;
-      const filepath = path.join(audioDir, filename);
-      fs.writeFileSync(filepath, audioBuffer);
+      const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
 
-      segmentStore.updateStatus(segIdCheck.id, 'generated', `/audio/${filename}`);
+      segmentStore.updateStatus(segIdCheck.id, 'generated', audioPath);
     } catch (ttsError) {
       segmentStore.updateStatus(segIdCheck.id, 'failed');
       return res.status(500).json({ error: '语音生成失败: ' + ttsError.message });

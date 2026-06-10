@@ -1,9 +1,11 @@
 const request = require('supertest');
 const app = require('../../src/app');
 const db = require('../../src/db');
+const scheduler = require('../../src/services/scheduler');
 
 describe('定时任务 API', () => {
   afterEach(() => {
+    scheduler.shutdown();
     db.prepare('DELETE FROM schedules').run();
   });
 

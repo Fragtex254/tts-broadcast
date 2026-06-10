@@ -340,17 +340,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
           <input type="text" value={stylePrompt} onChange={(e) => setStylePrompt(e.target.value)} placeholder="风格提示词（可选）"
             className="w-36 bg-white/70 text-ink rounded-lg px-3 py-1.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors animate-fade-in" />
         )}
-        <button
-          onClick={handleBatchGenerate}
-          disabled={isBusy || !hasSegments}
-          className="ml-auto bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[11px] rounded-xl px-4 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider flex items-center gap-2"
-        >
-          {isBusy ? '生成中...' : hasSegments ? (hasPending ? '生成语音' : '✓ 已全部生成') : '请先切分口播稿'}
-        </button>
       </div>
-      {error && (
-        <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-2.5 text-ink text-[11px] font-body animate-shake">{error}</div>
-      )}
     </div>
   );
 };

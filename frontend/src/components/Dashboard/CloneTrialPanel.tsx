@@ -13,6 +13,14 @@ interface CloneTrialPanelProps {
   stylePrompt: string;
 }
 
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { error?: string } } }).response;
+    return response?.data?.error || fallback;
+  }
+  return fallback;
+}
+
 // ============ 主组件 ============
 
 export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
@@ -84,8 +92,8 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
 
       const response = await voicePresetApi.trialClone(formData);
       setTrialAudioUrl(response.data.audioUrl);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '试听生成失败，请检查音频或稍后重试');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '试听生成失败，请检查音频或稍后重试'));
     } finally {
       setIsTrialLoading(false);
     }

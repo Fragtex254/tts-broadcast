@@ -9,7 +9,7 @@ import useStore from '../store';
 const DEFAULT_LEFT_WIDTH = 260;
 
 export const ScriptEditor: React.FC = () => {
-  const { script, currentBroadcast, segments, saveBroadcast } = useStore();
+  const { currentBroadcast, segments, saveBroadcast } = useStore();
   const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);

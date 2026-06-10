@@ -37,13 +37,22 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '服务器内部错误' });
 });
 
-// 初始化调度器
-const scheduler = require('./services/scheduler');
-scheduler.init();
+/**
+ * 启动 HTTP 服务和调度器
+ * @returns {import('http').Server} HTTP server 实例
+ */
+function start() {
+  const scheduler = require('./services/scheduler');
+  scheduler.init();
 
-// 启动服务器
-app.listen(PORT, () => {
-  console.log(`服务器运行在 http://localhost:${PORT}`);
-});
+  return app.listen(PORT, () => {
+    console.log(`服务器运行在 http://localhost:${PORT}`);
+  });
+}
+
+if (require.main === module) {
+  start();
+}
 
 module.exports = app;
+module.exports.start = start;

@@ -1,7 +1,34 @@
 const axios = require('axios');
+const https = require('https');
+const tls = require('tls');
+const fs = require('fs');
+const path = require('path');
 
 const BASE_URL = 'https://aihot.virxact.com';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+// 加载系统 CA 证书，补充 Node.js 内置根证书（解决 Let's Encrypt ISRG Root X2 缺失问题）
+function loadSystemCAs() {
+  const caPaths = [
+    '/etc/ssl/cert.pem',          // macOS
+    '/etc/ssl/certs/ca-certificates.crt', // Debian/Ubuntu
+    '/etc/pki/tls/certs/ca-bundle.crt',  // RHEL/CentOS
+  ];
+  for (const p of caPaths) {
+    try {
+      const pem = fs.readFileSync(p, 'utf8');
+      // 拆分为单个证书
+      const certs = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
+      if (certs?.length) return certs;
+    } catch { /* 文件不存在，继续 */ }
+  }
+  return null;
+}
+
+const systemCAs = loadSystemCAs();
+const httpsAgent = systemCAs
+  ? new https.Agent({ ca: [...tls.rootCertificates, ...systemCAs] })
+  : undefined;
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -9,6 +36,8 @@ const api = axios.create({
     'User-Agent': UA
   },
   timeout: 10000,
+  httpsAgent,
+  proxy: false, // 禁用代理，避免环境变量中的代理干扰 TLS 连接
 });
 
 /**

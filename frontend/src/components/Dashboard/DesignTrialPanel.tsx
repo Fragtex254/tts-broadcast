@@ -12,6 +12,14 @@ interface DesignTrialPanelProps {
   stylePrompt: string;
 }
 
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { error?: string } } }).response;
+    return response?.data?.error || fallback;
+  }
+  return fallback;
+}
+
 // ============ 主组件 ============
 
 export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
@@ -52,8 +60,8 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
         style_prompt: stylePrompt.trim() || undefined,
       });
       setTrialAudioUrl(response.data.audioUrl);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '试听生成失败，请检查描述或稍后重试');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '试听生成失败，请检查描述或稍后重试'));
     } finally {
       setIsTrialLoading(false);
     }
