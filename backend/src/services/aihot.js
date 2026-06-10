@@ -1,17 +1,20 @@
 const axios = require('axios');
+const https = require('https');
 
 const BASE_URL = 'https://aihot.virxact.com';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-// AI HOT API 配置
-// 注意：证书验证通过 NODE_TLS_REJECT_UNAUTHORIZED=0 环境变量禁用（见 package.json dev 脚本）
-// TODO: 联系 AI HOT 运维团队修复证书链，然后移除环境变量配置
+// ⚠️ 临时方案：AI HOT API 证书链不完整，暂时对此单一 endpoint 禁用证书验证
+// 原则：绝不用全局 NODE_TLS_REJECT_UNAUTHORIZED=0，只在最小范围（本实例）降级
+// TODO: 联系 AI HOT 运维团队修复证书链，然后移除 httpsAgent 配置
+// 相关 issue: 见 docs/TECH_REVIEW_REPORT.md P0-2
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
     'User-Agent': UA
   },
   timeout: 10000,
+  httpsAgent: new https.Agent({ rejectUnauthorized: false })
 });
 
 /**
