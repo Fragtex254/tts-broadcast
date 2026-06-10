@@ -4,6 +4,9 @@ const https = require('https');
 const BASE_URL = 'https://aihot.virxact.com';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+// ⚠️ 临时方案：AI HOT API 证书链不完整，暂时禁用证书验证
+// TODO: 联系 AI HOT 运维团队修复证书链，然后移除 httpsAgent 配置
+// 相关 issue: 见 docs/TECH_REVIEW_REPORT.md P0-2
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
