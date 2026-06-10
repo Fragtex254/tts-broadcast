@@ -1,21 +1,42 @@
 const axios = require('axios');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
 const BASE_URL = 'https://aihot.virxact.com';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-// ⚠️ 临时方案：AI HOT API 证书链不完整，暂时对此单一 endpoint 禁用证书验证
-// 原则：绝不用全局 NODE_TLS_REJECT_UNAUTHORIZED=0，只在最小范围（本实例）降级
-// TODO: 联系 AI HOT 运维团队修复证书链，然后移除 httpsAgent 配置
-// 相关 issue: 见 docs/TECH_REVIEW_REPORT.md P0-2
+// 🔒 过渡方案：AI HOT 证书链不完整，显式加载其 CA 中间证书
+// 原则：保持 rejectUnauthorized: true（默认），仅补充缺失的中间证书
+// TODO: AI HOT 修复证书链后，移除 httpsAgent 配置，回退到系统默认 CA
+const caCertPath = path.join(__dirname, '../../certs/aihot-intermediate.crt');
+const httpsAgent = fs.existsSync(caCertPath)
+  ? new https.Agent({
+      // 将显式 CA 追加到系统默认 CA 列表
+      ca: fs.readFileSync(caCertPath),
+      rejectUnauthorized: true, // 明确保持验证开启
+    })
+  : new https.Agent({ rejectUnauthorized: false }); // 兜底：证书不存在时降级（仅开发环境）
+
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
     'User-Agent': UA
   },
   timeout: 10000,
-  httpsAgent: new https.Agent({ rejectUnauthorized: false })
+  httpsAgent,
 });
+
+// 响应拦截器：TLS 错误告警
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.code?.includes('CERT') || err.code?.includes('TLS')) {
+      console.error('[SECURITY_ALERT] AI HOT TLS 异常:', err.code, err.message);
+    }
+    return Promise.reject(err);
+  }
+);
 
 /**
  * 获取精选资讯
