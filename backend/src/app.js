@@ -6,16 +6,6 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const fs = require('fs');
-
-// 生产环境安全检查：AI HOT CA 证书必须存在
-if (NODE_ENV === 'production') {
-  const aihotCaPath = path.join(__dirname, '../certs/aihot-intermediate.crt');
-  if (!fs.existsSync(aihotCaPath)) {
-    console.error('[FATAL] 生产环境缺少 AI HOT CA 证书 (certs/aihot-intermediate.crt)，拒绝启动');
-    process.exit(1);
-  }
-}
 
 // CORS 配置
 const corsOptions = {
