@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon src/app.js",
     "test": "jest --verbose"
   },
   "keywords": [],
