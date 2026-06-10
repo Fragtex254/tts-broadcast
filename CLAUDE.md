@@ -131,12 +131,13 @@ SQLite 数据库包含 4 张表：
 ## 外部 API
 
 - **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
+- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本）
 - **MiMo LLM API**（`https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 
 ### MiMo API 模型与限速
 
-完整文档见 `docs/mimo-api-models-limits.md` 和 `docs/ttsSeries.md`。
+完整文档见 `docs/mimo-api-models-limits.md`、`docs/ttsSeries.md` 和 `docs/asr.md`。
 
 **限流规则**：RPM（每分钟请求数）上限 100，TPM（每分钟 Token 数）上限 10M。超出会返回 `429 Too Many Requests`。批量生成语音时必须注意并发控制，避免触发限流。
 
@@ -149,6 +150,12 @@ SQLite 数据库包含 4 张表：
 | `mimo-v2.5-tts-voicedesign` | 音色设计（文本描述生成音色） |
 
 **LLM 模型**：`mimo-v2.5`（稿件改写与文本切分）
+
+**ASR 模型**：
+
+| 模型 ID | 用途 |
+|---------|------|
+| `mimo-v2.5-asr` | 语音识别（支持中英双语及方言，音频转文本） |
 
 ## 前端开发规范
 
