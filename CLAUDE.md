@@ -2,6 +2,14 @@
 
 本文件为 Claude Code（claude.ai/code）在本仓库中工作时提供指引。
 
+## 双 Agent 协作约定
+
+本项目会由不止一个 agent 协作开发。所有 agent 在开始工作前都必须同时检查项目内的 `AGENTS.md` 和 `CLAUDE.md`（如果存在）。
+
+- 如果 `AGENTS.md` 与 `CLAUDE.md` 有冲突，以 `CLAUDE.md` 为准
+- `CLAUDE.md` 不只是说明文档，也是当前项目协作规范的事实来源
+- 当开发过程中出现新的约定、工作流、架构变化、重要坑点或操作要求时，必须持续更新 `CLAUDE.md`
+
 ## ⚠️ 开发规范强制要求
 
 **每次开发都必须严格遵守前后端开发规范，这不是建议，而是硬性要求。**
@@ -132,7 +140,7 @@ SQLite 数据库包含 5 张表：
 ## 外部 API
 
 - **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
-- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`
+- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`；单次请求遵守 Base64 data URL 10MB 上限，后端自动按静音切片长音频
 - **MiMo LLM API**（`https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 
@@ -192,7 +200,7 @@ SQLite 数据库包含 5 张表：
 ## 关键开发模式
 
 - 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM（`services/mimo.js`），通过 Axios 调用 MiMo TTS API（`services/tts.js`）
-- ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，`services/media.js` 转为 ASR data URL，`services/asr.js` 调用 MiMo ASR，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
+- ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，`services/media.js` 转为一个或多个 ASR data URL（长音频优先按静音点切片，目标 15 秒、最大 30 秒，并转为 MP3 降低体积），`services/asr.js` 串行调用 MiMo ASR 并拼接文本，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
 - 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`

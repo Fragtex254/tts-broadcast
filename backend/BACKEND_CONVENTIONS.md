@@ -259,8 +259,8 @@ app.use('/api/voice-presets', require('./routes/voicePresets'));
 |------|------|------|
 | `aihot.js` | AI HOT API 数据抓取 | axios |
 | `audio.js` | WAV 文件操作、resolveVoiceClone | fs, path |
-| `asr.js` | MiMo ASR 转录服务 | mimo, media, mimoApiClient |
-| `media.js` | 上传音视频转 ASR data URL | fs, os, path, child_process, ffmpeg-static |
+| `asr.js` | MiMo ASR 转录服务，串行处理切片并合并文本/usage | mimo, media, mimoApiClient |
+| `media.js` | 上传音视频转 ASR data URL；长音频按静音点切片并转 MP3 | fs, os, path, child_process, ffmpeg-static |
 | `mimo.js` | MiMo LLM 调用、API Key 管理、Key 测试 | @anthropic-ai/sdk, axios |
 | `mimoApiClient.js` | MiMo 标准 API HTTP client（timeout、429 重试、错误映射） | axios |
 | `tts.js` | MiMo TTS 语音合成 | axios, mimo (getApiKey) |

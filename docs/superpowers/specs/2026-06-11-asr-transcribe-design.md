@@ -1,5 +1,7 @@
 # ASR 上传转录设计文档
 
+> 2026-06-11 更新：长音视频切片转录已作为后续增强实现。当前后端会在单次 ASR data URL 超过 10MB 时，优先按静音点切片、逐片调用 ASR，并对前端返回拼接后的完整文本。
+
 ## 背景
 
 项目已经有 MiMo TTS、MiMo LLM、音频上传和分段 TTS 工作流。`docs/asr.md` 记录了 MiMo-V2.5-ASR 的调用方式，但仓库中尚未实现 ASR 能力。此前的 `2026-06-10-asr-litellm-design.md` 同时包含 LiteLLM Proxy、API Key 重命名和 ASR，范围较大，本次先实现独立的上传转录能力，不引入 LLM 网关迁移。
@@ -249,6 +251,6 @@ interface TranscriptionResult {
 
 ## 开放问题
 
-- 长音视频是否要做切片转录：本次不做。当前 MiMo 单次 Base64 上限为 10MB，超限提示用户压缩或裁剪。
+- 长音视频是否要做切片转录：已在后续增强中实现。当前 MiMo 单次 Base64 上限仍为 10MB，但后端会自动切片并拼接转录结果。
 - 是否保存转录历史：本次不做，后续如果用户需要再新增表和历史页面。
 - 是否迁移 TTS 到 `mimoApiClient`：本次不迁移。后续如果要统一 TTS/ASR HTTP 调用，再单独做小重构。

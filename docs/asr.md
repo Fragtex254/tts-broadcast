@@ -37,6 +37,8 @@ tags:
 
 目前仅支持 `wav` 和 `mp3` 格式的音频样本文件，传入前需将音频文件转换为 Base64 编码字符串，Base64 编码后的字符串大小上限为 10MB。
 
+项目后端的 `/api/transcribe` 接口会额外接收 `m4a`、`mp4`、`mov`、`webm` 上传文件。后端会先尝试转成 ASR 可接受的 MP3 data URL；如果单次 data URL 仍超过 10MB，会用 `ffmpeg` 检测静音区，按接近 15 秒、最大 30 秒的范围切片，逐片调用 ASR 后把文本按顺序拼接返回。这个切片流程对前端无感。
+
 传入格式为：`data:{MIME_TYPE};base64,$BASE64_AUDIO`
 
 | **格式** | **MIME 类型** |
@@ -198,17 +200,18 @@ for chunk in completion:
 
 ## 项目集成规划
 
-> ⚠️ 以下为规划中的集成方案，尚未实现。具体实现计划见 [ASR + LiteLLM 设计文档](../superpowers/specs/2026-06-10-asr-litellm-design.md) 。
+> 以下为本项目当前的 ASR 集成方式。历史设计见 [ASR + LiteLLM 设计文档](../superpowers/specs/2026-06-10-asr-litellm-design.md) 和 [ASR 上传转录设计文档](../superpowers/specs/2026-06-11-asr-transcribe-design.md)。
 
 ### 调用方式
 
-项目使用 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM，ASR 同样使用此方式复用现有 SDK 基础设施：
+项目使用独立的 MiMo 标准 API client 调用 ASR，不经过 Anthropic SDK：
 
 ```
 前端页面
-  → broadcastApi / segmentApi
-    → 后端 routes/
-      → services/asr.js: transcribeAudio()
+  → transcribeApi
+    → routes/transcribe.js
+      → services/media.js: fileToAsrDataUrls()
+      → services/asr.js: transcribeMedia()
         → POST https://api.xiaomimimo.com/v1/chat/completions
           (model: mimo-v2.5-asr)
 ```

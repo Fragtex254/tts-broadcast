@@ -1,4 +1,4 @@
-const { fileToAsrDataUrl } = require('../../src/services/media');
+const { buildChunkRanges, fileToAsrDataUrl } = require('../../src/services/media');
 
 describe('媒体转 ASR data URL 服务', () => {
   test('wav 文件直接编码为 audio/wav data URL', async () => {
@@ -39,5 +39,38 @@ describe('媒体转 ASR data URL 服务', () => {
 
     await expect(fileToAsrDataUrl({ file }))
       .rejects.toThrow('暂不支持该文件类型');
+  });
+
+  test('根据静音点生成接近目标时长的切片范围', () => {
+    const ranges = buildChunkRanges({
+      duration: 62,
+      silencePoints: [14.8, 30.1, 44.9],
+      targetSeconds: 15,
+      minSeconds: 10,
+      maxSeconds: 30
+    });
+
+    expect(ranges).toEqual([
+      { start: 0, duration: 14.8 },
+      { start: 14.8, duration: 15.3 },
+      { start: 30.1, duration: 14.8 },
+      { start: 44.9, duration: 17.1 }
+    ]);
+  });
+
+  test('没有合适静音点时按最大时长硬切', () => {
+    const ranges = buildChunkRanges({
+      duration: 65,
+      silencePoints: [],
+      targetSeconds: 15,
+      minSeconds: 10,
+      maxSeconds: 30
+    });
+
+    expect(ranges).toEqual([
+      { start: 0, duration: 30 },
+      { start: 30, duration: 30 },
+      { start: 60, duration: 5 }
+    ]);
   });
 });
