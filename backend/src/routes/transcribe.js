@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 const multer = require('multer');
 const asr = require('../services/asr');
+const sseManager = require('../services/sseManager');
 
 const router = express.Router();
 const TRANSCRIBE_UPLOAD_LIMIT_BYTES = Number(process.env.TRANSCRIBE_UPLOAD_LIMIT_BYTES || 500 * 1024 * 1024);
@@ -37,6 +38,11 @@ function handleUploadError(error, res) {
   return res.status(500).json({ error: error.message || '上传失败' });
 }
 
+function buildTaskId(req) {
+  const taskId = req.body.taskId;
+  return typeof taskId === 'string' && taskId.trim() ? taskId.trim() : null;
+}
+
 /**
  * POST /api/transcribe
  * 上传音频或视频并转录为文本
@@ -54,14 +60,43 @@ router.post('/', (req, res) => {
         return res.status(400).json({ error: '请上传需要转录的音频或视频文件' });
       }
 
+      const taskId = buildTaskId(req);
+
+      if (taskId) {
+        sseManager.send(taskId, 'transcribe-start', {
+          phase: 'preparing',
+          percent: 0,
+          text: '',
+          fileName: req.file.originalname,
+          timestamp: Date.now()
+        });
+      }
+
       const result = await asr.transcribeMedia({
         file: req.file,
-        language: req.body.language || 'auto'
+        language: req.body.language || 'auto',
+        onProgress: taskId
+          ? (progress) => sseManager.sendProgress(taskId, { ...progress, timestamp: Date.now() })
+          : undefined
       });
+
+      if (taskId) {
+        sseManager.sendComplete(taskId, {
+          phase: 'completed',
+          percent: 100,
+          text: result.text,
+          usage: result.usage,
+          timestamp: Date.now()
+        });
+      }
 
       res.json(result);
     } catch (error) {
       console.error('转录失败:', error);
+      const taskId = buildTaskId(req);
+      if (taskId) {
+        sseManager.sendError(taskId, error.message || '转录失败');
+      }
       res.status(500).json({ error: error.message || '转录失败' });
     } finally {
       cleanUploadedFile(req.file);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../../store';
 
 export const ScriptPreview: React.FC = () => {
@@ -7,10 +7,6 @@ export const ScriptPreview: React.FC = () => {
   const [localScript, setLocalScript] = useState(script);
   const [showSaved, setShowSaved] = useState(false);
   const [splitError, setSplitError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLocalScript(script);
-  }, [script]);
 
   const handleSave = () => {
     updateScript(localScript);
@@ -66,7 +62,10 @@ export const ScriptPreview: React.FC = () => {
                 {wordCount} 字 · ≈ {estimatedDuration} 秒
               </span>
               <button
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  setLocalScript(script);
+                  setIsEditing(true);
+                }}
                 className="font-body text-[12px] text-ink-soft hover:text-ink transition-colors"
               >
                 编辑

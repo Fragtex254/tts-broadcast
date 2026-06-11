@@ -140,7 +140,7 @@ SQLite 数据库包含 5 张表：
 ## 外部 API
 
 - **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
-- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`；上传文件先落系统临时目录，默认支持 500MB 内音视频；单次请求遵守 Base64 data URL 10MB 上限，后端自动按静音切片长音频
+- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`；上传文件先落系统临时目录，默认支持 500MB 内音视频；单次请求遵守 Base64 data URL 10MB 上限，后端自动按静音切片长音频；长音频转录通过 SSE 推送分片进度和累计文本
 - **MiMo LLM API**（`https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 
@@ -200,7 +200,7 @@ SQLite 数据库包含 5 张表：
 ## 关键开发模式
 
 - 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM（`services/mimo.js`），通过 Axios 调用 MiMo TTS API（`services/tts.js`）
-- ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，上传先写入系统临时目录并在请求结束后清理；`services/media.js` 支持 multer 的 `buffer` 或 `path` 输入，并转为一个或多个 ASR data URL（长音频优先按静音点切片，目标 15 秒、最大 30 秒，并转为 MP3 降低体积）；`services/asr.js` 串行调用 MiMo ASR 并拼接文本，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
+- ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，上传先写入系统临时目录并在请求结束后清理；前端上传进度使用 axios `onUploadProgress`，后端按 `taskId` 通过 `/api/sse/:taskId` 推送 `transcribe-start`、`progress`、`complete`、`error`；`services/media.js` 支持 multer 的 `buffer` 或 `path` 输入，并转为一个或多个 ASR data URL（长音频优先按静音点切片，目标 15 秒、最大 30 秒，并转为 MP3 降低体积）；`services/asr.js` 串行调用 MiMo ASR、按分片回调累计文本，并拼接最终文本，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
 - 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`
@@ -232,7 +232,7 @@ SQLite 数据库包含 5 张表：
 
 - 会超过 2 秒的任务（改写、TTS、切分、批量生成、合并、试听）必须有明确的前端 loading/error 状态。
 - 已接入 SSE 的任务，后端必须发送开始、进度、完成、失败事件；前端收到失败事件后必须落到可重试状态。
-- 当前 SSE 主要覆盖 segment 批量生成；如果文档声明“所有长任务使用 SSE”，实现必须同步补齐，否则先更新文档收窄范围。
+- 当前 SSE 覆盖 segment 批量生成和长音频转录；转录上传阶段由 axios 上传进度覆盖，后端处理阶段必须发送开始、进度、完成、失败事件。
 - 对同一 broadcast/segment 的重复生成要保证幂等：失败不能留下永久 `generating` 状态，重试应能从 `pending` 或 `failed` 继续。
 
 ### 4. SQLite 与音频文件一致性

@@ -99,6 +99,16 @@ export interface TranscriptionResult {
   usage?: Record<string, unknown> | null;
 }
 
+export type TranscriptionPhase = 'idle' | 'uploading' | 'preparing' | 'transcribing' | 'completed' | 'failed';
+
+export interface TranscriptionProgress {
+  phase: TranscriptionPhase;
+  percent: number;
+  current: number;
+  total: number;
+  message: string;
+}
+
 /** 确认对话框 */
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -127,6 +137,7 @@ export interface AppState {
 
   transcriptionText: string;
   isTranscribing: boolean;
+  transcribeProgress: TranscriptionProgress;
 
   voiceConfig: VoiceConfig;
   updateVoiceConfig: (config: Partial<VoiceConfig>) => void;

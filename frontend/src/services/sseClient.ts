@@ -3,12 +3,16 @@
 
 export interface SSEProgressEvent {
   segmentId?: number;
-  status: 'generating' | 'generated' | 'failed';
+  status?: 'generating' | 'generated' | 'failed';
   audioPath?: string;
   error?: string;
   current?: number;
   total?: number;
   text?: string;
+  chunkText?: string;
+  phase?: 'preparing' | 'transcribing';
+  percent?: number;
+  timestamp?: number;
 }
 
 export interface SSESegment {
@@ -29,8 +33,12 @@ export interface SSEResult {
 }
 
 export interface SSECompleteEvent {
-  segments: SSESegment[];
-  results: SSEResult[];
+  segments?: SSESegment[];
+  results?: SSEResult[];
+  phase?: 'completed';
+  percent?: number;
+  text?: string;
+  usage?: Record<string, unknown> | null;
   timestamp: number;
 }
 

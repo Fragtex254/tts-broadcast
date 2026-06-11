@@ -27,14 +27,12 @@ interface UseSEReturn {
 export function useSSE(options: UseSSEOptions): UseSEReturn {
   const { taskId, onProgress, onComplete, onError, enabled = true } = options;
   const clientRef = useRef<SSEClient | null>(null);
-  const isConnectedRef = useRef(false);
 
   // 清理连接
   const close = useCallback(() => {
     if (clientRef.current) {
       clientRef.current.close();
       clientRef.current = null;
-      isConnectedRef.current = false;
     }
   }, []);
 
@@ -62,7 +60,6 @@ export function useSSE(options: UseSSEOptions): UseSEReturn {
 
     // 建立连接
     client.connect();
-    isConnectedRef.current = true;
 
     // 清理函数
     return () => {
@@ -71,7 +68,7 @@ export function useSSE(options: UseSSEOptions): UseSEReturn {
   }, [taskId, enabled, onProgress, onComplete, onError, close]);
 
   return {
-    isConnected: isConnectedRef.current,
+    isConnected: Boolean(taskId && enabled),
     close,
   };
 }
@@ -93,7 +90,7 @@ export function useBatchGenerateSSE(
 
   const handleProgress = useCallback(
     (event: SSEProgressEvent) => {
-      if (onSegmentProgress && event.segmentId) {
+      if (onSegmentProgress && event.segmentId && event.status) {
         onSegmentProgress(event.segmentId, event.status, event.audioPath);
       }
     },
@@ -102,7 +99,7 @@ export function useBatchGenerateSSE(
 
   const handleComplete = useCallback(
     (event: SSECompleteEvent) => {
-      if (onSegmentComplete) {
+      if (onSegmentComplete && event.segments) {
         onSegmentComplete(event.segments);
       }
     },

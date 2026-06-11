@@ -88,6 +88,45 @@ describe('ASR 服务', () => {
       .toBe('data:audio/mpeg;base64,BBBB');
   });
 
+  test('转录多个切片时回调进度与累计文本', async () => {
+    media.fileToAsrDataUrls.mockResolvedValue([
+      'data:audio/mpeg;base64,AAAA',
+      'data:audio/mpeg;base64,BBBB'
+    ]);
+    mimoApiClient.postChatCompletions
+      .mockResolvedValueOnce({ choices: [{ message: { content: '第一段。' } }], usage: { total_tokens: 5 } })
+      .mockResolvedValueOnce({ choices: [{ message: { content: '第二段。' } }], usage: { total_tokens: 7 } });
+    const onProgress = jest.fn();
+
+    await asr.transcribeMedia({
+      file: { originalname: 'long.mp3', buffer: Buffer.from('a') },
+      language: 'zh',
+      onProgress
+    });
+
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'preparing',
+      percent: 10,
+      text: ''
+    }));
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'transcribing',
+      current: 1,
+      total: 2,
+      percent: 60,
+      chunkText: '第一段。',
+      text: '第一段。'
+    }));
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'transcribing',
+      current: 2,
+      total: 2,
+      percent: 100,
+      chunkText: '第二段。',
+      text: '第一段。\n第二段。'
+    }));
+  });
+
   test('语言参数无效时抛出中文错误', async () => {
     await expect(asr.transcribeMedia({
       file: { originalname: 'a.wav', buffer: Buffer.from('a') },

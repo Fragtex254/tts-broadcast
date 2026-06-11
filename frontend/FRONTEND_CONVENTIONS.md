@@ -369,6 +369,7 @@ export interface AppState {
 2. **子组件**通过 props 接收数据，不直接调用 `useStore()`（除非是完全独立的功能组件如 `AudioPlayer`）。
 3. **接口类型**统一定义在 `store/index.ts` 顶部，通过 `export` 供其他文件引用。
 4. **Loading 状态**在 store 中维护（`isGenerating`, `isSplitting` 等），组件读取即可。
+5. **长任务进度**放在对应领域 slice 中维护；例如转录使用 `transcribeProgress` 保存上传、准备、分片转录、完成和失败状态，页面只负责展示。
 
 ### 推荐的组件内 Store 使用模式
 

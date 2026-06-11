@@ -9,6 +9,15 @@ const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
   { value: 'en', label: '英文' },
 ];
 
+const PHASE_LABELS = {
+  idle: '待开始',
+  uploading: '上传中',
+  preparing: '准备中',
+  transcribing: '转录中',
+  completed: '已完成',
+  failed: '失败',
+};
+
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
     const response = (error as { response?: { data?: { error?: string } } }).response;
@@ -24,6 +33,7 @@ export const Transcribe: React.FC = () => {
   const {
     transcriptionText,
     isTranscribing,
+    transcribeProgress,
     transcribeMedia,
     setTranscriptionText,
     updateScript,
@@ -133,6 +143,35 @@ export const Transcribe: React.FC = () => {
                 {error}
               </div>
             )}
+
+            {(isTranscribing || transcribeProgress.phase !== 'idle') && (
+              <div className="mt-4 bg-white/60 rounded-2xl p-4 border border-card-border">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    <p className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">
+                      {PHASE_LABELS[transcribeProgress.phase]}
+                    </p>
+                    <p className="font-body text-[12px] text-ink truncate">
+                      {transcribeProgress.message}
+                    </p>
+                  </div>
+                  <span className="font-display italic text-[22px] text-ink">
+                    {Math.round(transcribeProgress.percent)}%
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/70 border border-card-border">
+                  <div
+                    className="h-full rounded-full bg-lilac transition-all duration-300"
+                    style={{ width: `${Math.min(Math.max(transcribeProgress.percent, 0), 100)}%` }}
+                  />
+                </div>
+                {transcribeProgress.total > 0 && (
+                  <p className="mt-2 font-body text-[11px] text-ink-soft/45">
+                    已完成 {transcribeProgress.current} / {transcribeProgress.total} 个音频片段
+                  </p>
+                )}
+              </div>
+            )}
           </section>
 
           <section
@@ -155,7 +194,7 @@ export const Transcribe: React.FC = () => {
               value={transcriptionText}
               onChange={(e) => setTranscriptionText(e.target.value)}
               className="w-full h-72 bg-white/60 text-ink rounded-2xl p-4 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[13px] leading-[1.9] transition-colors"
-              placeholder="转录完成后，文本会出现在这里..."
+              placeholder="转录过程中，文本会实时出现在这里..."
             />
 
             <div className="flex justify-end gap-2 mt-3">

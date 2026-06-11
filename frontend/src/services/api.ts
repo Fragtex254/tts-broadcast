@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosProgressEvent } from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
@@ -146,9 +146,10 @@ export const voicePresetApi = {
 
 // 转录 API
 export const transcribeApi = {
-  transcribe: (formData: FormData) =>
+  transcribe: (formData: FormData, options?: { onUploadProgress?: (event: AxiosProgressEvent) => void }) =>
     api.post('/transcribe', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: options?.onUploadProgress,
     }),
 };
 

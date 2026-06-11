@@ -8,8 +8,18 @@ jest.mock('../../src/services/asr', () => ({
   })
 }));
 
+jest.mock('../../src/services/sseManager', () => ({
+  send: jest.fn(),
+  sendProgress: jest.fn(),
+  sendComplete: jest.fn(),
+  sendError: jest.fn(),
+  addClient: jest.fn(),
+  removeClient: jest.fn()
+}));
+
 const app = require('../../src/app');
 const asr = require('../../src/services/asr');
+const sseManager = require('../../src/services/sseManager');
 
 describe('转录 API', () => {
   beforeEach(() => {
@@ -31,10 +41,10 @@ describe('转录 API', () => {
       text: '转录文本',
       usage: { total_tokens: 12 }
     });
-    expect(asr.transcribeMedia).toHaveBeenCalledWith({
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       file: expect.objectContaining({ originalname: 'sample.wav' }),
       language: 'zh'
-    });
+    }));
   });
 
   test('POST /api/transcribe 支持超过 50MB 的长音频上传', async () => {
@@ -44,14 +54,51 @@ describe('转录 API', () => {
       .attach('media', Buffer.alloc(51 * 1024 * 1024, 1), 'long.mp3');
 
     expect(res.status).toBe(200);
-    expect(asr.transcribeMedia).toHaveBeenCalledWith({
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       file: expect.objectContaining({
         originalname: 'long.mp3',
         path: expect.any(String)
       }),
       language: 'zh'
-    });
+    }));
     expect(fs.existsSync(asr.transcribeMedia.mock.calls[0][0].file.path)).toBe(false);
+  });
+
+  test('提供 taskId 时通过 SSE 推送转录进度与完成事件', async () => {
+    asr.transcribeMedia.mockImplementation(async ({ onProgress }) => {
+      onProgress({
+        phase: 'transcribing',
+        current: 1,
+        total: 2,
+        percent: 60,
+        text: '第一段。',
+        chunkText: '第一段。'
+      });
+      return { text: '第一段。\n第二段。', usage: { total_tokens: 12 } };
+    });
+
+    const res = await request(app)
+      .post('/api/transcribe')
+      .field('language', 'zh')
+      .field('taskId', 'transcribe-test')
+      .attach('media', Buffer.from('fake-wav'), 'sample.wav');
+
+    expect(res.status).toBe(200);
+    expect(sseManager.send).toHaveBeenCalledWith('transcribe-test', 'transcribe-start', expect.objectContaining({
+      phase: 'preparing',
+      percent: 0
+    }));
+    expect(sseManager.sendProgress).toHaveBeenCalledWith('transcribe-test', expect.objectContaining({
+      phase: 'transcribing',
+      current: 1,
+      total: 2,
+      text: '第一段。'
+    }));
+    expect(sseManager.sendComplete).toHaveBeenCalledWith('transcribe-test', expect.objectContaining({
+      phase: 'completed',
+      percent: 100,
+      text: '第一段。\n第二段。'
+    }));
   });
 
   test('未上传文件返回 400', async () => {
