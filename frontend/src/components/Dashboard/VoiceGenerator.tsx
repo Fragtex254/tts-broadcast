@@ -86,6 +86,8 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
 
   // 切换音色后同步到后端（影响段落重新生成），跳过首次渲染
   const isInitialMount = useRef(true);
+  // 记录上一次已同步的 voice-config 签名，避免重复 PATCH（尤其是 clone 大音频）
+  const lastSyncedRef = useRef<string | null>(null);
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -93,7 +95,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
     }
     if (!currentBroadcast) return;
     const effectiveType = activePresetType || (voiceType === 'builtin' ? 'preset' : voiceType);
-    broadcastApi.updateVoiceConfig(currentBroadcast.id, {
+    const payload = {
       voiceType: effectiveType,
       voice: effectiveType === 'preset' ? selectedVoice : undefined,
       voiceDesign: effectiveType === 'design' ? voiceDesign : undefined,
@@ -102,7 +104,15 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       speed: voiceType === 'builtin' && speedRatio !== 1.0 ? { speed_ratio: speedRatio, style: '固定' } : undefined,
       emotion: voiceType === 'builtin' && emotion !== '' ? emotion : undefined,
       pitch: voiceType === 'builtin' && pitchRatio !== 1.0 ? { pitch_ratio: pitchRatio, style: '固定' } : undefined,
-    }).catch(() => {/* 静默失败 */});
+    };
+    // 去重：相同 broadcast + 相同配置不重复发送（避免选中 clone 预设后 effect 多次触发重复 PATCH 大音频）
+    const signature = `${currentBroadcast.id}:${JSON.stringify(payload)}`;
+    if (lastSyncedRef.current === signature) return;
+    lastSyncedRef.current = signature;
+    broadcastApi.updateVoiceConfig(currentBroadcast.id, payload).catch(() => {
+      // 同步失败时清除签名，下次允许重试
+      lastSyncedRef.current = null;
+    });
   }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast, activePresetType, speedRatio, emotion, pitchRatio]);
 
   const handleApplyPreset = (preset: VoicePreset) => {

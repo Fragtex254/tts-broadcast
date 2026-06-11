@@ -2,6 +2,14 @@ const request = require('supertest');
 const app = require('../../src/app');
 const db = require('../../src/db');
 
+// 批量生成会调用真实 TTS 外部 API，这里 mock 掉
+jest.mock('../../src/services/tts', () => ({
+  generateSpeech: jest.fn(),
+}));
+const tts = require('../../src/services/tts');
+const audio = require('../../src/services/audio');
+const audioAsset = require('../../src/services/audioAsset');
+
 describe('Segments API', () => {
   let broadcastId;
 
@@ -217,5 +225,70 @@ describe('Segments API', () => {
         .delete(`/api/broadcast/${broadcastId}/segments/99999`);
       expect(res.status).toBe(404);
     });
+  });
+
+  describe('POST /api/broadcast/:id/segments/batch-generate', () => {
+    let cloneBroadcastId;
+
+    beforeEach(() => {
+      db.prepare('DELETE FROM segments').run();
+      db.prepare('DELETE FROM broadcasts').run();
+
+      // 使用 clone 音色 + /audio 路径，触发批量开始阶段的一次性解析逻辑
+      const result = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        '克隆批量生成',
+        '内容',
+        'clone',
+        JSON.stringify({ voiceClone: '/audio/preset_original_1.wav' }),
+        'pending',
+        'segmented'
+      );
+      cloneBroadcastId = result.lastInsertRowid;
+
+      const insert = db.prepare('INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)');
+      insert.run(cloneBroadcastId, 0, '第一句', 'pending');
+      insert.run(cloneBroadcastId, 1, '第二句', 'pending');
+      insert.run(cloneBroadcastId, 2, '第三句', 'pending');
+
+      tts.generateSpeech.mockResolvedValue(Buffer.from('fake-wav'));
+      jest.spyOn(audio, 'resolveVoiceClone').mockResolvedValue('data:audio/wav;base64,AAAA');
+      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/segment_fake.wav');
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      tts.generateSpeech.mockReset();
+    });
+
+    test('clone 音色只解析一次（不在每段重复读取文件 / base64）', async () => {
+      const res = await request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      // 3 段只解析 1 次 clone 音色
+      expect(audio.resolveVoiceClone).toHaveBeenCalledTimes(1);
+      // 仍逐段调用 TTS（保持限速串行）
+      expect(tts.generateSpeech).toHaveBeenCalledTimes(3);
+      expect(res.body.segments.every((s) => s.status === 'generated')).toBe(true);
+    }, 15000);
+
+    test('clone 音色解析失败时各段落到可重试的 failed 状态而非中断整批', async () => {
+      audio.resolveVoiceClone.mockRejectedValue(new Error('voiceClone 格式无效'));
+
+      const res = await request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      // 解析只尝试一次，失败后不再逐段重复尝试
+      expect(audio.resolveVoiceClone).toHaveBeenCalledTimes(1);
+      // 解析失败则不应调用 TTS
+      expect(tts.generateSpeech).not.toHaveBeenCalled();
+      expect(res.body.segments.every((s) => s.status === 'failed')).toBe(true);
+    }, 15000);
   });
 });

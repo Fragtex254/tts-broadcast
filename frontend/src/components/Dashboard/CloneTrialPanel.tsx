@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { voicePresetApi } from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
 import { useStore } from '../../store';
 import AudioUploader from './AudioUploader';
 import MiniAudioPlayer from './MiniAudioPlayer';
@@ -11,14 +12,6 @@ interface CloneTrialPanelProps {
   onStylePromptChange: (prompt: string) => void;
   voiceClone: string;
   stylePrompt: string;
-}
-
-function getApiErrorMessage(error: unknown, fallback: string) {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { error?: string } } }).response;
-    return response?.data?.error || fallback;
-  }
-  return fallback;
 }
 
 // ============ 主组件 ============

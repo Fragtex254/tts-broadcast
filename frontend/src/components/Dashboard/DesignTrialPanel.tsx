@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { voicePresetApi } from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
 import { useStore } from '../../store';
 import MiniAudioPlayer from './MiniAudioPlayer';
 
@@ -10,14 +11,6 @@ interface DesignTrialPanelProps {
   onStylePromptChange: (prompt: string) => void;
   voiceDesign: string;
   stylePrompt: string;
-}
-
-function getApiErrorMessage(error: unknown, fallback: string) {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { error?: string } } }).response;
-    return response?.data?.error || fallback;
-  }
-  return fallback;
 }
 
 // ============ 主组件 ============

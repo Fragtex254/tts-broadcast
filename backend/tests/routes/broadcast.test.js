@@ -171,6 +171,17 @@ describe('播报 API', () => {
       expect(res.status).toBe(200);
       expect(res.body.broadcast.voice_type).toBe('design');
     });
+
+    test('支持较大的克隆音频配置', async () => {
+      const res = await request(app)
+        .patch(`/api/broadcast/${vcTestBroadcastId}/voice-config`)
+        .send({
+          voiceType: 'clone',
+          voiceClone: 'a'.repeat(200 * 1024)
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.voice_type).toBe('clone');
+    });
   });
 
   describe('GET /api/broadcast/:id/audio', () => {

@@ -81,9 +81,27 @@ async function toSpeechParams({ text, voiceType, voiceConfig, resolveClone = fal
   return params;
 }
 
+/**
+ * 预解析 clone 音色：将 voiceClone 中的 /audio 文件路径转换为 base64 data URI（仅一次）。
+ * 用于批量生成场景，避免在每个 segment 回调里重复读取文件和重复 base64 转换。
+ * 非 clone 类型或空 voiceClone 时原样返回。
+ * @param {Object} params
+ * @param {string} params.voiceType - 音色类型
+ * @param {Object} params.voiceConfig - 规范化音色配置
+ * @returns {Promise<Object>} 解析后的 voiceConfig（clone 时 voiceClone 已是 data URI）
+ */
+async function resolveCloneVoiceConfig({ voiceType, voiceConfig }) {
+  if (normalizeVoiceType(voiceType) !== 'clone' || !voiceConfig.voiceClone) {
+    return voiceConfig;
+  }
+  const resolvedClone = await audio.resolveVoiceClone(voiceConfig.voiceClone);
+  return { ...voiceConfig, voiceClone: resolvedClone };
+}
+
 module.exports = {
   normalizeVoiceType,
   normalizeVoiceConfig,
   parseBroadcastVoiceConfig,
   toSpeechParams,
+  resolveCloneVoiceConfig,
 };

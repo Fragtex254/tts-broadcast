@@ -96,6 +96,16 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       return res.json({ segments, results: [] });
     }
 
+    // 批量开始前一次性解析 clone 音色，避免在每段回调里重复读取文件 / 重复 base64 转换。
+    // 解析失败时不直接中断批量任务，记录错误并让每段落到可重试的 failed 状态。
+    let resolvedVoiceConfig = voiceConfig;
+    let cloneResolveError = null;
+    try {
+      resolvedVoiceConfig = await voiceConfigService.resolveCloneVoiceConfig({ voiceType, voiceConfig });
+    } catch (resolveError) {
+      cloneResolveError = resolveError;
+    }
+
     // 发送开始事件
     sseManager.send(String(idCheck.id), 'batch-generate-start', {
       total: pendingSegments.length,
@@ -119,13 +129,16 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       });
 
       try {
+        // clone 音色解析失败则整批都无法生成，直接抛出统一错误
+        if (cloneResolveError) throw cloneResolveError;
+
         // 使用队列管理 TTS 请求，避免触发限流
         const audioBuffer = await ttsQueue.enqueue(async () => {
           const speechParams = await voiceConfigService.toSpeechParams({
             text: segment.text,
             voiceType,
-            voiceConfig,
-            resolveClone: true
+            voiceConfig: resolvedVoiceConfig,
+            resolveClone: false // clone 音色已在批量开始时统一解析
           });
           return tts.generateSpeech(speechParams);
         });

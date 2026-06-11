@@ -15,10 +15,12 @@ const corsOptions = {
   credentials: true,
 };
 
+const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || '20mb';
+
 // 中间件
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
 
 // 静态文件（音频存储）
 app.use('/audio', express.static(path.join(__dirname, '../audio')));
@@ -33,6 +35,11 @@ app.use('/api/sse', require('./routes/sse'));
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    console.warn(`请求体过大: ${req.method} ${req.originalUrl}`);
+    return res.status(413).json({ error: '请求体过大，请压缩音频或使用更短的参考音频' });
+  }
+
   console.error(err.stack);
   res.status(500).json({ error: '服务器内部错误' });
 });
