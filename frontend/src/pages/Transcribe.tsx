@@ -118,7 +118,7 @@ export const Transcribe: React.FC = () => {
               </select>
               <button
                 onClick={handleSubmit}
-                disabled={isTranscribing || !file}
+                disabled={isTranscribing}
                 className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
               >
                 {isTranscribing && (

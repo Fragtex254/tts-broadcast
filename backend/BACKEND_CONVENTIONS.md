@@ -47,11 +47,15 @@ backend/src/
 │   ├── segments.js         # Segment 子路由（split、batch-generate、merge、reorder）
 │   ├── settings.js
 │   ├── schedule.js
+│   ├── transcribe.js       # ASR 上传转录
 │   └── voicePresets.js
 ├── services/               # 服务层：外部 API 调用、业务逻辑、数据访问
 │   ├── aihot.js            # AI HOT API 客户端
 │   ├── audio.js            # WAV 文件操作 + resolveVoiceClone
+│   ├── asr.js              # MiMo ASR 转录服务
+│   ├── media.js            # 上传媒体转 ASR data URL
 │   ├── mimo.js             # MiMo LLM 服务（rewriteToScript, splitScript, testApiKey）
+│   ├── mimoApiClient.js    # MiMo 标准 API HTTP client
 │   ├── tts.js              # MiMo TTS 服务（generateSpeech）
 │   ├── broadcastStore.js   # DAL：broadcasts 表的 CRUD
 │   ├── segmentStore.js     # DAL：segments 表的 CRUD
@@ -255,7 +259,10 @@ app.use('/api/voice-presets', require('./routes/voicePresets'));
 |------|------|------|
 | `aihot.js` | AI HOT API 数据抓取 | axios |
 | `audio.js` | WAV 文件操作、resolveVoiceClone | fs, path |
+| `asr.js` | MiMo ASR 转录服务 | mimo, media, mimoApiClient |
+| `media.js` | 上传音视频转 ASR data URL | fs, os, path, child_process, ffmpeg-static |
 | `mimo.js` | MiMo LLM 调用、API Key 管理、Key 测试 | @anthropic-ai/sdk, axios |
+| `mimoApiClient.js` | MiMo 标准 API HTTP client（timeout、429 重试、错误映射） | axios |
 | `tts.js` | MiMo TTS 语音合成 | axios, mimo (getApiKey) |
 | `broadcastStore.js` | broadcasts 表数据访问层（DAL） | db |
 | `segmentStore.js` | segments 表数据访问层（DAL） | db, fs, path |

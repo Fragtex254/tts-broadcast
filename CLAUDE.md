@@ -41,6 +41,7 @@ TTS Broadcast 是一个全栈应用，用于自动化 AI 新闻播报。它从 A
 - better-sqlite3 嵌入式数据库
 - Anthropic SDK（LLM 稿件改写与文本切分）
 - Axios（TTS 语音合成 HTTP 请求 + API Key 测试）
+- multer + ffmpeg-static（音视频上传与 ASR 转换）
 - node-cron 定时任务
 - Jest 测试框架
 
@@ -79,15 +80,15 @@ tts-broadcast/
 │   ├── src/
 │   │   ├── app.js            # Express 应用入口，中间件配置，路由挂载
 │   │   ├── db/               # SQLite 初始化与 schema
-│   │   ├── routes/           # Express 路由（broadcast, segments, settings, schedule, voicePresets）
-│   │   ├── services/         # 业务逻辑 + 数据访问层（aihot, audio, audioAsset, mimo, tts, voiceConfig, *Store, scheduler, sseManager）
+│   │   ├── routes/           # Express 路由（broadcast, segments, settings, schedule, voicePresets, transcribe）
+│   │   ├── services/         # 业务逻辑 + 数据访问层（aihot, audio, audioAsset, asr, media, mimo, mimoApiClient, tts, voiceConfig, *Store, scheduler, sseManager）
 │   │   └── utils/            # 共享工具函数（validation）
 │   ├── tests/                # Jest 测试，镜像 src/ 结构
 │   ├── audio/                # 生成的音频文件（已 gitignore）
 │   └── data/                 # SQLite 数据库文件（已 gitignore）
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/            # 路由页面（SourceCollection, ScriptEditor, History, Settings）
+│   │   ├── pages/            # 路由页面（SourceCollection, ScriptEditor, Transcribe, History, Settings）
 │   │   ├── components/       # 可复用 UI 组件
 │   │   ├── services/         # API 客户端层
 │   │   └── store/            # Zustand 状态管理（index 组合入口，按领域拆分 slices）
@@ -131,7 +132,7 @@ SQLite 数据库包含 5 张表：
 ## 外部 API
 
 - **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
-- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本）
+- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`
 - **MiMo LLM API**（`https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 
@@ -191,6 +192,7 @@ SQLite 数据库包含 5 张表：
 ## 关键开发模式
 
 - 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM（`services/mimo.js`），通过 Axios 调用 MiMo TTS API（`services/tts.js`）
+- ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，`services/media.js` 转为 ASR data URL，`services/asr.js` 调用 MiMo ASR，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
 - 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`

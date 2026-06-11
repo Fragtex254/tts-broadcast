@@ -45,6 +45,7 @@ frontend/src/
 ├── pages/                      # 路由页面（一个文件一个页面）
 │   ├── SourceCollection.tsx
 │   ├── ScriptEditor.tsx
+│   ├── Transcribe.tsx
 │   ├── History.tsx
 │   └── Settings.tsx
 ├── components/
@@ -451,6 +452,7 @@ const handleFetch = async () => {
 |------|------|------|
 | `/` | `SourceCollection` | 信源收集（默认页） |
 | `/editor` | `ScriptEditor` | 口播稿编辑 |
+| `/transcribe` | `Transcribe` | 音视频上传转录 |
 | `/history` | `History` | 播报历史 |
 | `/settings` | `Settings` | 系统设置 |
 
@@ -530,7 +532,7 @@ const handleFetch = async () => {
 
 ### Sidebar
 
-当前 Sidebar 固定宽度 `w-64`，在移动端暂不折叠（后续可加折叠态）。
+Sidebar 桌面端使用 `sm:w-64` 展示完整品牌与导航文本；小屏使用 `w-20` 折叠，只显示短品牌和导航图标，避免主内容被挤压到文字竖排。
 
 ---
 
