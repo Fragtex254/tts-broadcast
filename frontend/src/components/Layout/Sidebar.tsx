@@ -4,6 +4,7 @@ import { NavLink } from 'react-router-dom';
 const navItems = [
   { path: '/', label: '信源收集', icon: '◉' },
   { path: '/editor', label: '口播稿编辑', icon: '○' },
+  { path: '/transcribe', label: '转录', icon: '○' },
   { path: '/history', label: '历史记录', icon: '○' },
   { path: '/settings', label: '设置', icon: '○' },
 ];

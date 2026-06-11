@@ -92,6 +92,13 @@ export interface BatchGenerateResult {
   error?: string;
 }
 
+export type AsrLanguage = 'auto' | 'zh' | 'en';
+
+export interface TranscriptionResult {
+  text: string;
+  usage?: Record<string, unknown> | null;
+}
+
 /** 确认对话框 */
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -117,6 +124,9 @@ export interface AppState {
   segments: Segment[];
   isSplitting: boolean;
   isMerging: boolean;
+
+  transcriptionText: string;
+  isTranscribing: boolean;
 
   voiceConfig: VoiceConfig;
   updateVoiceConfig: (config: Partial<VoiceConfig>) => void;
@@ -158,6 +168,10 @@ export interface AppState {
   deleteSegment: (broadcastId: number, segId: number) => Promise<Segment[]>;
   mergeSegments: (broadcastId: number) => Promise<Broadcast>;
   clearSegments: () => void;
+
+  transcribeMedia: (file: File, language: AsrLanguage) => Promise<TranscriptionResult>;
+  setTranscriptionText: (text: string) => void;
+  clearTranscription: () => void;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;

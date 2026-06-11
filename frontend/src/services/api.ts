@@ -144,6 +144,14 @@ export const voicePresetApi = {
     api.post('/voice-presets/trial/design', data),
 };
 
+// 转录 API
+export const transcribeApi = {
+  transcribe: (formData: FormData) =>
+    api.post('/transcribe', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+};
+
 export type { NewsItem, Settings };
 
 export default api;
