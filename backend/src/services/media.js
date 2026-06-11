@@ -27,6 +27,39 @@ function bufferToDataUrl(buffer, mimeType) {
   return `data:${mimeType};base64,${buffer.toString('base64')}`;
 }
 
+function hasFileData(file) {
+  return Boolean(file && (file.buffer || file.path));
+}
+
+function readUploadBuffer(file) {
+  if (file.buffer) {
+    return file.buffer;
+  }
+  return fs.readFileSync(file.path);
+}
+
+function writeUploadToPath(file, outputPath) {
+  if (file.buffer) {
+    fs.writeFileSync(outputPath, file.buffer);
+    return;
+  }
+  fs.copyFileSync(file.path, outputPath);
+}
+
+function getUploadSize(file) {
+  if (typeof file.size === 'number') {
+    return file.size;
+  }
+  if (file.buffer) {
+    return file.buffer.length;
+  }
+  return fs.statSync(file.path).size;
+}
+
+function estimateDataUrlSize(file, mimeType) {
+  return `data:${mimeType};base64,`.length + Math.ceil(getUploadSize(file) / 3) * 4;
+}
+
 function roundSeconds(value) {
   return Math.round(value * 1000) / 1000;
 }
@@ -147,7 +180,7 @@ async function convertToWavDataUrl(file, ext) {
   const outputPath = path.join(tmpDir, 'output.wav');
 
   try {
-    fs.writeFileSync(inputPath, file.buffer);
+    writeUploadToPath(file, inputPath);
     await runFfmpeg([
       '-y',
       '-i', inputPath,
@@ -171,13 +204,13 @@ async function convertToWavDataUrl(file, ext) {
  * @returns {Promise<string>} data URL
  */
 async function fileToAsrDataUrl({ file }) {
-  if (!file || !file.buffer) {
+  if (!hasFileData(file)) {
     throw new Error('请上传需要转录的音频或视频文件');
   }
 
   const ext = getExtension(file);
   if (DIRECT_AUDIO_TYPES.has(ext)) {
-    return bufferToDataUrl(file.buffer, DIRECT_AUDIO_TYPES.get(ext));
+    return bufferToDataUrl(readUploadBuffer(file), DIRECT_AUDIO_TYPES.get(ext));
   }
 
   if (CONVERTIBLE_TYPES.has(ext)) {
@@ -231,7 +264,7 @@ async function convertToMp3DataUrl(file, ext) {
   const outputPath = path.join(tmpDir, 'output.mp3');
 
   try {
-    fs.writeFileSync(inputPath, file.buffer);
+    writeUploadToPath(file, inputPath);
     await writeMp3Slice({
       inputPath,
       outputPath,
@@ -249,7 +282,7 @@ async function convertToChunkedDataUrls({ file, ext, maxDataUrlSize }) {
   const inputPath = path.join(tmpDir, `input.${ext}`);
 
   try {
-    fs.writeFileSync(inputPath, file.buffer);
+    writeUploadToPath(file, inputPath);
     const { duration, silencePoints } = await analyzeMedia(inputPath);
     const ranges = buildChunkRanges({ duration, silencePoints });
     if (ranges.length === 0) {
@@ -281,14 +314,19 @@ async function convertToChunkedDataUrls({ file, ext, maxDataUrlSize }) {
  * @returns {Promise<string[]>} data URL 列表
  */
 async function fileToAsrDataUrls({ file, maxDataUrlSize }) {
-  if (!file || !file.buffer) {
+  if (!hasFileData(file)) {
     throw new Error('请上传需要转录的音频或视频文件');
   }
 
   const ext = getExtension(file);
   if (DIRECT_AUDIO_TYPES.has(ext)) {
-    const dataUrl = bufferToDataUrl(file.buffer, DIRECT_AUDIO_TYPES.get(ext));
-    if (dataUrl.length <= maxDataUrlSize) {
+    const mimeType = DIRECT_AUDIO_TYPES.get(ext);
+    if (maxDataUrlSize && estimateDataUrlSize(file, mimeType) > maxDataUrlSize) {
+      return convertToChunkedDataUrls({ file, ext, maxDataUrlSize });
+    }
+
+    const dataUrl = bufferToDataUrl(readUploadBuffer(file), mimeType);
+    if (!maxDataUrlSize || dataUrl.length <= maxDataUrlSize) {
       return [dataUrl];
     }
     return convertToChunkedDataUrls({ file, ext, maxDataUrlSize });
@@ -296,7 +334,7 @@ async function fileToAsrDataUrls({ file, maxDataUrlSize }) {
 
   if (CONVERTIBLE_TYPES.has(ext)) {
     const dataUrl = await convertToMp3DataUrl(file, ext);
-    if (dataUrl.length <= maxDataUrlSize) {
+    if (!maxDataUrlSize || dataUrl.length <= maxDataUrlSize) {
       return [dataUrl];
     }
     return convertToChunkedDataUrls({ file, ext, maxDataUrlSize });

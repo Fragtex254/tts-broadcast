@@ -260,7 +260,7 @@ app.use('/api/voice-presets', require('./routes/voicePresets'));
 | `aihot.js` | AI HOT API 数据抓取 | axios |
 | `audio.js` | WAV 文件操作、resolveVoiceClone | fs, path |
 | `asr.js` | MiMo ASR 转录服务，串行处理切片并合并文本/usage | mimo, media, mimoApiClient |
-| `media.js` | 上传音视频转 ASR data URL；长音频按静音点切片并转 MP3 | fs, os, path, child_process, ffmpeg-static |
+| `media.js` | 上传音视频转 ASR data URL；支持 multer 的 buffer/path 输入；长音频按静音点切片并转 MP3 | fs, os, path, child_process, ffmpeg-static |
 | `mimo.js` | MiMo LLM 调用、API Key 管理、Key 测试 | @anthropic-ai/sdk, axios |
 | `mimoApiClient.js` | MiMo 标准 API HTTP client（timeout、429 重试、错误映射） | axios |
 | `tts.js` | MiMo TTS 语音合成 | axios, mimo (getApiKey) |
@@ -392,6 +392,7 @@ router.post('/action', async (req, res) => {
 | 201 | 创建成功 | 新增资源后 |
 | 400 | 参数无效 / 业务校验失败 | 缺少必填参数、格式错误、超出上限 |
 | 404 | 资源不存在 | ID 对应的记录不存在 |
+| 413 | 上传或请求体过大 | 转录音视频超过上传上限 |
 | 500 | 服务器内部错误 | catch 块中 |
 
 ### 异步错误处理

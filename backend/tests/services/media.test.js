@@ -1,3 +1,6 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { buildChunkRanges, fileToAsrDataUrl } = require('../../src/services/media');
 
 describe('媒体转 ASR data URL 服务', () => {
@@ -23,6 +26,27 @@ describe('媒体转 ASR data URL 服务', () => {
     const result = await fileToAsrDataUrl({ file });
 
     expect(result).toBe(`data:audio/mpeg;base64,${Buffer.from('mp3-bytes').toString('base64')}`);
+  });
+
+  test('mp3 临时文件路径可直接编码为 audio/mpeg data URL', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-media-test-'));
+    const inputPath = path.join(tmpDir, 'upload.mp3');
+
+    try {
+      fs.writeFileSync(inputPath, Buffer.from('mp3-path-bytes'));
+      const file = {
+        originalname: 'sample.mp3',
+        mimetype: 'audio/mpeg',
+        path: inputPath,
+        size: Buffer.byteLength('mp3-path-bytes')
+      };
+
+      const result = await fileToAsrDataUrl({ file });
+
+      expect(result).toBe(`data:audio/mpeg;base64,${Buffer.from('mp3-path-bytes').toString('base64')}`);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   test('缺少文件时抛出中文错误', async () => {

@@ -1,4 +1,5 @@
 const request = require('supertest');
+const fs = require('fs');
 
 jest.mock('../../src/services/asr', () => ({
   transcribeMedia: jest.fn().mockResolvedValue({
@@ -34,6 +35,23 @@ describe('转录 API', () => {
       file: expect.objectContaining({ originalname: 'sample.wav' }),
       language: 'zh'
     });
+  });
+
+  test('POST /api/transcribe 支持超过 50MB 的长音频上传', async () => {
+    const res = await request(app)
+      .post('/api/transcribe')
+      .field('language', 'zh')
+      .attach('media', Buffer.alloc(51 * 1024 * 1024, 1), 'long.mp3');
+
+    expect(res.status).toBe(200);
+    expect(asr.transcribeMedia).toHaveBeenCalledWith({
+      file: expect.objectContaining({
+        originalname: 'long.mp3',
+        path: expect.any(String)
+      }),
+      language: 'zh'
+    });
+    expect(fs.existsSync(asr.transcribeMedia.mock.calls[0][0].file.path)).toBe(false);
   });
 
   test('未上传文件返回 400', async () => {
