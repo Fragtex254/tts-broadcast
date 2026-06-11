@@ -11,9 +11,26 @@ export interface SSEProgressEvent {
   text?: string;
 }
 
+export interface SSESegment {
+  id: number;
+  broadcast_id: number;
+  index: number;
+  text: string;
+  audio_path: string | null;
+  status: 'pending' | 'generating' | 'generated' | 'failed';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SSEResult {
+  id: number;
+  status: 'pending' | 'generating' | 'generated' | 'failed';
+  error?: string;
+}
+
 export interface SSECompleteEvent {
-  segments: any[];
-  results: any[];
+  segments: SSESegment[];
+  results: SSEResult[];
   timestamp: number;
 }
 
@@ -21,12 +38,12 @@ export interface SSEErrorEvent {
   error: string;
 }
 
-export type SSEEventHandler<T = any> = (data: T) => void;
+export type SSEEventHandler<T = unknown> = (data: T) => void;
 
 export class SSEClient {
   private eventSource: EventSource | null = null;
   private taskId: string;
-  private handlers: Map<string, Set<SSEEventHandler>> = new Map();
+  private handlers: Map<string, Set<SSEEventHandler<unknown>>> = new Map();
 
   constructor(taskId: string) {
     this.taskId = taskId;
@@ -43,7 +60,7 @@ export class SSEClient {
     this.eventSource = new EventSource(`/api/sse/${this.taskId}`);
 
     // 连接成功事件
-    this.eventSource.addEventListener('connected', (event) => {
+    this.eventSource.addEventListener('connected', () => {
       console.log(`SSE 连接成功: ${this.taskId}`);
     });
 
@@ -79,27 +96,27 @@ export class SSEClient {
   /**
    * 注册事件处理器
    */
-  on<T = any>(eventType: string, handler: SSEEventHandler<T>): void {
+  on<T = unknown>(eventType: string, handler: SSEEventHandler<T>): void {
     if (!this.handlers.has(eventType)) {
       this.handlers.set(eventType, new Set());
     }
-    this.handlers.get(eventType)!.add(handler);
+    this.handlers.get(eventType)!.add(handler as SSEEventHandler<unknown>);
   }
 
   /**
    * 移除事件处理器
    */
-  off<T = any>(eventType: string, handler: SSEEventHandler<T>): void {
+  off<T = unknown>(eventType: string, handler: SSEEventHandler<T>): void {
     const handlers = this.handlers.get(eventType);
     if (handlers) {
-      handlers.delete(handler);
+      handlers.delete(handler as SSEEventHandler<unknown>);
     }
   }
 
   /**
    * 触发事件
    */
-  private emit(eventType: string, data: any): void {
+  private emit(eventType: string, data: unknown): void {
     const handlers = this.handlers.get(eventType);
     if (handlers) {
       for (const handler of handlers) {

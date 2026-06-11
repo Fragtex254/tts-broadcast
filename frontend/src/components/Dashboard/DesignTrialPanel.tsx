@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { voicePresetApi } from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
 import { useStore } from '../../store';
 import MiniAudioPlayer from './MiniAudioPlayer';
 
@@ -52,8 +53,8 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
         style_prompt: stylePrompt.trim() || undefined,
       });
       setTrialAudioUrl(response.data.audioUrl);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '试听生成失败，请检查描述或稍后重试');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '试听生成失败，请检查描述或稍后重试'));
     } finally {
       setIsTrialLoading(false);
     }

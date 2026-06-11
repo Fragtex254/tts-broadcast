@@ -4,6 +4,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { SSEClient, createSSEClient } from '../services/sseClient';
 import type { SSEProgressEvent, SSECompleteEvent, SSEErrorEvent } from '../services/sseClient';
+import type { Segment } from '../store';
 
 interface UseSSEOptions {
   taskId: string | null;
@@ -83,7 +84,7 @@ export function useBatchGenerateSSE(
   broadcastId: number | null,
   options: {
     onSegmentProgress?: (segmentId: number, status: string, audioPath?: string) => void;
-    onSegmentComplete?: (segments: any[]) => void;
+    onSegmentComplete?: (segments: Segment[]) => void;
     onError?: (error: string) => void;
     enabled?: boolean;
   }

@@ -86,6 +86,8 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
 
   // 切换音色后同步到后端（影响段落重新生成），跳过首次渲染
   const isInitialMount = useRef(true);
+  // 记录上一次已同步的 voice-config 签名，避免重复 PATCH（尤其是 clone 大音频）
+  const lastSyncedRef = useRef<string | null>(null);
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -93,7 +95,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
     }
     if (!currentBroadcast) return;
     const effectiveType = activePresetType || (voiceType === 'builtin' ? 'preset' : voiceType);
-    broadcastApi.updateVoiceConfig(currentBroadcast.id, {
+    const payload = {
       voiceType: effectiveType,
       voice: effectiveType === 'preset' ? selectedVoice : undefined,
       voiceDesign: effectiveType === 'design' ? voiceDesign : undefined,
@@ -102,7 +104,15 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       speed: voiceType === 'builtin' && speedRatio !== 1.0 ? { speed_ratio: speedRatio, style: '固定' } : undefined,
       emotion: voiceType === 'builtin' && emotion !== '' ? emotion : undefined,
       pitch: voiceType === 'builtin' && pitchRatio !== 1.0 ? { pitch_ratio: pitchRatio, style: '固定' } : undefined,
-    }).catch(() => {/* 静默失败 */});
+    };
+    // 去重：相同 broadcast + 相同配置不重复发送（避免选中 clone 预设后 effect 多次触发重复 PATCH 大音频）
+    const signature = `${currentBroadcast.id}:${JSON.stringify(payload)}`;
+    if (lastSyncedRef.current === signature) return;
+    lastSyncedRef.current = signature;
+    broadcastApi.updateVoiceConfig(currentBroadcast.id, payload).catch(() => {
+      // 同步失败时清除签名，下次允许重试
+      lastSyncedRef.current = null;
+    });
   }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast, activePresetType, speedRatio, emotion, pitchRatio]);
 
   const handleApplyPreset = (preset: VoicePreset) => {
@@ -340,17 +350,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
           <input type="text" value={stylePrompt} onChange={(e) => setStylePrompt(e.target.value)} placeholder="风格提示词（可选）"
             className="w-36 bg-white/70 text-ink rounded-lg px-3 py-1.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors animate-fade-in" />
         )}
-        <button
-          onClick={handleBatchGenerate}
-          disabled={isBusy || !hasSegments}
-          className="ml-auto bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[11px] rounded-xl px-4 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider flex items-center gap-2"
-        >
-          {isBusy ? '生成中...' : hasSegments ? (hasPending ? '生成语音' : '✓ 已全部生成') : '请先切分口播稿'}
-        </button>
       </div>
-      {error && (
-        <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-2.5 text-ink text-[11px] font-body animate-shake">{error}</div>
-      )}
     </div>
   );
 };

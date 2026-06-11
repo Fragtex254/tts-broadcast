@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { voicePresetApi } from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
 import { useStore } from '../../store';
 import AudioUploader from './AudioUploader';
 import MiniAudioPlayer from './MiniAudioPlayer';
@@ -84,8 +85,8 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
 
       const response = await voicePresetApi.trialClone(formData);
       setTrialAudioUrl(response.data.audioUrl);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '试听生成失败，请检查音频或稍后重试');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, '试听生成失败，请检查音频或稍后重试'));
     } finally {
       setIsTrialLoading(false);
     }

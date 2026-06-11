@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useStore } from '../../store';
 import type { Segment } from '../../store';
+import { getApiErrorMessage } from '../../services/apiError';
 import { useBatchGenerateSSE } from '../../hooks/useSSE';
 
 // ============ StatusBadge ============
@@ -118,7 +119,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
         }),
       }));
     }, []),
-    onSegmentComplete: useCallback((newSegments: any[]) => {
+    onSegmentComplete: useCallback((newSegments: Segment[]) => {
       // 所有 segment 生成完成
       useStore.setState({ segments: newSegments });
     }, []),
@@ -151,8 +152,9 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
     setError(null);
     try {
       await batchGenerateSegments(broadcastId);
-    } catch {
-      setError('批量生成失败');
+    } catch (err) {
+      // 优先展示后端返回的错误文案（如 429 限流、请求体过大、clone 解析失败等）
+      setError(getApiErrorMessage(err, '批量生成失败'));
     }
   };
   const handleMerge = async () => { setError(null); try { await mergeSegments(broadcastId); onMerged?.(); } catch { setError('合并失败'); } };

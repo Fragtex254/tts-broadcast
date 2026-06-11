@@ -4,10 +4,14 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const aihot = require('../services/aihot');
+const mimo = require('../services/mimo');
+const tts = require('../services/tts');
 const db = require('../db');
 const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
-const { validateId, cleanAudioFile, audioDir } = require('../utils/validation');
+const voiceConfigService = require('../services/voiceConfig');
+const audioAsset = require('../services/audioAsset');
+const { validateId, cleanAudioFile } = require('../utils/validation');
 
 /**
  * GET /api/broadcast/today
@@ -47,7 +51,6 @@ router.post('/rewrite', async (req, res) => {
     const defaultOpening = db.prepare('SELECT value FROM settings WHERE key = ?').get('opening_script');
     const defaultClosing = db.prepare('SELECT value FROM settings WHERE key = ?').get('closing_script');
 
-    const mimo = require('../services/mimo');
     const script = await mimo.rewriteToScript({
       items,
       opening: opening || JSON.parse(defaultOpening?.value || '""'),
@@ -73,25 +76,9 @@ router.post('/generate', async (req, res) => {
       return res.status(400).json({ error: '请提供口播稿内容' });
     }
 
-    if (mode === 'segmented') {
-      const broadcast = broadcastStore.create({
-        title: text.substring(0, 50) + '...',
-        content: text,
-        voiceType: voiceType || 'preset',
-        voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch },
-        sourceItems,
-        status: 'pending',
-        mode: 'segmented'
-      });
-      return res.json({ broadcast });
-    }
-
-    // 整篇生成
-    const tts = require('../services/tts');
-    const audioBuffer = await tts.generateSpeech({
-      text,
-      voice,
+    const normalized = voiceConfigService.normalizeVoiceConfig({
       voiceType,
+      voice,
       voiceDesign,
       voiceClone,
       stylePrompt,
@@ -100,16 +87,36 @@ router.post('/generate', async (req, res) => {
       pitch
     });
 
-    const filename = `broadcast_${Date.now()}.wav`;
-    const filepath = path.join(audioDir, filename);
-    fs.writeFileSync(filepath, audioBuffer);
+    if (mode === 'segmented') {
+      const broadcast = broadcastStore.create({
+        title: text.substring(0, 50) + '...',
+        content: text,
+        voiceType: normalized.voiceType,
+        voiceConfig: normalized.voiceConfig,
+        sourceItems,
+        status: 'pending',
+        mode: 'segmented'
+      });
+      return res.json({ broadcast });
+    }
+
+    // 整篇生成
+    const speechParams = await voiceConfigService.toSpeechParams({
+      text,
+      voiceType: normalized.voiceType,
+      voiceConfig: normalized.voiceConfig,
+      resolveClone: true
+    });
+    const audioBuffer = await tts.generateSpeech(speechParams);
+
+    const audioPath = audioAsset.writeBroadcastAudio(audioBuffer);
 
     const broadcast = broadcastStore.create({
       title: text.substring(0, 50) + '...',
       content: text,
-      audioPath: `/audio/${filename}`,
-      voiceType: voiceType || 'preset',
-      voiceConfig: { voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch },
+      audioPath,
+      voiceType: normalized.voiceType,
+      voiceConfig: normalized.voiceConfig,
       sourceItems,
       status: 'generated',
       mode: 'whole'
@@ -127,7 +134,7 @@ router.post('/generate', async (req, res) => {
 
     res.json({
       broadcast,
-      audioUrl: `/audio/${filename}`
+      audioUrl: audioPath
     });
   } catch (error) {
     console.error('生成语音失败:', error);
@@ -232,9 +239,21 @@ router.patch('/:id/voice-config', (req, res) => {
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     const { voiceType, voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch } = req.body;
-    const voiceConfig = JSON.stringify({ voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch });
+    const normalized = voiceConfigService.normalizeVoiceConfig({
+      voiceType,
+      voice,
+      voiceDesign,
+      voiceClone,
+      stylePrompt,
+      speed,
+      emotion,
+      pitch
+    });
 
-    broadcastStore.updateVoiceConfig(idCheck.id, { voiceType, voiceConfig });
+    broadcastStore.updateVoiceConfig(idCheck.id, {
+      voiceType: normalized.voiceType,
+      voiceConfig: JSON.stringify(normalized.voiceConfig)
+    });
 
     const broadcast = broadcastStore.getById(idCheck.id);
     res.json({ broadcast });

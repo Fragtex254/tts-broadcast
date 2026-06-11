@@ -80,7 +80,7 @@ tts-broadcast/
 │   │   ├── app.js            # Express 应用入口，中间件配置，路由挂载
 │   │   ├── db/               # SQLite 初始化与 schema
 │   │   ├── routes/           # Express 路由（broadcast, segments, settings, schedule, voicePresets）
-│   │   ├── services/         # 业务逻辑 + 数据访问层（aihot, audio, mimo, tts, broadcastStore, segmentStore, scheduler）
+│   │   ├── services/         # 业务逻辑 + 数据访问层（aihot, audio, audioAsset, mimo, tts, voiceConfig, *Store, scheduler, sseManager）
 │   │   └── utils/            # 共享工具函数（validation）
 │   ├── tests/                # Jest 测试，镜像 src/ 结构
 │   ├── audio/                # 生成的音频文件（已 gitignore）
@@ -90,7 +90,7 @@ tts-broadcast/
 │   │   ├── pages/            # 路由页面（SourceCollection, ScriptEditor, History, Settings）
 │   │   ├── components/       # 可复用 UI 组件
 │   │   ├── services/         # API 客户端层
-│   │   └── store/            # Zustand 状态管理
+│   │   └── store/            # Zustand 状态管理（index 组合入口，按领域拆分 slices）
 │   └── vite.config.ts
 ├── docs/                     # 项目文档
 ├── start.sh                  # 一键启动脚本
@@ -100,12 +100,13 @@ tts-broadcast/
 
 ## 数据库结构
 
-SQLite 数据库包含 4 张表：
+SQLite 数据库包含 5 张表：
 
 - `broadcasts`：播报记录，含稿件内容、音频路径、状态、模式（整篇/分段）
 - `segments`：分段记录，关联 broadcast（外键 `ON DELETE CASCADE`），每段独立生成音频
 - `settings`：键值存储，保存 API Key、音色偏好、脚本等配置
 - `schedules`：定时任务，基于 cron 表达式自动播报
+- `voice_presets`：音色预设，含克隆和设计两种类型，支持保存试听音频和原始参考音频
 
 关键字段说明：
 
@@ -122,7 +123,6 @@ SQLite 数据库包含 4 张表：
 - `segments.text`：该段稿件文本
 - `segments.audio_path`：该段音频路径
 - `segments.status`：该段状态
-- `voice_presets`：音色预设，含克隆和设计两种类型，支持保存试听音频和原始参考音频
 - `voice_presets.type`：`clone`（克隆）或 `design`（设计）
 - `voice_presets.trial_audio_path`：试听音频路径
 - `voice_presets.original_audio_path`：克隆原始音频路径（仅 clone 类型）
@@ -166,7 +166,7 @@ SQLite 数据库包含 4 张表：
 - **组件规范** — 文件结构、Props interface 命名、导出方式、入场动画延迟分配
 - **加载状态** — 使用骨架屏（`animate-pulse`），不使用 spinner
 - **错误状态** — 使用 `animate-shake` + `bg-pink/10`
-- **状态管理** — Zustand store 使用模式、接口类型统一定义在 `store/index.ts`
+- **状态管理** — Zustand store 使用模式、接口类型统一定义在 `store/types.ts`，`store/index.ts` 只做组合入口
 - **命名规范** — 文件/组件/函数/常量/CSS 变量命名规则
 
 新增页面或组件时，务必对照文档末尾的 Checklist 逐项检查。
@@ -191,11 +191,74 @@ SQLite 数据库包含 4 张表：
 ## 关键开发模式
 
 - 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM（`services/mimo.js`），通过 Axios 调用 MiMo TTS API（`services/tts.js`）
-- 路由层通过 DAL 层（`services/broadcastStore.js`、`services/segmentStore.js`）操作数据库，不直接写 SQL
-- ID 校验使用 `utils/validation.js` 中的 `validateId()`，文件删除使用 `cleanAudioFile()`
-- 前端使用 Zustand store 模式管理全局状态
+- 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
+- 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
+- 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`
+- ID 校验使用 `utils/validation.js` 中的 `validateId()`
+- 前端使用 Zustand store 模式管理全局状态；新增状态优先按领域放入 `store/*Slice.ts`，类型放入 `store/types.ts`
 - 测试使用 supertest 进行 HTTP 端点测试
 - 音频文件通过 `/audio` 路由作为静态文件提供服务
+
+## 健壮性与可维护性开发规范
+
+本项目的主要风险来自外部 API、长时间任务、SQLite 与音频文件的一致性、前后端类型契约漂移。新增或修改功能时必须优先保证以下约束。
+
+### 1. 分层边界
+
+- **路由层只做 HTTP 翻译**：解析请求、参数校验、选择状态码、返回 JSON；不得直接写 SQL、不得内联复杂文件处理、不得直接封装外部 API。
+- **服务层负责业务和外部 API**：MiMo、AI HOT、音频转换、音频资产、音色配置、队列、SSE 推送等逻辑放在 `services/`。
+- **DAL 层负责单表 SQL**：每张业务表优先有对应 `services/*Store.js`；新增表必须同步补 store，而不是在路由里散写 SQL。
+- **前端 API 层不做状态管理**：`frontend/src/services/api.ts` 只封装 HTTP；数据组合、loading/error 状态放在 Zustand 或页面组件。
+- **前端 store 按领域拆分**：`frontend/src/store/index.ts` 只创建 `useStore` 并组合 slices；业务动作放在 `broadcastSlice.ts`、`segmentSlice.ts`、`settingsSlice.ts`、`scheduleSlice.ts`、`presetSlice.ts`、`voiceConfigSlice.ts` 等领域文件。
+
+### 2. 外部 API 必须隔离失败
+
+- 所有 MiMo、AI HOT 调用必须设置明确 timeout，并把 401、429、超时、网络错误转换为用户可理解的中文错误。
+- 批量 TTS 只能串行或通过队列限速，禁止在路由或组件里 `Promise.all` 并发打 MiMo TTS。
+- API Key 测试、LLM 改写、TTS 生成、ASR 等测试必须 mock 外部 API；单元测试不得依赖真实网络或真实 key。
+- 不允许全局关闭 TLS 校验，不允许使用 `NODE_TLS_REJECT_UNAUTHORIZED=0`。如需补 CA，只能在特定 HTTP client 实例内配置。
+
+### 3. 长时间任务与状态一致性
+
+- 会超过 2 秒的任务（改写、TTS、切分、批量生成、合并、试听）必须有明确的前端 loading/error 状态。
+- 已接入 SSE 的任务，后端必须发送开始、进度、完成、失败事件；前端收到失败事件后必须落到可重试状态。
+- 当前 SSE 主要覆盖 segment 批量生成；如果文档声明“所有长任务使用 SSE”，实现必须同步补齐，否则先更新文档收窄范围。
+- 对同一 broadcast/segment 的重复生成要保证幂等：失败不能留下永久 `generating` 状态，重试应能从 `pending` 或 `failed` 继续。
+
+### 4. SQLite 与音频文件一致性
+
+- 数据库写入和文件写入跨资源，无法真正事务化；实现时必须设计补偿清理：
+  - DB 创建成功但文件写入失败：删除或回滚对应记录，或将状态置为 `failed`。
+  - 文件写入成功但 DB 更新失败：删除刚写入的文件，避免孤儿音频。
+  - 删除记录前先读取旧路径，删除 DB 后清理文件；失败要记录日志但不能中断级联删除。
+- 所有对 `/audio/...` 的删除必须经过 `cleanAudioFile()` 或同等路径安全函数，禁止拼接任意用户输入路径后直接 `unlinkSync`。
+- 预设、segment、broadcast 的音频命名必须可追踪：优先包含业务 ID，避免仅使用时间戳导致排查困难。
+
+### 5. 前后端契约
+
+- 共享业务概念必须有稳定类型：`Broadcast`、`Segment`、`VoiceConfig`、`Settings`、SSE event payload 不得使用裸 `any`。
+- 后端新增字段后，必须同步更新：
+  1. `schema.sql` 和迁移
+  2. 对应 `*Store.js`
+  3. 路由响应
+  4. `frontend/src/services/api.ts`
+  5. `frontend/src/store/types.ts` 和相关 `store/*Slice.ts`
+  6. 相关页面/组件
+- 前端不得硬编码与后端不一致的默认音色、状态枚举或参数名；默认值应来自 settings 或统一常量。
+
+### 6. 测试与进程生命周期
+
+- `backend/src/app.js` 只导出 Express app；只有直接运行入口时才 `listen()` 和初始化调度器，避免 supertest 引入 app 时留下端口和 cron 句柄。
+- 创建 cron 任务的测试必须在 `afterEach` 中调用 `scheduler.shutdown()` 并清理表数据。
+- 后端改动至少运行 `npm test -- --runInBand`；前端改动至少运行 `npm run build`。
+- 如果 Jest 提示 open handles，必须用 `--detectOpenHandles` 定位并修复，不能仅靠强制退出掩盖。
+
+### 7. 可维护性红线
+
+- 单文件超过规范阈值时优先拆分：路由按资源拆，组件按交互单元拆，服务按外部 API 或业务能力拆。
+- 不引入新依赖作为默认解法；新增依赖必须说明为什么原生能力或现有依赖不足。
+- 不把“临时兼容”留在代码里。若保留旧 API 或旧字段，必须写清迁移/删除条件。
+- 文档优先：当 `docs/`、`BACKEND_CONVENTIONS.md`、`FRONTEND_CONVENTIONS.md` 与实现冲突时，先按最新已批准文档校准；如果文档过期，先更新文档再改实现。
 
 ## 数据持久化开发规范
 

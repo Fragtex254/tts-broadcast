@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../../src/app');
 const db = require('../../src/db');
+const mimo = require('../../src/services/mimo');
 
 describe('设置 API', () => {
   const originalSettings = {};
@@ -14,6 +15,8 @@ describe('设置 API', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
+
     // 恢复原始设置
     const upsert = db.prepare(`
       INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -57,11 +60,12 @@ describe('设置 API', () => {
   });
 
   test('POST /api/settings/test-key - 测试 API Key', async () => {
+    jest.spyOn(mimo, 'testApiKey').mockResolvedValue(true);
+
     const res = await request(app)
       .post('/api/settings/test-key')
       .send();
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('valid');
-    expect(typeof res.body.valid).toBe('boolean');
+    expect(res.body).toEqual({ valid: true });
   });
 });
