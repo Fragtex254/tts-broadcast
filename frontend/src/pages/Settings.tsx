@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Header } from '../components/Layout/Header';
 import { PasswordField } from '../components/PasswordField';
 import useStore, { type LlmModelOption, type Settings as AppSettings } from '../store';
+import { buildAutoSaveUpdate, changeBaseUrl } from './settingsDraft';
 
 const voiceOptions = [
   { value: '冰糖', label: '冰糖' },
@@ -44,36 +45,45 @@ export const Settings: React.FC = () => {
   const [apiFormatTouched, setApiFormatTouched] = useState(false);
 
   const autoSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const formDataRef = useRef(formData);
+  const dirtyFieldsRef = useRef(dirtyFields);
 
   const [scheduleForm, setScheduleForm] = useState({ name: '', cron_expression: '', content_types: '' });
   const [isCreatingSchedule, setIsCreatingSchedule] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
-  useEffect(() => { fetchSettings(); fetchSchedules(); }, [fetchSettings, fetchSchedules]);
-  useEffect(() => { setFormData(settings); }, [settings]);
+  const setDirtyFieldsState = useCallback((next: Set<keyof AppSettings>) => {
+    dirtyFieldsRef.current = next;
+    setDirtyFields(next);
+  }, []);
 
-  const inferApiFormat = (baseUrl: string): AppSettings['llm_api_format'] =>
-    baseUrl.toLowerCase().includes('/anthropic') ? 'anthropic' : 'openai';
+  useEffect(() => { fetchSettings(); fetchSchedules(); }, [fetchSettings, fetchSchedules]);
+  useEffect(() => {
+    if (dirtyFieldsRef.current.size > 0) return;
+    formDataRef.current = settings;
+    setFormData(settings);
+  }, [settings]);
 
   const handleChange = <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    setDirtyFields((prev) => new Set(prev).add(field));
+    const nextFormData = { ...formDataRef.current, [field]: value };
+    const nextDirtyFields = new Set(dirtyFieldsRef.current).add(field);
+    formDataRef.current = nextFormData;
+    setFormData(nextFormData);
+    setDirtyFieldsState(nextDirtyFields);
     setSaveSuccess(false);
   };
 
   /** 自动保存单个字段（onBlur 或 debounce 调用） */
   const handleAutoSave = useCallback(async (field: keyof AppSettings) => {
-    if (!dirtyFields.has(field)) return;
+    const update = buildAutoSaveUpdate(formDataRef.current, dirtyFieldsRef.current, field);
+    if (!update) return;
     try {
-      const update: Partial<AppSettings> = { [field]: formData[field] };
       await updateSettings(update);
-      setDirtyFields((prev) => {
-        const next = new Set(prev);
-        next.delete(field);
-        return next;
-      });
+      const nextDirtyFields = new Set(dirtyFieldsRef.current);
+      nextDirtyFields.delete(field);
+      setDirtyFieldsState(nextDirtyFields);
     } catch (e) { console.error(`自动保存 ${String(field)} 失败:`, e); }
-  }, [dirtyFields, formData, updateSettings]);
+  }, [setDirtyFieldsState, updateSettings]);
 
   /** debounce 自动保存，用于文本输入 */
   const debouncedAutoSave = useCallback((field: keyof AppSettings, delay = 800) => {
@@ -89,11 +99,14 @@ export const Settings: React.FC = () => {
   }, []);
 
   const handleBaseUrlChange = (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      llm_base_url: value,
-      ...(apiFormatTouched ? {} : { llm_api_format: inferApiFormat(value) }),
-    }));
+    const draft = changeBaseUrl({
+      formData: formDataRef.current,
+      dirtyFields: dirtyFieldsRef.current,
+      apiFormatTouched,
+    }, value);
+    formDataRef.current = draft.formData;
+    setFormData(draft.formData);
+    setDirtyFieldsState(draft.dirtyFields);
     setModelFetchResult(null);
     setSaveSuccess(false);
   };
@@ -106,7 +119,12 @@ export const Settings: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
-    try { await updateSettings(formData); setSaveSuccess(true); setTimeout(() => setSaveSuccess(false), 3000); }
+    try {
+      await updateSettings(formDataRef.current);
+      setDirtyFieldsState(new Set());
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    }
     catch (e) { console.error('保存设置失败:', e); }
     finally { setIsSaving(false); }
   };

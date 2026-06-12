@@ -13,9 +13,11 @@
 9. [响应式](#响应式)
 10. [TypeScript](#typescript)
 11. [命名规范](#命名规范)
-12. [性能](#性能)
-13. [无障碍](#无障碍)
-14. [新增页面/组件 Checklist](#新增页面组件-checklist)
+12. [Settings 保存模式](#settings-保存模式)
+13. [质量门禁与测试](#质量门禁与测试)
+14. [性能](#性能)
+15. [无障碍](#无障碍)
+16. [新增页面/组件 Checklist](#新增页面组件-checklist)
 
 ---
 
@@ -30,8 +32,10 @@
 | 状态 | Zustand | 5 |
 | 路由 | React Router | 7 |
 | HTTP | Axios | 1.x |
+| 运行时校验 | Zod | 4 |
+| 测试 | Vitest + Testing Library | 4 / 16 |
 
-**原则：不引入新依赖。** 如需新功能，优先用 CSS/原生 API 实现。确需三方库时，先评估 bundle size 影响。
+**原则：谨慎引入新依赖。** UI 和普通交互优先用 CSS/原生 API 实现；运行时契约校验使用现有 Zod；测试使用现有 Vitest/Testing Library。确需新增依赖时，先评估 bundle size、维护成本和 CI 影响。
 
 ---
 
@@ -47,24 +51,33 @@ frontend/src/
 │   ├── ScriptEditor.tsx
 │   ├── Transcribe.tsx
 │   ├── History.tsx
-│   └── Settings.tsx
+│   ├── Settings.tsx
+│   └── settingsDraft.ts            # Settings 页纯逻辑 helper（需配测试）
 ├── components/
 │   ├── Layout/                 # 布局组件（Sidebar, Header）
 │   └── Dashboard/              # Dashboard 子组件
+├── hooks/                       # 可复用 hooks（useDebounce, useSSE）
 ├── services/
-│   └── api.ts                  # Axios API 封装
+│   ├── api.ts                  # Axios API 封装
+│   ├── apiError.ts             # API 错误提取 helper
+│   └── schemas.ts              # Zod 运行时校验 schema
 └── store/
-    └── index.ts                # Zustand 全局 store
+    ├── index.ts                # Zustand 全局 store 组合入口
+    ├── types.ts                # 全局共享类型
+    └── *Slice.ts               # 按领域拆分的 store slice
 ```
 
 ### 文件职责
 
 | 文件类型 | 职责 | 不应包含 |
 |---------|------|---------|
-| `pages/*.tsx` | 页面布局、数据编排、路由参数 | 可复用的 UI 组件 |
-| `components/**/*.tsx` | 独立 UI 单元，通过 props 接收数据 | 直接调用 API、路由跳转 |
-| `store/index.ts` | 全局状态 + 异步 action | UI 逻辑、样式 |
-| `services/api.ts` | HTTP 请求封装 | 状态管理、数据转换 |
+| `pages/*.tsx` | 页面布局、数据编排、路由参数 | 通用 UI 基础组件 |
+| `pages/*Draft.ts` / `pages/*Model.ts` | 页面私有纯逻辑 helper | React hooks、DOM、API 调用 |
+| `components/**/*.tsx` | 独立 UI/功能单元，通过 props 或 selector 接收数据 | 直接调用 API、路由跳转 |
+| `store/index.ts` | Zustand store 组合入口 | 业务 action 实现、UI 逻辑 |
+| `store/*Slice.ts` | 领域状态与异步 action | 样式、页面局部状态 |
+| `services/api.ts` | HTTP 请求封装 | 状态管理、页面数据组合 |
+| `services/schemas.ts` | API 响应运行时 schema | UI 展示逻辑 |
 
 ### 组件文件组织
 
@@ -365,8 +378,8 @@ export interface AppState {
 
 ### 使用规则
 
-1. **页面组件**通过 `useStore()` 获取数据和 action，编排后传给子组件。
-2. **子组件**通过 props 接收数据，不直接调用 `useStore()`（除非是完全独立的功能组件如 `AudioPlayer`）。
+1. **页面组件**通过 selector 模式获取 store 数据和 action，负责路由级编排。
+2. **功能组件**可以直接使用 selector 读取所需 store 字段；展示型子组件优先通过 props 接收数据。
 3. **接口类型**统一定义在 `store/types.ts`，通过 `export` 供其他文件引用。
 4. **Loading 状态**在 store 中维护（`isGenerating`, `isSplitting` 等），组件读取即可。
 5. **长任务进度**放在对应领域 slice 中维护；例如转录使用 `transcribeProgress` 保存上传、准备、分片转录、完成和失败状态，页面只负责展示。
@@ -409,6 +422,7 @@ const { script, updateScript, settings } = useStore();
 - 已配置全局响应拦截器，统一处理 401/403/429/500 等常见错误码
 - 按功能域导出 API 对象：`broadcastApi`, `settingsApi`, `scheduleApi`
 - Settings 页的 LLM 模型发现通过 `settingsApi.fetchLlmModels()` 调用 `POST /settings/llm-models`，页面只维护局部 loading/error 和模型下拉选项
+- API 响应的结构校验 schema 放在 `services/schemas.ts`；store slice 中按领域引入对应 schema
 
 ### 命名约定
 
@@ -450,6 +464,13 @@ const handleFetch = async () => {
 };
 ```
 
+### 运行时数据校验
+
+- Zod schema 命名为 `{Domain}Schema`，例如 `SettingsSchema`、`BroadcastSchema`。
+- schema 与 `store/types.ts` 的共享类型保持同一字段语义；新增后端字段时先更新类型，再更新 schema。
+- `safeParseArray()` 会过滤不符合 schema 的条目，只适合列表接口；详情/设置类接口解析失败时应保留旧 state 或显式报错，避免静默写入半可信数据。
+- 不要在组件里直接写 schema 校验，组件只消费 store 给出的数据。
+
 ---
 
 ## 路由
@@ -463,13 +484,17 @@ const handleFetch = async () => {
 | `/transcribe` | `Transcribe` | 音视频上传转录 |
 | `/history` | `History` | 播报历史 |
 | `/settings` | `Settings` | 系统设置 |
+| `*` | `NotFound` | 404 兜底 |
 
 ### 规则
 
 1. 路由定义在 `App.tsx` 的 `<Routes>` 内。
 2. `Sidebar` 在 `<Routes>` 外部，跨页面持久渲染。
-3. 新增页面：在 `pages/` 创建组件 → 在 `App.tsx` 添加 `<Route>` → 在 `Sidebar` 添加导航项。
-4. 导航使用 `<NavLink>`（不是 `<Link>`），以支持 `isActive` 高亮。
+3. 首屏路由 `SourceCollection` 直接导入；非首屏页面使用 `React.lazy()` + `Suspense` 懒加载。
+4. 所有路由页面位于 `<ErrorBoundary>` 内；新增可能独立崩溃的功能区可再加局部 Error Boundary。
+5. 新增页面：在 `pages/` 创建组件 → 在 `App.tsx` 添加 `<Route>` → 在 `Sidebar` 添加导航项。
+6. 新增用户可访问路径时，确认 `NotFound` 兜底仍存在。
+7. 导航使用 `<NavLink>`（不是 `<Link>`），以支持 `isActive` 高亮。
 
 ---
 
@@ -623,31 +648,63 @@ const debouncedSync = useDebounce(() => {
 // useEffect 中调用 debouncedSync，用户停止操作 800ms 后执行
 ```
 
-## 测试
+## Settings 保存模式
+
+Settings 页使用“本地 draft + dirtyFields + onBlur/debounce 自动保存 + 顶部批量保存兜底”的模式：
+
+- 表单值保存在页面局部 `formData`，同时用 `formDataRef` 保存最新值，避免 debounce 闭包读取上一帧数据。
+- `dirtyFields` 只记录用户改过但尚未保存的字段；保存成功后清除对应字段。
+- 文本域等高频输入通过 debounce 自动保存；普通输入在 `onBlur` 保存；顶部“保存设置”提交整个当前 draft。
+- 纯数据变换放在 `pages/settingsDraft.ts`，并配套 `settingsDraft.test.ts`；不要把这类逻辑藏在 JSX 事件处理里。
+- LLM Base URL 会自动推断 `llm_api_format`，除非用户手动切换过 API format；这两个字段的 dirty 状态必须一起维护。
+
+新增 Settings 字段时，需要同步：
+
+- `store/types.ts` 的 `Settings` 接口
+- `store/defaults.ts` 的默认值
+- `services/schemas.ts` 的 `SettingsSchema`
+- `Settings.tsx` 的输入控件和保存行为
+- `settingsDraft.test.ts` 中与自动保存或推断有关的测试
+
+## 质量门禁与测试
 
 ### 框架
 
-- **Vitest** + **@testing-library/react** + **jsdom**
+- **Vitest** + **@testing-library/react** + **@testing-library/jest-dom** + **jsdom**
 - 测试文件命名：`*.test.{ts,tsx}`
-- 运行：`npm run test`
+- 测试配置在 `vite.config.ts`，setup 在 `vitest.setup.ts`
+
+### 必跑命令
+
+每次前端代码变更后，至少运行：
+
+```bash
+npm run lint
+npm run build
+npm run test
+```
+
+如果只改文档，可以不跑 build/test，但需要确认文档与现有实现一致。
 
 ### 新增功能必须伴随测试
 
 | 测试类型 | 范围 | 示例 |
 |---------|------|------|
 | 单元测试 | `services/` 工具函数 | `apiError.test.ts` |
-| 组件测试 | 纯展示组件渲染 | 待补充 |
+| 纯逻辑测试 | 页面 draft/helper、数据转换 | `settingsDraft.test.ts` |
+| 组件测试 | 纯展示组件渲染 | 后续新增复杂组件时补充 |
 
 ### 最小测试要求
 
 - 工具函数（`apiError.ts`、`formatters` 等）必须有单元测试
+- 页面私有 helper（如 `settingsDraft.ts`）必须有单元测试
 - 复杂交互组件（如 `VoiceGenerator`、`SegmentEditor`）鼓励添加组件测试
 
 ## 性能
 
 1. **图片** — 使用 WebP 格式，配合 `loading="lazy"`。
 2. **字体** — `index.html` 中使用 `preconnect` + `display=swap` 预加载。
-3. **代码分割** — 当前 3 个页面体量较小，暂不需要 lazy loading。如果页面增长到 >500 行，考虑 `React.lazy()`。
+3. **代码分割** — 非首屏路由页面使用 `React.lazy()` + `Suspense` 懒加载；首屏 `SourceCollection` 保持直接导入。
 4. **Store 选择器** — 使用 Zustand selector 避免不必要的重渲染：
    ```tsx
    // ✅ 只订阅需要的值
@@ -680,14 +737,19 @@ const debouncedSync = useDebounce(() => {
 新增一个页面时，按顺序完成：
 
 - [ ] `pages/NewPage.tsx` — 创建页面组件，使用 `Header` + 毛玻璃卡片布局
-- [ ] `App.tsx` — 添加 `<Route path="/new" element={<NewPage />} />`
+- [ ] `App.tsx` — 非首屏页面用 `React.lazy()` 添加 `<Route path="/new" element={<NewPage />} />`
 - [ ] `Sidebar.tsx` — 在 `navItems` 添加导航项
+- [ ] 确认 `NotFound` 兜底路由仍保留
 - [ ] 使用 `bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border` 作为卡片基类
 - [ ] 卡片标题使用 `font-display italic` + 色点
 - [ ] 添加入场动画 `style={{ animation: 'fade-in-up ...' }}`
 - [ ] 加载状态使用骨架屏，错误状态使用 `animate-shake`
 - [ ] 按钮使用语义色（lemon/sage/lilac/pink）
+- [ ] Store 读取使用 selector，不写无 selector 的 `useStore()`
+- [ ] 新增 API 响应字段时同步 `store/types.ts` 与 `services/schemas.ts`
+- [ ] 运行 `npm run lint`
 - [ ] 运行 `npm run build` 确认无 TypeScript 错误
+- [ ] 运行 `npm run test`
 - [ ] 运行 `npm run dev` 目视检查三个页面样式一致
 
 新增一个子组件时：
@@ -697,4 +759,6 @@ const debouncedSync = useDebounce(() => {
 - [ ] Props 使用 `interface {Name}Props`
 - [ ] 卡片标题使用色点 + 斜体衬线
 - [ ] 按钮/输入框使用统一样式模板
-- [ ] 确保 `npm run build` 通过
+- [ ] 如组件直接读 store，必须使用 selector
+- [ ] 纯逻辑 helper 需要配套 `*.test.ts`
+- [ ] 确保 `npm run lint && npm run build && npm run test` 通过

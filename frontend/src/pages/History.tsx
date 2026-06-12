@@ -130,7 +130,12 @@ export const History: React.FC = () => {
     }
   }, [fetchBroadcasts]);
 
-  useEffect(() => { loadBroadcasts(page); }, [page, loadBroadcasts]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadBroadcasts(page);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [page, loadBroadcasts]);
 
   // 删除失败错误提示自动消失
   useEffect(() => {
