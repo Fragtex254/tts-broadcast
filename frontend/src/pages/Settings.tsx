@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Header } from '../components/Layout/Header';
+import { PasswordField } from '../components/PasswordField';
 import useStore, { type LlmModelOption, type Settings as AppSettings } from '../store';
 
 const voiceOptions = [
@@ -36,11 +37,13 @@ export const Settings: React.FC = () => {
   const [isTestingKey, setIsTestingKey] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { valid: boolean; error?: string }>>({});
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [savingField, setSavingField] = useState<string | null>(null);
+  const [dirtyFields, setDirtyFields] = useState<Set<keyof AppSettings>>(new Set());
   const [modelOptions, setModelOptions] = useState<LlmModelOption[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [modelFetchResult, setModelFetchResult] = useState<{ error?: string; resolvedUrl?: string } | null>(null);
   const [apiFormatTouched, setApiFormatTouched] = useState(false);
+
+  const autoSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [scheduleForm, setScheduleForm] = useState({ name: '', cron_expression: '', content_types: '' });
   const [isCreatingSchedule, setIsCreatingSchedule] = useState(false);
@@ -54,8 +57,36 @@ export const Settings: React.FC = () => {
 
   const handleChange = <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setDirtyFields((prev) => new Set(prev).add(field));
     setSaveSuccess(false);
   };
+
+  /** 自动保存单个字段（onBlur 或 debounce 调用） */
+  const handleAutoSave = useCallback(async (field: keyof AppSettings) => {
+    if (!dirtyFields.has(field)) return;
+    try {
+      const update: Partial<AppSettings> = { [field]: formData[field] };
+      await updateSettings(update);
+      setDirtyFields((prev) => {
+        const next = new Set(prev);
+        next.delete(field);
+        return next;
+      });
+    } catch (e) { console.error(`自动保存 ${String(field)} 失败:`, e); }
+  }, [dirtyFields, formData, updateSettings]);
+
+  /** debounce 自动保存，用于文本输入 */
+  const debouncedAutoSave = useCallback((field: keyof AppSettings, delay = 800) => {
+    const key = String(field);
+    if (autoSaveTimers.current[key]) clearTimeout(autoSaveTimers.current[key]);
+    autoSaveTimers.current[key] = setTimeout(() => {
+      handleAutoSave(field);
+    }, delay);
+  }, [handleAutoSave]);
+
+  useEffect(() => () => {
+    Object.values(autoSaveTimers.current).forEach(clearTimeout);
+  }, []);
 
   const handleBaseUrlChange = (value: string) => {
     setFormData((prev) => ({
@@ -81,6 +112,11 @@ export const Settings: React.FC = () => {
   };
 
   const handleTestKey = async (type: 'llm' | 'tts') => {
+    // 测试前自动保存对应的 key
+    const keyField = type === 'tts' ? 'mimo_tts_api_key' : 'mimo_api_key';
+    if (dirtyFields.has(keyField)) {
+      await handleAutoSave(keyField);
+    }
     setIsTestingKey(type);
     try {
       const apiKey = type === 'tts' ? formData.mimo_tts_api_key : formData.mimo_api_key;
@@ -115,17 +151,6 @@ export const Settings: React.FC = () => {
     } finally {
       setIsFetchingModels(false);
     }
-  };
-
-  const handleSaveField = async (field: keyof AppSettings) => {
-    setSavingField(field);
-    try {
-      const update: Partial<AppSettings> = { [field]: formData[field] };
-      await updateSettings(update);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
-    } catch (e) { console.error('保存失败:', e); }
-    finally { setSavingField(null); }
   };
 
   const handleCreateSchedule = async () => {
@@ -211,12 +236,11 @@ export const Settings: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">LLM API Key</label>
-                      <input
-                        type="password"
+                      <PasswordField
                         value={formData.mimo_api_key}
-                        onChange={(e) => handleChange('mimo_api_key', e.target.value)}
+                        onChange={(v) => handleChange('mimo_api_key', v)}
+                        onBlur={() => handleAutoSave('mimo_api_key')}
                         placeholder="输入 LLM API Key"
-                        className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
                       />
                     </div>
                     <div>
@@ -225,6 +249,7 @@ export const Settings: React.FC = () => {
                         type="text"
                         value={formData.llm_base_url}
                         onChange={(e) => handleBaseUrlChange(e.target.value)}
+                        onBlur={() => handleAutoSave('llm_base_url')}
                         placeholder="https://api.example.com/v1"
                         className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
                       />
@@ -238,6 +263,7 @@ export const Settings: React.FC = () => {
                         type="text"
                         value={formData.llm_model}
                         onChange={(e) => handleChange('llm_model', e.target.value)}
+                        onBlur={() => handleAutoSave('llm_model')}
                         placeholder="输入或选择模型 ID"
                         className="flex-1 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
                       />
@@ -278,7 +304,11 @@ export const Settings: React.FC = () => {
                       <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">改写系统提示词</label>
                       <textarea
                         value={formData.llm_rewrite_system_prompt}
-                        onChange={(e) => handleChange('llm_rewrite_system_prompt', e.target.value)}
+                        onChange={(e) => {
+                          handleChange('llm_rewrite_system_prompt', e.target.value);
+                          debouncedAutoSave('llm_rewrite_system_prompt');
+                        }}
+                        onBlur={() => handleAutoSave('llm_rewrite_system_prompt')}
                         rows={3}
                         className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] resize-none transition-colors"
                       />
@@ -287,7 +317,11 @@ export const Settings: React.FC = () => {
                       <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">切分系统提示词</label>
                       <textarea
                         value={formData.llm_split_system_prompt}
-                        onChange={(e) => handleChange('llm_split_system_prompt', e.target.value)}
+                        onChange={(e) => {
+                          handleChange('llm_split_system_prompt', e.target.value);
+                          debouncedAutoSave('llm_split_system_prompt');
+                        }}
+                        onBlur={() => handleAutoSave('llm_split_system_prompt')}
                         rows={3}
                         className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] resize-none transition-colors"
                       />
@@ -324,13 +358,9 @@ export const Settings: React.FC = () => {
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
                       ) : '测试 LLM'}
                     </button>
-                    <button
-                      onClick={() => handleSaveField('mimo_api_key')}
-                      disabled={savingField === 'mimo_api_key'}
-                      className="px-4 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 whitespace-nowrap"
-                    >
-                      {savingField === 'mimo_api_key' ? '保存中...' : '保存 LLM Key'}
-                    </button>
+                    {dirtyFields.has('mimo_api_key') && (
+                      <span className="font-body text-[11px] text-ink-soft/40 flex items-center">未保存</span>
+                    )}
                   </div>
                   {testResults.llm && (
                     <div className={`p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.llm.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
@@ -347,12 +377,12 @@ export const Settings: React.FC = () => {
                     <span className="font-body text-[10px] text-ink-soft/40">用于语音合成和转录</span>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="password"
+                    <PasswordField
                       value={formData.mimo_tts_api_key}
-                      onChange={(e) => handleChange('mimo_tts_api_key', e.target.value)}
+                      onChange={(v) => handleChange('mimo_tts_api_key', v)}
+                      onBlur={() => handleAutoSave('mimo_tts_api_key')}
                       placeholder="输入 TTS API Key"
-                      className="flex-1 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                      className="flex-1"
                     />
                     <button
                       onClick={() => handleTestKey('tts')}
@@ -363,13 +393,9 @@ export const Settings: React.FC = () => {
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
                       ) : '测试 TTS'}
                     </button>
-                    <button
-                      onClick={() => handleSaveField('mimo_tts_api_key')}
-                      disabled={savingField === 'mimo_tts_api_key'}
-                      className="px-4 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 whitespace-nowrap"
-                    >
-                      {savingField === 'mimo_tts_api_key' ? '保存中...' : '保存'}
-                    </button>
+                    {dirtyFields.has('mimo_tts_api_key') && (
+                      <span className="font-body text-[11px] text-ink-soft/40 flex items-center">未保存</span>
+                    )}
                   </div>
                   {testResults.tts && (
                     <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.tts.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
@@ -388,6 +414,7 @@ export const Settings: React.FC = () => {
                 <select
                   value={formData.default_voice}
                   onChange={(e) => handleChange('default_voice', e.target.value)}
+                  onBlur={() => handleAutoSave('default_voice')}
                   className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink focus:outline-none focus:border-ink/20 font-body text-[12px] appearance-none cursor-pointer transition-colors"
                 >
                   {voiceOptions.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
@@ -404,7 +431,11 @@ export const Settings: React.FC = () => {
                   <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">开场白</label>
                   <textarea
                     value={formData.opening_script}
-                    onChange={(e) => handleChange('opening_script', e.target.value)}
+                    onChange={(e) => {
+                      handleChange('opening_script', e.target.value);
+                      debouncedAutoSave('opening_script');
+                    }}
+                    onBlur={() => handleAutoSave('opening_script')}
                     rows={3}
                     placeholder="请输入播报开场白"
                     className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] resize-none transition-colors"
@@ -414,7 +445,11 @@ export const Settings: React.FC = () => {
                   <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">结束语</label>
                   <textarea
                     value={formData.closing_script}
-                    onChange={(e) => handleChange('closing_script', e.target.value)}
+                    onChange={(e) => {
+                      handleChange('closing_script', e.target.value);
+                      debouncedAutoSave('closing_script');
+                    }}
+                    onBlur={() => handleAutoSave('closing_script')}
                     rows={3}
                     placeholder="请输入播报结束语"
                     className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] resize-none transition-colors"
@@ -426,16 +461,22 @@ export const Settings: React.FC = () => {
 
           {!isLoadingSettings && (
             <div className="flex items-center justify-between" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both' }}>
-              {saveSuccess && (
-                <span className="font-body text-[12px] text-sage flex items-center gap-1.5 animate-fade-in">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  设置已保存
-                </span>
-              )}
-              <div className="flex-1" />
+              <div className="flex items-center gap-2">
+                {saveSuccess && (
+                  <span className="font-body text-[12px] text-sage flex items-center gap-1.5 animate-fade-in">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    设置已保存
+                  </span>
+                )}
+                {dirtyFields.size > 0 && !saveSuccess && (
+                  <span className="font-body text-[12px] text-ink-soft/40">
+                    {dirtyFields.size} 项更改未保存
+                  </span>
+                )}
+              </div>
               <button
                 onClick={handleSave}
-                disabled={isSaving}
+                disabled={isSaving || dirtyFields.size === 0}
                 className="px-6 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body font-medium text-[12px] shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 uppercase tracking-wider"
               >
                 {isSaving ? (

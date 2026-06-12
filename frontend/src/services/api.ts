@@ -1,4 +1,5 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
+import type { NewsItem, Settings } from '../store/types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -44,34 +45,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-interface NewsItem {
-  id: string;
-  title: string;
-  content?: string;
-  summary?: string;
-  category?: string;
-  published_at?: string;
-  source_url?: string;
-  [key: string]: unknown;
-}
-
-interface Settings {
-  mimo_api_key?: string;
-  mimo_tts_api_key?: string;
-  llm_api_format?: 'openai' | 'anthropic';
-  llm_base_url?: string;
-  llm_model?: string;
-  llm_rewrite_system_prompt?: string;
-  llm_split_system_prompt?: string;
-  llm_rewrite_thinking_enabled?: boolean;
-  llm_split_thinking_enabled?: boolean;
-  default_voice?: string;
-  opening_script?: string;
-  closing_script?: string;
-  content_categories?: string;
-  [key: string]: string | boolean | undefined;
-}
 
 // 播报相关 API
 export const broadcastApi = {
@@ -148,7 +121,7 @@ export const broadcastApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
 
-  update: (data: Settings) =>
+  update: (data: Partial<Settings>) =>
     api.put('/settings', data),
 
   testKey: (

@@ -1,4 +1,5 @@
 import { broadcastApi } from '../services/api';
+import { safeParseArray, safeParse, BroadcastSchema, TodayItemSchema } from '../services/schemas';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
 
@@ -32,7 +33,8 @@ export function createBroadcastSlice(set: StoreSet): Pick<
     fetchTodayItems: async (params) => {
       try {
         const response = await broadcastApi.getToday(params);
-        set({ todayItems: response.data.items });
+        const items = safeParseArray(TodayItemSchema, response.data.items || []);
+        set({ todayItems: items });
       } catch (error) {
         console.error('获取今日资讯失败:', error);
         throw error;
@@ -57,7 +59,8 @@ export function createBroadcastSlice(set: StoreSet): Pick<
       set({ isGenerating: true });
       try {
         const response = await broadcastApi.generate(data);
-        const { broadcast, audioUrl } = response.data;
+        const broadcast = safeParse(BroadcastSchema, response.data.broadcast) || response.data.broadcast;
+        const audioUrl = response.data.audioUrl as string;
         set((state) => ({
           broadcasts: [broadcast, ...state.broadcasts],
           currentBroadcast: broadcast,
@@ -74,7 +77,8 @@ export function createBroadcastSlice(set: StoreSet): Pick<
     fetchBroadcasts: async (params) => {
       try {
         const response = await broadcastApi.getHistory(params);
-        const { broadcasts, pagination } = response.data;
+        const broadcasts = safeParseArray(BroadcastSchema, response.data.broadcasts || []);
+        const pagination = response.data.pagination;
         set({ broadcasts });
         return { broadcasts, pagination };
       } catch (error) {
@@ -90,7 +94,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
     saveBroadcast: async (id) => {
       try {
         const response = await broadcastApi.save(id);
-        const updated = response.data.broadcast;
+        const updated = safeParse(BroadcastSchema, response.data.broadcast) || response.data.broadcast;
         set((state) => ({
           broadcasts: state.broadcasts.map((b) => (b.id === id ? updated : b)),
           currentBroadcast: state.currentBroadcast?.id === id ? updated : state.currentBroadcast,
