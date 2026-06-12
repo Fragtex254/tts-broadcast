@@ -80,6 +80,26 @@ npm run lint         # 运行 ESLint
 npm run preview      # 预览生产构建
 ```
 
+## CI/CD 流水线
+
+仓库使用 GitHub Actions 进行 PR 质量门禁，工作流文件位于 `.github/workflows/pr-checks.yml`。
+
+触发条件：
+
+- `pull_request`：所有 PR 必跑
+- `push` 到 `main`：合并后回归检查
+
+检查内容：
+
+- 后端：`cd backend && npm ci && NODE_ENV=test npm test -- --runInBand`
+- 前端：`cd frontend && npm ci && npm run lint && npm run build`
+
+约束：
+
+- CI 不配置真实 MiMo、AI HOT、TTS、ASR API Key
+- 后端测试必须 mock 外部 API，不依赖真实网络或真实业务密钥
+- 新增会影响 PR 门禁的脚本、运行环境或检查项时，必须同步更新本节
+
 ## 目录结构
 
 ```
