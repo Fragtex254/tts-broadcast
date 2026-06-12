@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
@@ -40,7 +40,15 @@ const getStatusBadge = (status: string) => {
 };
 
 export const History: React.FC = () => {
-  const { broadcasts, fetchBroadcasts, currentBroadcast, setCurrentBroadcast, saveBroadcast, fetchSegments, batchDeleteBroadcasts, isBatchDeleting } = useStore();
+  const broadcasts = useStore((s) => s.broadcasts);
+  const fetchBroadcasts = useStore((s) => s.fetchBroadcasts);
+  const currentBroadcast = useStore((s) => s.currentBroadcast);
+  const setCurrentBroadcast = useStore((s) => s.setCurrentBroadcast);
+  const saveBroadcast = useStore((s) => s.saveBroadcast);
+  const fetchSegments = useStore((s) => s.fetchSegments);
+  const batchDeleteBroadcasts = useStore((s) => s.batchDeleteBroadcasts);
+  const isBatchDeleting = useStore((s) => s.isBatchDeleting);
+
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,69 +56,97 @@ export const History: React.FC = () => {
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  // 多选模式状态
+  // 多选模式状态 — 使用 Set 存储选中 ID
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedBroadcasts, setSelectedBroadcasts] = useState<Map<number, boolean>>(new Map());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // 从 selectedBroadcasts 派生 selectedIds
-  const selectedIds = new Set(selectedBroadcasts.keys());
-
   // 进入多选模式
-  const handleEnterMultiSelect = () => {
+  const handleEnterMultiSelect = useCallback(() => {
     setIsMultiSelectMode(true);
-    setSelectedBroadcasts(new Map());
-  };
+    setSelectedIds(new Set());
+  }, []);
 
   // 退出多选模式
-  const handleExitMultiSelect = () => {
+  const handleExitMultiSelect = useCallback(() => {
     setIsMultiSelectMode(false);
-    setSelectedBroadcasts(new Map());
-  };
+    setSelectedIds(new Set());
+  }, []);
 
   // 切换选择状态
-  const handleToggleSelect = (broadcast: Broadcast) => {
-    setSelectedBroadcasts((prev) => {
-      const next = new Map(prev);
+  const handleToggleSelect = useCallback((broadcast: Broadcast) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
       if (next.has(broadcast.id)) {
         next.delete(broadcast.id);
       } else {
-        next.set(broadcast.id, broadcast.saved === 1);
+        next.add(broadcast.id);
       }
       return next;
     });
-  };
+  }, []);
 
   // 全选/取消全选当前页
-  const handleToggleSelectAll = () => {
-    const allSelected = broadcasts.every((b) => selectedBroadcasts.has(b.id));
+  const handleToggleSelectAll = useCallback(() => {
+    const allSelected = broadcasts.every((b) => selectedIds.has(b.id));
 
     if (allSelected) {
       // 取消全选当前页
-      setSelectedBroadcasts((prev) => {
-        const next = new Map(prev);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
         broadcasts.forEach((b) => next.delete(b.id));
         return next;
       });
     } else {
       // 全选当前页
-      setSelectedBroadcasts((prev) => {
-        const next = new Map(prev);
-        broadcasts.forEach((b) => next.set(b.id, b.saved === 1));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        broadcasts.forEach((b) => next.add(b.id));
         return next;
       });
     }
-  };
+  }, [broadcasts, selectedIds]);
 
   // 点击删除按钮
-  const handleDeleteClick = () => {
-    if (selectedBroadcasts.size === 0) return;
+  const handleDeleteClick = useCallback(() => {
+    if (selectedIds.size === 0) return;
     setShowConfirmDialog(true);
-  };
+  }, [selectedIds.size]);
+
+  // 计算已选中的已保存记录数量
+  const savedCount = broadcasts.filter((b) => selectedIds.has(b.id) && b.saved === 1).length;
+
+  const loadBroadcasts = useCallback(async (pageNum: number) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await fetchBroadcasts({ page: pageNum, limit });
+      setTotal(result.pagination.total);
+    } catch {
+      setError('加载播报历史失败，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchBroadcasts]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadBroadcasts(page);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [page, loadBroadcasts]);
+
+  // 删除失败错误提示自动消失
+  useEffect(() => {
+    if (deleteError) {
+      const timer = setTimeout(() => setDeleteError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [deleteError]);
 
   // 确认删除
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     try {
       setDeleteError(null);
       const ids = Array.from(selectedIds);
@@ -123,36 +159,10 @@ export const History: React.FC = () => {
       setDeleteError('删除失败，请稍后重试');
       setShowConfirmDialog(false);
     }
-  };
+  }, [selectedIds, batchDeleteBroadcasts, handleExitMultiSelect, loadBroadcasts, page]);
 
-  // 计算已选中的已保存记录数量（跨页准确统计）
-  const savedCount = Array.from(selectedBroadcasts.values()).filter(Boolean).length;
-
-  const loadBroadcasts = async (pageNum: number) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await fetchBroadcasts({ page: pageNum, limit });
-      setTotal(result.pagination.total);
-    } catch {
-      setError('加载播报历史失败，请稍后重试');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { loadBroadcasts(page); }, [page]);
-
-  // 删除失败错误提示自动消失
-  useEffect(() => {
-    if (deleteError) {
-      const timer = setTimeout(() => setDeleteError(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [deleteError]);
-
-  const handleSelectBroadcast = (broadcast: Broadcast) => setCurrentBroadcast(broadcast);
-  const handleReEdit = async (broadcast: Broadcast, e: React.MouseEvent) => {
+  const handleSelectBroadcast = useCallback((broadcast: Broadcast) => setCurrentBroadcast(broadcast), [setCurrentBroadcast]);
+  const handleReEdit = useCallback(async (broadcast: Broadcast, e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentBroadcast(broadcast);
     try {
@@ -161,8 +171,8 @@ export const History: React.FC = () => {
       // Even if segments fail to load, still navigate
     }
     navigate('/editor');
-  };
-  const getAudioUrl = (broadcast: Broadcast): string | null => broadcast.audio_path ? `/api/broadcast/${broadcast.id}/audio` : null;
+  }, [setCurrentBroadcast, fetchSegments, navigate]);
+  const getAudioUrl = useCallback((broadcast: Broadcast): string | null => broadcast.audio_path ? `/api/broadcast/${broadcast.id}/audio` : null, []);
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -328,7 +338,7 @@ export const History: React.FC = () => {
       <ConfirmDialog
         isOpen={showConfirmDialog}
         title="确认删除"
-        message={`确定要删除选中的 ${selectedBroadcasts.size} 条记录吗？`}
+        message={`确定要删除选中的 ${selectedIds.size} 条记录吗？`}
         warningMessage={savedCount > 0 ? `其中包含 ${savedCount} 条已保存记录` : undefined}
         onConfirm={handleConfirmDelete}
         onCancel={() => setShowConfirmDialog(false)}

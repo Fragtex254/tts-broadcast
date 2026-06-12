@@ -21,7 +21,8 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
   voiceDesign,
   stylePrompt,
 }) => {
-  const { presets, fetchPresets } = useStore();
+  const presets = useStore((s) => s.presets);
+  const fetchPresets = useStore((s) => s.fetchPresets);
 
   const [trialText, setTrialText] = useState('');
   const [isTrialLoading, setIsTrialLoading] = useState(false);

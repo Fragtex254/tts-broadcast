@@ -23,7 +23,9 @@ const TYPE_TAG_LABELS: Record<VoicePreset['type'], string> = {
 // ============ 主组件 ============
 
 export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset }) => {
-  const { presets, fetchPresets, deletePreset } = useStore();
+  const presets = useStore((s) => s.presets);
+  const fetchPresets = useStore((s) => s.fetchPresets);
+  const deletePreset = useStore((s) => s.deletePreset);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);

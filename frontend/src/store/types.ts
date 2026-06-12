@@ -1,4 +1,14 @@
-import type { NewsItem } from '../services/api';
+/** 资讯条目 */
+export interface NewsItem {
+  id: string;
+  title: string;
+  content?: string;
+  summary?: string;
+  category?: string;
+  published_at?: string;
+  source_url?: string;
+  [key: string]: unknown;
+}
 
 /** 播报记录 */
 export interface Broadcast {

@@ -1,37 +1,50 @@
-import axios, { type AxiosProgressEvent } from 'axios';
+import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
+import type { NewsItem, Settings } from '../store/types';
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 0, // 不设置超时限制，TTS 生成可能需要较长时间
+  timeout: 300000, // 5 分钟超时 — TTS 生成可能耗时较长
 });
 
-interface NewsItem {
-  id: string;
-  title: string;
-  content?: string;
-  summary?: string;
-  category?: string;
-  published_at?: string;
-  source_url?: string;
-  [key: string]: unknown;
-}
+// === 全局响应拦截器 ===
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    // 网络错误 / 请求中断
+    if (!error.response) {
+      if (axios.isCancel(error)) {
+        console.log('Request cancelled');
+      } else {
+        console.error('Network error:', error.message);
+      }
+      return Promise.reject(error);
+    }
 
-interface Settings {
-  mimo_api_key?: string;
-  mimo_tts_api_key?: string;
-  llm_api_format?: 'openai' | 'anthropic';
-  llm_base_url?: string;
-  llm_model?: string;
-  llm_rewrite_system_prompt?: string;
-  llm_split_system_prompt?: string;
-  llm_rewrite_thinking_enabled?: boolean;
-  llm_split_thinking_enabled?: boolean;
-  default_voice?: string;
-  opening_script?: string;
-  closing_script?: string;
-  content_categories?: string;
-  [key: string]: string | boolean | undefined;
-}
+    const status = error.response.status;
+    const data = error.response.data as { error?: string } | undefined;
+
+    switch (status) {
+      case 401:
+        console.error('Unauthorized — 请检查 API Key 配置');
+        break;
+      case 403:
+        console.error('Forbidden — 无权访问该资源');
+        break;
+      case 429:
+        console.error('Rate limited — 请求过于频繁，请稍后重试');
+        break;
+      case 500:
+      case 502:
+      case 503:
+        console.error(`Server error (${status}) — 服务端异常`);
+        break;
+      default:
+        console.error(`API error (${status}):`, data?.error || error.message);
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 // 播报相关 API
 export const broadcastApi = {
@@ -108,7 +121,7 @@ export const broadcastApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
 
-  update: (data: Settings) =>
+  update: (data: Partial<Settings>) =>
     api.put('/settings', data),
 
   testKey: (

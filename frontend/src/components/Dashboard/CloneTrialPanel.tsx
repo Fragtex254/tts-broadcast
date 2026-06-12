@@ -22,7 +22,8 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
   voiceClone,
   stylePrompt,
 }) => {
-  const { presets, fetchPresets } = useStore();
+  const presets = useStore((s) => s.presets);
+  const fetchPresets = useStore((s) => s.fetchPresets);
 
   const [fileName, setFileName] = useState<string | undefined>(undefined);
   const [trialText, setTrialText] = useState('');

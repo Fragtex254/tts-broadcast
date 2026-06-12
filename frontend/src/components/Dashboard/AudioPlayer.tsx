@@ -9,15 +9,22 @@ interface AudioPlayerProps {
   mode?: string | null;
 }
 
-const generateWaveformBars = (count: number) => {
+const generateWaveformBars = (count: number, seed: string) => {
+  // 基于 seed 生成确定性伪随机序列
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const char = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
   const bars: number[] = [];
   for (let i = 0; i < count; i++) {
-    bars.push(8 + Math.random() * 20);
+    // 简单的 LCG 伪随机
+    hash = (hash * 1103515245 + 12345) & 0x7fffffff;
+    bars.push(8 + (hash % 2000) / 100);
   }
   return bars;
 };
-
-const WAVEFORM_BARS = generateWaveformBars(32);
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   audioUrl,
@@ -27,6 +34,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   onSave,
   mode,
 }) => {
+  const waveformBars = React.useMemo(
+    () => generateWaveformBars(32, audioUrl || title),
+    [audioUrl, title]
+  );
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -140,8 +151,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
         {/* 波形可视化 */}
         <div className="flex-1 flex items-center gap-[2px] h-7 overflow-hidden">
-          {WAVEFORM_BARS.map((height, i) => {
-            const barProgress = i / WAVEFORM_BARS.length;
+          {waveformBars.map((height, i) => {
+            const barProgress = i / waveformBars.length;
             const isPlayed = barProgress <= progress;
             return (
               <div

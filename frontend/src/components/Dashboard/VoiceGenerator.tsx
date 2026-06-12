@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useStore, type VoicePreset } from '../../store';
+import React, { useState, useEffect, useCallback } from 'react';
+import useStore, { type VoicePreset } from '../../store';
 import { broadcastApi } from '../../services/api';
+import { useDebounce } from '../../hooks/useDebounce';
 import { CloneTrialPanel } from './CloneTrialPanel';
 import { DesignTrialPanel } from './DesignTrialPanel';
 import { VoicePresetTab } from './VoicePresetTab';
@@ -50,10 +51,10 @@ const EMOTION_OPTIONS = [
 ];
 
 export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizontal' }) => {
-  const {
-    currentBroadcast,
-    settings, voiceConfig, updateVoiceConfig,
-  } = useStore();
+  const currentBroadcast = useStore((s) => s.currentBroadcast);
+  const settings = useStore((s) => s.settings);
+  const voiceConfig = useStore((s) => s.voiceConfig);
+  const updateVoiceConfig = useStore((s) => s.updateVoiceConfig);
 
   const [voiceType, setVoiceType] = useState(voiceConfig.voiceType === 'preset' ? 'builtin' : (voiceConfig.voiceType || 'builtin'));
   const [selectedVoice, setSelectedVoice] = useState(voiceConfig.voice || settings.default_voice || '冰糖');
@@ -68,9 +69,8 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
   const [pitchRatio, setPitchRatio] = useState<number>(1.0);
   const [showFineControls, setShowFineControls] = useState(false);
 
-  // 同步本地状态到 store
+  // ====== 同步本地状态到 store（即时，不触后端） ======
   useEffect(() => {
-    // 如果有选中的预设，使用预设的真实类型；否则用本地 voiceType
     const effectiveType = activePresetType || (voiceType === 'builtin' ? 'preset' : voiceType);
     updateVoiceConfig({
       voice: selectedVoice,
@@ -82,17 +82,10 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       emotion: emotion === '' ? null : emotion,
       pitch: pitchRatio === 1.0 ? null : { pitch_ratio: pitchRatio, style: '固定' },
     });
-  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, updateVoiceConfig, activePresetType, speedRatio, emotion, pitchRatio]);
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, activePresetType, speedRatio, emotion, pitchRatio, updateVoiceConfig]);
 
-  // 切换音色后同步到后端（影响段落重新生成），跳过首次渲染
-  const isInitialMount = useRef(true);
-  // 记录上一次已同步的 voice-config 签名，避免重复 PATCH（尤其是 clone 大音频）
-  const lastSyncedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+  // ====== 防抖同步音色配置到后端（避免 slider 每次变动都 PATCH） ======
+  const syncToBackend = useCallback(() => {
     if (!currentBroadcast) return;
     const effectiveType = activePresetType || (voiceType === 'builtin' ? 'preset' : voiceType);
     const payload = {
@@ -101,22 +94,35 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       voiceDesign: effectiveType === 'design' ? voiceDesign : undefined,
       voiceClone: effectiveType === 'clone' ? voiceClone : undefined,
       stylePrompt: stylePrompt || undefined,
-      speed: voiceType === 'builtin' && speedRatio !== 1.0 ? { speed_ratio: speedRatio, style: '固定' } : undefined,
+      speed: voiceType === 'builtin' && speedRatio !== 1.0 ? { speed_ratio: speedRatio, style: '固定' as const } : undefined,
       emotion: voiceType === 'builtin' && emotion !== '' ? emotion : undefined,
-      pitch: voiceType === 'builtin' && pitchRatio !== 1.0 ? { pitch_ratio: pitchRatio, style: '固定' } : undefined,
+      pitch: voiceType === 'builtin' && pitchRatio !== 1.0 ? { pitch_ratio: pitchRatio, style: '固定' as const } : undefined,
     };
-    // 去重：相同 broadcast + 相同配置不重复发送（避免选中 clone 预设后 effect 多次触发重复 PATCH 大音频）
-    const signature = `${currentBroadcast.id}:${JSON.stringify(payload)}`;
-    if (lastSyncedRef.current === signature) return;
-    lastSyncedRef.current = signature;
     broadcastApi.updateVoiceConfig(currentBroadcast.id, payload).catch(() => {
-      // 同步失败时清除签名，下次允许重试
-      lastSyncedRef.current = null;
+      // 静默处理 — 拦截器已打印错误
     });
-  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, currentBroadcast, activePresetType, speedRatio, emotion, pitchRatio]);
+  }, [currentBroadcast, activePresetType, voiceType, selectedVoice, voiceDesign, voiceClone, stylePrompt, speedRatio, emotion, pitchRatio]);
+
+  const debouncedSyncToBackend = useDebounce(syncToBackend, 800);
+
+  // 当配置变化时，触发防抖同步
+  useEffect(() => {
+    // 跳过首次渲染 — 首次不需要同步（后端已有数据）
+    // 通过检查 voiceConfig 是否与本地状态一致来判断是否是初始化
+    const effectiveType = activePresetType || (voiceType === 'builtin' ? 'preset' : voiceType);
+    const isInitial =
+      voiceConfig.voice === selectedVoice &&
+      voiceConfig.voiceType === effectiveType &&
+      voiceConfig.voiceDesign === voiceDesign &&
+      voiceConfig.voiceClone === voiceClone &&
+      voiceConfig.stylePrompt === stylePrompt;
+
+    if (isInitial) return;
+    debouncedSyncToBackend();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVoice, voiceType, voiceDesign, voiceClone, stylePrompt, activePresetType, speedRatio, emotion, pitchRatio]);
 
   const handleApplyPreset = (preset: VoicePreset) => {
-    // 设定预设的真实类型，useEffect 会用它来同步 store 和后端
     setActivePresetType(preset.type);
     if (preset.type === 'clone') {
       setVoiceClone(preset.original_audio_path || '');
@@ -126,7 +132,6 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
       setVoiceClone('');
     }
     setStylePrompt(preset.style_prompt || '');
-    // voiceType 保持 'preset'，UI 不切换 tab
   };
 
   // 切换到非预设 tab 时，清除预设选中状态
@@ -147,7 +152,6 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
   const isVertical = layout === 'vertical';
 
   if (isVertical) {
-    // 垂直布局：用于左侧固定面板
     return (
       <div className="flex flex-col h-full">
         {/* 标题 */}

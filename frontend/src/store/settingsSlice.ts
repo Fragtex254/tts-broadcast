@@ -1,5 +1,6 @@
 import { settingsApi } from '../services/api';
 import { getApiErrorMessage } from '../services/apiError';
+import { safeParse, SettingsSchema } from '../services/schemas';
 import { defaultSettings } from './defaults';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
@@ -16,7 +17,8 @@ export function createSettingsSlice(set: StoreSet): Pick<
       set({ isLoadingSettings: true });
       try {
         const response = await settingsApi.get();
-        set({ settings: response.data.settings, isLoadingSettings: false });
+        const settings = safeParse(SettingsSchema, response.data.settings) || response.data.settings;
+        set({ settings, isLoadingSettings: false });
       } catch (error) {
         set({ isLoadingSettings: false });
         console.error('获取设置失败:', error);
@@ -27,7 +29,8 @@ export function createSettingsSlice(set: StoreSet): Pick<
     updateSettings: async (data) => {
       try {
         const response = await settingsApi.update(data);
-        set({ settings: response.data.settings });
+        const settings = safeParse(SettingsSchema, response.data.settings) || response.data.settings;
+        set({ settings });
       } catch (error) {
         console.error('更新设置失败:', error);
         throw error;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useStore } from '../../store';
+import useStore from '../../store';
 import type { Segment } from '../../store';
 import { getApiErrorMessage } from '../../services/apiError';
 import { useBatchGenerateSSE } from '../../hooks/useSSE';
@@ -92,11 +92,15 @@ interface SegmentEditorProps {
 }
 
 export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMerged }) => {
-  const {
-    segments, isSplitting, isMerging,
-    fetchSegments, updateSegmentText, regenerateSegment,
-    batchGenerateSegments, deleteSegment, mergeSegments,
-  } = useStore();
+  const segments = useStore((s) => s.segments);
+  const isSplitting = useStore((s) => s.isSplitting);
+  const isMerging = useStore((s) => s.isMerging);
+  const fetchSegments = useStore((s) => s.fetchSegments);
+  const updateSegmentText = useStore((s) => s.updateSegmentText);
+  const regenerateSegment = useStore((s) => s.regenerateSegment);
+  const batchGenerateSegments = useStore((s) => s.batchGenerateSegments);
+  const deleteSegment = useStore((s) => s.deleteSegment);
+  const mergeSegments = useStore((s) => s.mergeSegments);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');

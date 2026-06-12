@@ -9,19 +9,22 @@ import useStore from '../store';
 const DEFAULT_LEFT_WIDTH = 260;
 
 export const ScriptEditor: React.FC = () => {
-  const { currentBroadcast, segments, saveBroadcast } = useStore();
+  const currentBroadcast = useStore((s) => s.currentBroadcast);
+  const segments = useStore((s) => s.segments);
+  const saveBroadcast = useStore((s) => s.saveBroadcast);
+
   const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [widthLimits, setWidthLimits] = useState({ min: 200, max: 600 });
+  const widthLimits = useRef({ min: 200, max: 600 });
 
-  // 动态计算面板宽度限制（视口 25%-75%）
+  // 动态计算面板宽度限制（视口 25%-75%），使用 ref 避免重渲染
   useEffect(() => {
     const updateLimits = () => {
-      setWidthLimits({
+      widthLimits.current = {
         min: window.innerWidth * 0.25,
         max: window.innerWidth * 0.75,
-      });
+      };
     };
     updateLimits();
     window.addEventListener('resize', updateLimits);
@@ -34,39 +37,49 @@ export const ScriptEditor: React.FC = () => {
 
   const isSegmented = currentBroadcast?.mode === 'segmented';
 
-  // 拖动处理
+  // 拖动处理 — 使用 ref 直接操作 DOM，避免 mousemove 时触发 React 重渲染
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
-  }, []);
 
-  useEffect(() => {
-    if (!isDragging) return;
+    const startX = e.clientX;
+    const startWidth = leftWidth;
+    const limits = widthLimits.current;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const newWidth = e.clientX - rect.left;
-      const clamped = Math.min(widthLimits.max, Math.max(widthLimits.min, newWidth));
-      setLeftWidth(clamped);
+      const newWidth = startWidth + (moveEvent.clientX - startX);
+      const clamped = Math.min(limits.max, Math.max(limits.min, newWidth));
+      // 直接修改 DOM，不触发 React state update
+      const leftPanel = containerRef.current.firstElementChild as HTMLElement | null;
+      if (leftPanel) {
+        leftPanel.style.width = `${clamped}px`;
+      }
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      // mouseup 时同步 React state（用于持久化或 SSR）
+      if (containerRef.current) {
+        const leftPanel = containerRef.current.firstElementChild as HTMLElement | null;
+        if (leftPanel) {
+          const finalWidth = parseInt(leftPanel.style.width, 10);
+          if (!isNaN(finalWidth)) {
+            setLeftWidth(finalWidth);
+          }
+        }
+      }
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isDragging, widthLimits]);
+  }, [leftWidth]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
