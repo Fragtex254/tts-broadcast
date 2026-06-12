@@ -2,11 +2,23 @@ const request = require('supertest');
 const app = require('../../src/app');
 const db = require('../../src/db');
 const mimo = require('../../src/services/mimo');
+const axios = require('axios');
+
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  create: jest.fn(() => ({
+    get: jest.fn(),
+    post: jest.fn(),
+  })),
+}));
 
 describe('设置 API', () => {
   const originalSettings = {};
 
   beforeEach(() => {
+    axios.get.mockReset();
+    axios.post.mockReset();
     // 保存原始设置
     const rows = db.prepare('SELECT * FROM settings').all();
     rows.forEach(row => {
@@ -78,6 +90,109 @@ describe('设置 API', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ valid: true });
-    expect(spy).toHaveBeenCalledWith('anthropic', 'current-input-key');
+    expect(spy).toHaveBeenCalledWith('anthropic', 'current-input-key', {
+      apiFormat: undefined,
+      baseUrl: undefined,
+      model: undefined,
+    });
+  });
+
+  test('POST /api/settings/test-key - 透传请求中的 LLM 配置验证当前输入', async () => {
+    const spy = jest.spyOn(mimo, 'testApiKey').mockResolvedValue(true);
+
+    const res = await request(app)
+      .post('/api/settings/test-key')
+      .send({
+        type: 'llm',
+        apiKey: 'current-input-key',
+        apiFormat: 'openai',
+        baseUrl: 'https://current.example/v1',
+        model: 'current-model',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ valid: true });
+    expect(spy).toHaveBeenCalledWith('anthropic', 'current-input-key', {
+      apiFormat: 'openai',
+      baseUrl: 'https://current.example/v1',
+      model: 'current-model',
+    });
+  });
+
+  test('POST /api/settings/llm-models - 从默认 /v1/models 获取并排序模型', async () => {
+    axios.get.mockResolvedValue({
+      data: {
+        data: [
+          { id: 'z-model', owned_by: 'provider' },
+          { id: 'a-model', owned_by: 'provider' },
+        ],
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/settings/llm-models')
+      .send({ baseUrl: 'https://provider.example', apiKey: 'model-key' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      models: [
+        { id: 'a-model', owned_by: 'provider' },
+        { id: 'z-model', owned_by: 'provider' },
+      ],
+      resolvedUrl: 'https://provider.example/v1/models',
+    });
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://provider.example/v1/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer model-key',
+          'api-key': 'model-key',
+          'User-Agent': 'tts-broadcast',
+        }),
+        timeout: 15000,
+      })
+    );
+  });
+
+  test('POST /api/settings/llm-models - baseURL 含版本段时尝试 /models', async () => {
+    axios.get.mockRejectedValueOnce(new Error('not found'));
+    axios.get.mockResolvedValueOnce({
+      data: { data: [{ id: 'glm-4.5', owned_by: 'zhipu' }] },
+    });
+
+    const res = await request(app)
+      .post('/api/settings/llm-models')
+      .send({ baseUrl: 'https://provider.example/v4', apiKey: 'model-key' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.resolvedUrl).toBe('https://provider.example/v4/models');
+    expect(axios.get).toHaveBeenNthCalledWith(2, 'https://provider.example/v4/models', expect.any(Object));
+  });
+
+  test('POST /api/settings/llm-models - Anthropic 子路径失败后尝试父路径', async () => {
+    axios.get.mockRejectedValueOnce(new Error('child v1 failed'));
+    axios.get.mockRejectedValueOnce(new Error('child models failed'));
+    axios.get.mockResolvedValueOnce({
+      data: { data: [{ id: 'deepseek-chat', owned_by: 'deepseek' }] },
+    });
+
+    const res = await request(app)
+      .post('/api/settings/llm-models')
+      .send({ baseUrl: 'https://provider.example/anthropic', apiKey: 'model-key' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.resolvedUrl).toBe('https://provider.example/v1/models');
+    expect(axios.get).toHaveBeenNthCalledWith(3, 'https://provider.example/v1/models', expect.any(Object));
+  });
+
+  test('POST /api/settings/llm-models - 所有候选失败返回 400', async () => {
+    axios.get.mockRejectedValue(new Error('network failed'));
+
+    const res = await request(app)
+      .post('/api/settings/llm-models')
+      .send({ baseUrl: 'https://provider.example/anthropic', apiKey: 'model-key' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/获取模型列表失败/);
   });
 });

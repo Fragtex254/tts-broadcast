@@ -67,14 +67,38 @@ router.put('/', (req, res) => {
  */
 router.post('/test-key', async (req, res) => {
   try {
-    const { type, apiKey } = req.body || {};
+    const { type, apiKey, apiFormat, baseUrl, model } = req.body || {};
     const mimoType = type === 'tts' ? 'tts' : 'anthropic';
     const keyToTest = typeof apiKey === 'string' ? apiKey.trim() : undefined;
-    const isValid = await mimo.testApiKey(mimoType, keyToTest || undefined);
+    const llmConfig = mimoType === 'tts' ? undefined : { apiFormat, baseUrl, model };
+    const isValid = await mimo.testApiKey(mimoType, keyToTest || undefined, llmConfig);
     res.json({ valid: isValid });
   } catch (error) {
     console.error('测试 API Key 失败:', error);
     res.json({ valid: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/settings/llm-models
+ * 根据当前输入的 LLM Base URL 和 API Key 获取模型列表
+ */
+router.post('/llm-models', async (req, res) => {
+  try {
+    const { baseUrl, apiKey } = req.body || {};
+    if (!baseUrl || typeof baseUrl !== 'string') {
+      return res.status(400).json({ error: '请提供 LLM Base URL' });
+    }
+
+    const keyToUse = typeof apiKey === 'string' ? apiKey.trim() : '';
+    const result = await mimo.fetchModelsForConfig({
+      baseUrl: baseUrl.trim(),
+      apiKey: keyToUse
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message || '获取模型列表失败' });
   }
 });
 

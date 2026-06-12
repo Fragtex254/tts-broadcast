@@ -25,7 +25,7 @@
 |---|---|---|
 | 框架 | Express 5 | Web 框架 |
 | 数据库 | better-sqlite3 | 嵌入式 SQLite，同步 API |
-| LLM | Anthropic SDK | 通过自定义 baseURL 调用 MiMo LLM |
+| LLM | Anthropic SDK + Axios | Anthropic 兼容格式用 SDK，OpenAI 兼容格式用 Axios |
 | TTS | Axios | 直接请求 MiMo TTS API |
 | 定时任务 | node-cron | Cron 表达式调度 |
 | 测试 | Jest + supertest | 单元测试 + HTTP 端点测试 |
@@ -54,7 +54,8 @@ backend/src/
 │   ├── audio.js            # WAV 文件操作 + resolveVoiceClone
 │   ├── asr.js              # MiMo ASR 转录服务
 │   ├── media.js            # 上传媒体转 ASR data URL
-│   ├── mimo.js             # MiMo LLM 服务（rewriteToScript, splitScript, testApiKey）
+│   ├── mimo.js             # LLM 服务（双协议调用、rewriteToScript、splitScript、testApiKey、模型发现）
+│   ├── llmModels.js        # OpenAI-compatible 模型列表候选 URL 生成与探测
 │   ├── mimoApiClient.js    # MiMo 标准 API HTTP client
 │   ├── tts.js              # MiMo TTS 服务（generateSpeech）
 │   ├── broadcastStore.js   # DAL：broadcasts 表的 CRUD
@@ -261,7 +262,8 @@ app.use('/api/voice-presets', require('./routes/voicePresets'));
 | `audio.js` | WAV 文件操作、resolveVoiceClone | fs, path |
 | `asr.js` | MiMo ASR 转录服务，串行处理切片、回调进度并合并文本/usage | mimo, media, mimoApiClient |
 | `media.js` | 上传音视频转 ASR data URL；支持 multer 的 buffer/path 输入；长音频按静音点切片并转 MP3 | fs, os, path, child_process, ffmpeg-static |
-| `mimo.js` | MiMo LLM 调用、API Key 管理、Key 测试 | @anthropic-ai/sdk, axios |
+| `mimo.js` | LLM 配置读取、Anthropic/OpenAI 兼容调用、API Key 管理、Key 测试、模型发现 | @anthropic-ai/sdk, axios |
+| `llmModels.js` | OpenAI-compatible 模型列表候选 URL 生成、顺序探测、响应解析 | axios |
 | `mimoApiClient.js` | MiMo 标准 API HTTP client（timeout、429 重试、错误映射） | axios |
 | `tts.js` | MiMo TTS 语音合成 | axios, mimo (getApiKey) |
 | `broadcastStore.js` | broadcasts 表数据访问层（DAL） | db |
@@ -634,8 +636,13 @@ npm test -- --watch      # 监听模式
 - `audioDir` — 音频目录常量
 
 **TTS 与 LLM 分离：**
-- `services/mimo.js` — 纯 LLM（rewriteToScript, splitScript, testApiKey, getApiKey）
+- `services/mimo.js` — 纯 LLM（rewriteToScript, splitScript, testApiKey, getApiKey, fetchModelsForConfig）；Anthropic 兼容格式使用 SDK，OpenAI 兼容格式使用 Axios 调 `/chat/completions`
 - `services/tts.js` — 纯 TTS（generateSpeech），复用 mimo.getApiKey
+
+**LLM 设置与模型发现：**
+- LLM 配置持久化在 `settings` 表：`llm_api_format`、`llm_base_url`、`llm_model`、`llm_rewrite_system_prompt`、`llm_split_system_prompt`、`llm_rewrite_thinking_enabled`、`llm_split_thinking_enabled`
+- `POST /api/settings/llm-models` 只做 HTTP 翻译，实际候选 URL 生成和 OpenAI-compatible `/models` 探测放在 `services/llmModels.js`，并由 `services/mimo.js` re-export
+- 模型发现测试必须 mock `axios.get`，不得依赖真实 provider 或真实 API Key
 
 ---
 

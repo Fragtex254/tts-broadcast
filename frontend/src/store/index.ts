@@ -14,6 +14,8 @@ export type {
   BatchGenerateResult,
   Broadcast,
   ConfirmDialogProps,
+  LlmApiFormat,
+  LlmModelOption,
   Schedule,
   Segment,
   Settings,

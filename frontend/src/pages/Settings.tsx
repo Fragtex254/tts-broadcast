@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Layout/Header';
-import useStore, { type Settings as AppSettings } from '../store';
+import useStore, { type LlmModelOption, type Settings as AppSettings } from '../store';
 
 const voiceOptions = [
   { value: '冰糖', label: '冰糖' },
@@ -21,6 +21,7 @@ const cronExamples = [
 export const Settings: React.FC = () => {
   const {
     settings, isLoadingSettings, fetchSettings, updateSettings, testApiKey,
+    fetchLlmModels,
     schedules, fetchSchedules, createSchedule, deleteSchedule, toggleSchedule,
   } = useStore();
 
@@ -30,17 +31,39 @@ export const Settings: React.FC = () => {
   const [testResults, setTestResults] = useState<Record<string, { valid: boolean; error?: string }>>({});
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [savingField, setSavingField] = useState<string | null>(null);
+  const [modelOptions, setModelOptions] = useState<LlmModelOption[]>([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [modelFetchResult, setModelFetchResult] = useState<{ error?: string; resolvedUrl?: string } | null>(null);
+  const [apiFormatTouched, setApiFormatTouched] = useState(false);
 
   const [scheduleForm, setScheduleForm] = useState({ name: '', cron_expression: '', content_types: '' });
   const [isCreatingSchedule, setIsCreatingSchedule] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
-  useEffect(() => { fetchSettings(); fetchSchedules(); }, []);
+  useEffect(() => { fetchSettings(); fetchSchedules(); }, [fetchSettings, fetchSchedules]);
   useEffect(() => { setFormData(settings); }, [settings]);
 
-  const handleChange = (field: keyof typeof formData, value: string) => {
+  const inferApiFormat = (baseUrl: string): AppSettings['llm_api_format'] =>
+    baseUrl.toLowerCase().includes('/anthropic') ? 'anthropic' : 'openai';
+
+  const handleChange = <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setSaveSuccess(false);
+  };
+
+  const handleBaseUrlChange = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      llm_base_url: value,
+      ...(apiFormatTouched ? {} : { llm_api_format: inferApiFormat(value) }),
+    }));
+    setModelFetchResult(null);
+    setSaveSuccess(false);
+  };
+
+  const handleApiFormatChange = (value: AppSettings['llm_api_format']) => {
+    setApiFormatTouched(true);
+    handleChange('llm_api_format', value);
   };
 
   const handleSave = async () => {
@@ -55,7 +78,12 @@ export const Settings: React.FC = () => {
     setIsTestingKey(type)
     try {
       const apiKey = type === 'tts' ? formData.mimo_tts_api_key : formData.mimo_api_key
-      const result = await testApiKey(type, apiKey)
+      const llmConfig = type === 'llm' ? {
+        apiFormat: formData.llm_api_format,
+        baseUrl: formData.llm_base_url,
+        model: formData.llm_model,
+      } : undefined
+      const result = await testApiKey(type, apiKey, llmConfig)
       setTestResults((prev) => ({ ...prev, [type]: result }))
     } catch (e) {
       setTestResults((prev) => ({ ...prev, [type]: { valid: false, error: (e as Error).message } }))
@@ -63,6 +91,25 @@ export const Settings: React.FC = () => {
       setIsTestingKey(null)
     }
   }
+
+  const handleFetchModels = async () => {
+    setIsFetchingModels(true);
+    setModelFetchResult(null);
+    try {
+      const result = await fetchLlmModels({
+        baseUrl: formData.llm_base_url,
+        apiKey: formData.mimo_api_key,
+        apiFormat: formData.llm_api_format,
+      });
+      setModelOptions(result.models);
+      setModelFetchResult({ resolvedUrl: result.resolvedUrl });
+    } catch (e) {
+      setModelOptions([]);
+      setModelFetchResult({ error: (e as Error).message || '获取模型列表失败' });
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
 
   const handleSaveField = async (field: keyof AppSettings) => {
     setSavingField(field);
@@ -131,55 +178,169 @@ export const Settings: React.FC = () => {
 
           {!isLoadingSettings && (
             <SectionCard dotColor="bg-pink" title="API 配置" index={0}>
-              <div className="space-y-4">
-                {/* LLM API Key */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">LLM API Key</label>
-                    <span className="font-body text-[10px] text-ink-soft/40">用于资讯改写、文本切分</span>
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">LLM API</label>
+                      <p className="font-body text-[10px] text-ink-soft/40 mt-0.5">用于资讯改写、文本切分和模型发现</p>
+                    </div>
+                    <div className="inline-flex rounded-full bg-white/50 border border-card-border p-1">
+                      {([
+                        { value: 'openai', label: 'OpenAI 兼容' },
+                        { value: 'anthropic', label: 'Anthropic 兼容' },
+                      ] as const).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleApiFormatChange(option.value)}
+                          className={`px-3 py-1.5 rounded-full font-body text-[11px] transition-all ${formData.llm_api_format === option.value ? 'bg-lilac text-ink shadow-btn' : 'text-ink-soft hover:text-ink'}`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={formData.mimo_api_key}
-                      onChange={(e) => handleChange('mimo_api_key', e.target.value)}
-                      placeholder="输入 LLM API Key"
-                      className="flex-1 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
-                    />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">LLM API Key</label>
+                      <input
+                        type="password"
+                        value={formData.mimo_api_key}
+                        onChange={(e) => handleChange('mimo_api_key', e.target.value)}
+                        placeholder="输入 LLM API Key"
+                        className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">LLM Base URL</label>
+                      <input
+                        type="text"
+                        value={formData.llm_base_url}
+                        onChange={(e) => handleBaseUrlChange(e.target.value)}
+                        placeholder="https://api.example.com/v1"
+                        className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">LLM 模型</label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={formData.llm_model}
+                        onChange={(e) => handleChange('llm_model', e.target.value)}
+                        placeholder="输入或选择模型 ID"
+                        className="flex-1 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                      />
+                      {modelOptions.length > 0 && (
+                        <select
+                          value={formData.llm_model}
+                          onChange={(e) => handleChange('llm_model', e.target.value)}
+                          className="sm:w-56 px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink focus:outline-none focus:border-ink/20 font-body text-[12px] appearance-none cursor-pointer transition-colors"
+                        >
+                          {modelOptions.map((model) => (
+                            <option key={model.id} value={model.id}>{model.id}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleFetchModels}
+                        disabled={isFetchingModels || !formData.llm_base_url || !formData.mimo_api_key}
+                        className="px-4 py-2.5 bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
+                      >
+                        {isFetchingModels ? (
+                          <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>获取中...</>
+                        ) : '获取模型'}
+                      </button>
+                    </div>
+                    {modelFetchResult?.resolvedUrl && (
+                      <p className="mt-2 font-body text-[11px] text-ink-soft/50 animate-fade-in">已从 {modelFetchResult.resolvedUrl} 获取模型</p>
+                    )}
+                    {modelFetchResult?.error && (
+                      <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-2.5 text-ink text-[12px] font-body animate-shake">
+                        {modelFetchResult.error}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">改写系统提示词</label>
+                      <textarea
+                        value={formData.llm_rewrite_system_prompt}
+                        onChange={(e) => handleChange('llm_rewrite_system_prompt', e.target.value)}
+                        rows={3}
+                        className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] resize-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">切分系统提示词</label>
+                      <textarea
+                        value={formData.llm_split_system_prompt}
+                        onChange={(e) => handleChange('llm_split_system_prompt', e.target.value)}
+                        rows={3}
+                        className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] resize-none transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {([
+                      { field: 'llm_rewrite_thinking_enabled', label: '改写 Thinking' },
+                      { field: 'llm_split_thinking_enabled', label: '切分 Thinking' },
+                    ] as const).map((item) => (
+                      <label key={item.field} className="flex items-center justify-between gap-3 flex-1 px-3.5 py-2.5 bg-white/35 border border-card-border rounded-xl cursor-pointer">
+                        <span className="font-body text-[12px] text-ink-soft">{item.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={formData[item.field]}
+                          onChange={(e) => handleChange(item.field, e.target.checked)}
+                          className="sr-only"
+                        />
+                        <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${formData[item.field] ? 'bg-sage' : 'bg-ink/10'}`}>
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${formData[item.field] ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <button
                       onClick={() => handleTestKey('llm')}
                       disabled={isTestingKey === 'llm' || !formData.mimo_api_key}
-                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
+                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'llm' ? (
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
-                      ) : '测试连接'}
+                      ) : '测试 LLM'}
                     </button>
                     <button
                       onClick={() => handleSaveField('mimo_api_key')}
                       disabled={savingField === 'mimo_api_key'}
                       className="px-4 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 whitespace-nowrap"
                     >
-                      {savingField === 'mimo_api_key' ? '保存中...' : '保存'}
+                      {savingField === 'mimo_api_key' ? '保存中...' : '保存 LLM Key'}
                     </button>
                   </div>
                   {testResults.llm && (
-                    <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.llm.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
+                    <div className={`p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.llm.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
                       {testResults.llm.valid ? '✓ LLM API Key 验证成功！' : `✕ 验证失败${testResults.llm.error ? `: ${testResults.llm.error}` : '，请检查 API Key 是否正确'}`}
                     </div>
                   )}
                 </div>
 
-                {/* 分隔线 */}
                 <div className="border-t border-dashed border-card-border" />
 
-                {/* TTS API Key */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">TTS API Key</label>
-                    <span className="font-body text-[10px] text-ink-soft/40">用于语音合成</span>
+                    <span className="font-body text-[10px] text-ink-soft/40">用于语音合成和转录</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="password"
                       value={formData.mimo_tts_api_key}
@@ -190,11 +351,11 @@ export const Settings: React.FC = () => {
                     <button
                       onClick={() => handleTestKey('tts')}
                       disabled={isTestingKey === 'tts' || !formData.mimo_tts_api_key}
-                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center gap-2 whitespace-nowrap"
+                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'tts' ? (
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
-                      ) : '测试连接'}
+                      ) : '测试 TTS'}
                     </button>
                     <button
                       onClick={() => handleSaveField('mimo_tts_api_key')}

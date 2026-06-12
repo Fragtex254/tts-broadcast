@@ -8,15 +8,30 @@ jest.mock('@anthropic-ai/sdk', () => {
   }));
 });
 
+jest.mock('axios', () => ({
+  post: jest.fn(),
+  get: jest.fn(),
+}));
+
 const db = require('../../src/db');
 const mimo = require('../../src/services/mimo');
 const Anthropic = require('@anthropic-ai/sdk');
+const axios = require('axios');
 
 describe('MiMo 服务', () => {
   beforeEach(() => {
     mockMessagesCreate.mockReset();
     Anthropic.mockClear();
+    axios.post.mockReset();
+    axios.get.mockReset();
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('mimo_api_key', '"test-key"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"anthropic"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_base_url', '"https://token-plan-cn.xiaomimimo.com/anthropic"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_model', '"mimo-v2.5"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_rewrite_system_prompt', '"你是一位专业的播音稿撰写者。"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_split_system_prompt', '"你是一个文本切分助手，只输出 JSON 数组格式。"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_rewrite_thinking_enabled', 'true');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_split_thinking_enabled', 'false');
   });
 
   test('生成口播稿', async () => {
@@ -54,6 +69,108 @@ describe('MiMo 服务', () => {
       apiKey: 'current-input-key',
       defaultHeaders: { 'api-key': 'current-input-key' },
     }));
+    expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
+      thinking: { type: 'disabled' },
+    }));
+  });
+
+  test('testApiKey 使用传入的 LLM 配置验证当前输入', async () => {
+    axios.post.mockResolvedValue({
+      data: { choices: [{ message: { content: 'ok' } }] },
+    });
+
+    await expect(mimo.testApiKey('anthropic', 'current-input-key', {
+      apiFormat: 'openai',
+      baseUrl: 'https://current.example/v1',
+      model: 'current-model',
+    })).resolves.toBe(true);
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://current.example/v1/chat/completions',
+      expect.objectContaining({ model: 'current-model' }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer current-input-key',
+        }),
+      })
+    );
+  });
+
+  test('Anthropic 格式使用设置中的 baseURL、模型、系统提示词和 thinking 配置', async () => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_base_url', '"https://custom.example/anthropic"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_model', '"custom-model"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_rewrite_system_prompt', '"自定义改写 system"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_rewrite_thinking_enabled', 'false');
+    mockMessagesCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '自定义改写结果' }],
+    });
+
+    const result = await mimo.rewriteToScript({
+      items: [{ title: '标题', summary: '摘要', source: '来源' }],
+      opening: '开场白',
+      closing: '结束语',
+    });
+
+    expect(result).toBe('自定义改写结果');
+    expect(Anthropic).toHaveBeenCalledWith(expect.objectContaining({
+      apiKey: 'test-key',
+      baseURL: 'https://custom.example/anthropic',
+      defaultHeaders: { 'api-key': 'test-key' },
+    }));
+    expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'custom-model',
+      system: '自定义改写 system',
+      thinking: { type: 'disabled' },
+    }));
+  });
+
+  test('OpenAI 格式使用 chat completions 请求并解析内容', async () => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_base_url', '"https://openai.example/v1"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_model', '"gpt-compatible"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_rewrite_system_prompt', '"OpenAI 改写 system"');
+    axios.post.mockResolvedValue({
+      data: { choices: [{ message: { content: '改写结果' } }] },
+    });
+
+    const result = await mimo.rewriteToScript({
+      items: [{ title: '标题', summary: '摘要', source: '来源' }],
+      opening: '开场白',
+      closing: '结束语',
+    });
+
+    expect(result).toBe('改写结果');
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://openai.example/v1/chat/completions',
+      expect.objectContaining({
+        model: 'gpt-compatible',
+        max_tokens: 2000,
+        messages: expect.arrayContaining([
+          { role: 'system', content: 'OpenAI 改写 system' },
+          expect.objectContaining({ role: 'user' }),
+        ]),
+      }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-key',
+          'api-key': 'test-key',
+          'Content-Type': 'application/json',
+        }),
+      })
+    );
+  });
+
+  test('OpenAI 格式返回空内容时抛出中文错误', async () => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
+    axios.post.mockResolvedValue({
+      data: { choices: [{ message: { content: '' } }] },
+    });
+
+    await expect(mimo.rewriteToScript({
+      items: [{ title: '标题', summary: '摘要', source: '来源' }],
+      opening: '开场白',
+      closing: '结束语',
+    })).rejects.toThrow('LLM API 返回内容为空');
   });
 
   test('generateSpeech 函数存在', () => {

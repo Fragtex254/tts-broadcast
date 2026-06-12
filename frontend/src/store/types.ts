@@ -41,9 +41,23 @@ export interface TodayItem {
 }
 
 /** 应用设置 */
+export type LlmApiFormat = 'openai' | 'anthropic';
+
+export interface LlmModelOption {
+  id: string;
+  owned_by?: string;
+}
+
 export interface Settings {
   mimo_api_key: string;
   mimo_tts_api_key: string;
+  llm_api_format: LlmApiFormat;
+  llm_base_url: string;
+  llm_model: string;
+  llm_rewrite_system_prompt: string;
+  llm_split_system_prompt: string;
+  llm_rewrite_thinking_enabled: boolean;
+  llm_split_thinking_enabled: boolean;
   default_voice: string;
   opening_script: string;
   closing_script: string;
@@ -186,7 +200,16 @@ export interface AppState {
 
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;
-  testApiKey: (type?: 'llm' | 'tts', apiKey?: string) => Promise<{ valid: boolean; error?: string }>;
+  testApiKey: (
+    type?: 'llm' | 'tts',
+    apiKey?: string,
+    llmConfig?: { apiFormat?: LlmApiFormat; baseUrl?: string; model?: string }
+  ) => Promise<{ valid: boolean; error?: string }>;
+  fetchLlmModels: (data: {
+    baseUrl: string;
+    apiKey?: string;
+    apiFormat?: LlmApiFormat;
+  }) => Promise<{ models: LlmModelOption[]; resolvedUrl?: string }>;
 
   fetchSchedules: () => Promise<void>;
   createSchedule: (data: { name: string; cron_expression: string; content_types?: string }) => Promise<Schedule>;

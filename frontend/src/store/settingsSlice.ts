@@ -1,11 +1,12 @@
 import { settingsApi } from '../services/api';
+import { getApiErrorMessage } from '../services/apiError';
 import { defaultSettings } from './defaults';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
 
 export function createSettingsSlice(set: StoreSet): Pick<
   AppState,
-  'settings' | 'isLoadingSettings' | 'fetchSettings' | 'updateSettings' | 'testApiKey'
+  'settings' | 'isLoadingSettings' | 'fetchSettings' | 'updateSettings' | 'testApiKey' | 'fetchLlmModels'
 > {
   return {
     settings: defaultSettings,
@@ -33,13 +34,23 @@ export function createSettingsSlice(set: StoreSet): Pick<
       }
     },
 
-    testApiKey: async (type, apiKey) => {
+    testApiKey: async (type, apiKey, llmConfig) => {
       try {
-        const response = await settingsApi.testKey(type, apiKey);
+        const response = await settingsApi.testKey(type, apiKey, llmConfig);
         return response.data;
       } catch (error) {
         console.error('测试 API Key 失败:', error);
         return { valid: false, error: (error as Error).message };
+      }
+    },
+
+    fetchLlmModels: async (data) => {
+      try {
+        const response = await settingsApi.fetchLlmModels(data);
+        return response.data;
+      } catch (error) {
+        console.error('获取 LLM 模型列表失败:', error);
+        throw new Error(getApiErrorMessage(error, '获取模型列表失败'), { cause: error });
       }
     },
   };
