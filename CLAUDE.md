@@ -47,7 +47,7 @@ TTS Broadcast 是一个全栈应用，用于自动化 AI 新闻播报。它从 A
 **后端（Node.js）**
 - Express 5 Web 框架
 - better-sqlite3 嵌入式数据库
-- Anthropic SDK（LLM 稿件改写与文本切分）
+- Anthropic SDK + Axios（LLM 稿件改写与文本切分，支持 Anthropic/OpenAI 兼容格式）
 - Axios（TTS 语音合成 HTTP 请求 + API Key 测试）
 - multer + ffmpeg-static（音视频上传与 ASR 转换）
 - node-cron 定时任务
@@ -89,7 +89,7 @@ tts-broadcast/
 │   │   ├── app.js            # Express 应用入口，中间件配置，路由挂载
 │   │   ├── db/               # SQLite 初始化与 schema
 │   │   ├── routes/           # Express 路由（broadcast, segments, settings, schedule, voicePresets, transcribe）
-│   │   ├── services/         # 业务逻辑 + 数据访问层（aihot, audio, audioAsset, asr, media, mimo, mimoApiClient, tts, voiceConfig, *Store, scheduler, sseManager）
+│   │   ├── services/         # 业务逻辑 + 数据访问层（aihot, audio, audioAsset, asr, media, mimo, llmModels, mimoApiClient, tts, voiceConfig, *Store, scheduler, sseManager）
 │   │   └── utils/            # 共享工具函数（validation）
 │   ├── tests/                # Jest 测试，镜像 src/ 结构
 │   ├── audio/                # 生成的音频文件（已 gitignore）
@@ -137,11 +137,21 @@ SQLite 数据库包含 5 张表：
 - `voice_presets.original_audio_path`：克隆原始音频路径（仅 clone 类型）
 - `voice_presets.design_prompt`：音色描述（仅 design 类型）
 
+关键设置说明：
+
+- `mimo_api_key`：LLM API Key，供改写、切分和模型发现使用
+- `mimo_tts_api_key`：TTS/ASR API Key，供语音合成和转录使用
+- `llm_api_format`：LLM 请求格式，`anthropic` 或 `openai`
+- `llm_base_url`：LLM baseURL，默认 MiMo Anthropic 地址
+- `llm_model`：LLM 模型 ID，默认 `mimo-v2.5`
+- `llm_rewrite_system_prompt` / `llm_split_system_prompt`：改写与切分分别使用的 system prompt
+- `llm_rewrite_thinking_enabled` / `llm_split_thinking_enabled`：Anthropic 兼容格式下的 thinking 开关
+
 ## 外部 API
 
 - **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
 - **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`；上传文件先落系统临时目录，默认支持 500MB 内音视频；单次请求遵守 Base64 data URL 10MB 上限，后端自动按静音切片长音频；长音频转录通过 SSE 推送分片进度和累计文本
-- **MiMo LLM API**（`https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分
+- **LLM API**（默认 `https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分，通过 `settings` 中的 `llm_api_format`、`llm_base_url`、`llm_model` 配置，可选择 Anthropic 兼容或 OpenAI 兼容格式；模型发现通过 `POST /api/settings/llm-models` 探测 OpenAI-compatible `/models` 端点
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 
 ### MiMo API 模型与限速
@@ -158,7 +168,7 @@ SQLite 数据库包含 5 张表：
 | `mimo-v2.5-tts-voiceclone` | 音色克隆（需上传音频样本的 base64） |
 | `mimo-v2.5-tts-voicedesign` | 音色设计（文本描述生成音色） |
 
-**LLM 模型**：`mimo-v2.5`（稿件改写与文本切分）
+**LLM 模型**：默认 `mimo-v2.5`（稿件改写与文本切分），可在设置页通过模型输入框或自动获取模型列表后选择
 
 **ASR 模型**：
 
@@ -199,7 +209,7 @@ SQLite 数据库包含 5 张表：
 
 ## 关键开发模式
 
-- 后端通过 Anthropic SDK 的自定义 `baseURL` 调用 MiMo LLM（`services/mimo.js`），通过 Axios 调用 MiMo TTS API（`services/tts.js`）
+- 后端通过 `services/mimo.js` 统一处理 LLM：Anthropic 兼容格式使用 Anthropic SDK，OpenAI 兼容格式使用 Axios 调 `/chat/completions`；`llm_rewrite_system_prompt` 与 `llm_split_system_prompt` 分别控制改写和切分的 system prompt，`llm_rewrite_thinking_enabled` 与 `llm_split_thinking_enabled` 控制 Anthropic 格式下是否禁用 thinking；通过 Axios 调用 MiMo TTS API（`services/tts.js`）
 - ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，上传先写入系统临时目录并在请求结束后清理；前端上传进度使用 axios `onUploadProgress`，后端按 `taskId` 通过 `/api/sse/:taskId` 推送 `transcribe-start`、`progress`、`complete`、`error`；`services/media.js` 支持 multer 的 `buffer` 或 `path` 输入，并转为一个或多个 ASR data URL（长音频优先按静音点切片，目标 15 秒、最大 30 秒，并转为 MP3 降低体积）；`services/asr.js` 串行调用 MiMo ASR、按分片回调累计文本，并拼接最终文本，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`

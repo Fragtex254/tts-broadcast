@@ -19,11 +19,18 @@ interface NewsItem {
 interface Settings {
   mimo_api_key?: string;
   mimo_tts_api_key?: string;
+  llm_api_format?: 'openai' | 'anthropic';
+  llm_base_url?: string;
+  llm_model?: string;
+  llm_rewrite_system_prompt?: string;
+  llm_split_system_prompt?: string;
+  llm_rewrite_thinking_enabled?: boolean;
+  llm_split_thinking_enabled?: boolean;
   default_voice?: string;
   opening_script?: string;
   closing_script?: string;
   content_categories?: string;
-  [key: string]: string | undefined;
+  [key: string]: string | boolean | undefined;
 }
 
 // 播报相关 API
@@ -104,7 +111,20 @@ export const settingsApi = {
   update: (data: Settings) =>
     api.put('/settings', data),
 
-  testKey: (type?: 'llm' | 'tts', apiKey?: string) => api.post('/settings/test-key', { type, apiKey }),
+  testKey: (
+    type?: 'llm' | 'tts',
+    apiKey?: string,
+    llmConfig?: { apiFormat?: 'openai' | 'anthropic'; baseUrl?: string; model?: string }
+  ) => api.post('/settings/test-key', {
+    type,
+    apiKey,
+    apiFormat: llmConfig?.apiFormat,
+    baseUrl: llmConfig?.baseUrl,
+    model: llmConfig?.model,
+  }),
+
+  fetchLlmModels: (data: { baseUrl: string; apiKey?: string; apiFormat?: 'openai' | 'anthropic' }) =>
+    api.post('/settings/llm-models', data),
 };
 
 // 定时任务 API

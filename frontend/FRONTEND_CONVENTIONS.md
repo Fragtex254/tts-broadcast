@@ -151,7 +151,7 @@ export default MyComponent;
 | 语音生成 | `bg-blush` |
 | 段落编辑器 | `bg-lilac` |
 | 播放器 | `bg-sage` |
-| API Key 设置 | `bg-pink` |
+| API 配置（LLM/TTS） | `bg-pink` |
 | 音色设置 | `bg-blush` |
 | 播报设置 | `bg-sage` |
 | 定时任务 | `bg-lemon` |
@@ -403,6 +403,7 @@ export const ScriptPreview: React.FC = () => {
 - 使用 Axios 实例，`baseURL: '/api'`
 - 不设置 timeout（TTS 生成可能耗时较长）
 - 按功能域导出 API 对象：`broadcastApi`, `settingsApi`, `scheduleApi`
+- Settings 页的 LLM 模型发现通过 `settingsApi.fetchLlmModels()` 调用 `POST /settings/llm-models`，页面只维护局部 loading/error 和模型下拉选项
 
 ### 命名约定
 
@@ -417,6 +418,7 @@ broadcastApi.rewrite(...)
 broadcastApi.generate(...)
 broadcastApi.split(...)
 broadcastApi.mergeSegments(...)
+settingsApi.fetchLlmModels(...)
 
 // PUT → update + 名词
 broadcastApi.updateSegment(...)
