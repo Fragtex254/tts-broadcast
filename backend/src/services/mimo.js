@@ -25,10 +25,11 @@ function getApiKey(type = 'anthropic') {
 
 /**
  * 创建 Anthropic 客户端
+ * @param {string} [apiKeyOverride] - 临时验证用 API Key，不传则读取已保存设置
  * @returns {Anthropic} 客户端实例
  */
-function createClient() {
-  const apiKey = getApiKey('anthropic');
+function createClient(apiKeyOverride) {
+  const apiKey = apiKeyOverride || getApiKey('anthropic');
   return new Anthropic({
     apiKey,
     baseURL: BASE_URL,
@@ -168,13 +169,14 @@ ${text}`;
 /**
  * 测试 API Key 是否有效
  * @param {string} type - Key 类型: 'anthropic' 或 'tts'
+ * @param {string} [apiKeyOverride] - 临时验证用 API Key，不传则读取已保存设置
  * @returns {Promise<boolean>} 是否有效
  */
-async function testApiKey(type = 'anthropic') {
+async function testApiKey(type = 'anthropic', apiKeyOverride) {
   try {
     if (type === 'tts') {
       // 测试 TTS API Key（使用 axios 替代 OpenAI SDK）
-      const ttsApiKey = getApiKey('tts');
+      const ttsApiKey = apiKeyOverride || getApiKey('tts');
       await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
         model: 'mimo-v2.5-tts',
         messages: [
@@ -191,7 +193,7 @@ async function testApiKey(type = 'anthropic') {
       });
     } else {
       // 测试 Anthropic API Key
-      const client = createClient();
+      const client = createClient(apiKeyOverride);
       await client.messages.create({
         model: 'mimo-v2.5',
         max_tokens: 10,

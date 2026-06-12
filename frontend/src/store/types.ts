@@ -186,7 +186,7 @@ export interface AppState {
 
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;
-  testApiKey: (type?: 'llm' | 'tts') => Promise<{ valid: boolean; error?: string }>;
+  testApiKey: (type?: 'llm' | 'tts', apiKey?: string) => Promise<{ valid: boolean; error?: string }>;
 
   fetchSchedules: () => Promise<void>;
   createSchedule: (data: { name: string; cron_expression: string; content_types?: string }) => Promise<Schedule>;

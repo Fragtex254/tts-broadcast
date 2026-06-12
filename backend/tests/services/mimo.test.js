@@ -10,10 +10,12 @@ jest.mock('@anthropic-ai/sdk', () => {
 
 const db = require('../../src/db');
 const mimo = require('../../src/services/mimo');
+const Anthropic = require('@anthropic-ai/sdk');
 
 describe('MiMo 服务', () => {
   beforeEach(() => {
     mockMessagesCreate.mockReset();
+    Anthropic.mockClear();
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('mimo_api_key', '"test-key"');
   });
 
@@ -41,6 +43,17 @@ describe('MiMo 服务', () => {
 
   test('testApiKey 函数存在', () => {
     expect(typeof mimo.testApiKey).toBe('function');
+  });
+
+  test('testApiKey 使用传入的 LLM API Key 验证当前输入', async () => {
+    mockMessagesCreate.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+
+    await expect(mimo.testApiKey('anthropic', 'current-input-key')).resolves.toBe(true);
+
+    expect(Anthropic).toHaveBeenCalledWith(expect.objectContaining({
+      apiKey: 'current-input-key',
+      defaultHeaders: { 'api-key': 'current-input-key' },
+    }));
   });
 
   test('generateSpeech 函数存在', () => {

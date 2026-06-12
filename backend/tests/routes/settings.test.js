@@ -68,4 +68,16 @@ describe('设置 API', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ valid: true });
   });
+
+  test('POST /api/settings/test-key - 使用请求中的 API Key 验证当前输入', async () => {
+    const spy = jest.spyOn(mimo, 'testApiKey').mockResolvedValue(true);
+
+    const res = await request(app)
+      .post('/api/settings/test-key')
+      .send({ type: 'llm', apiKey: 'current-input-key' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ valid: true });
+    expect(spy).toHaveBeenCalledWith('anthropic', 'current-input-key');
+  });
 });

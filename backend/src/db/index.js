@@ -3,12 +3,14 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '../../data/broadcast.db');
+const DB_PATH = process.env.NODE_ENV === 'test'
+  ? ':memory:'
+  : path.join(__dirname, '../../data/broadcast.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 // 确保 data 目录存在
 const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
+if (DB_PATH !== ':memory:' && !fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 

@@ -259,6 +259,7 @@ SQLite 数据库包含 5 张表：
 ### 6. 测试与进程生命周期
 
 - `backend/src/app.js` 只导出 Express app；只有直接运行入口时才 `listen()` 和初始化调度器，避免 supertest 引入 app 时留下端口和 cron 句柄。
+- `backend/src/db/index.js` 在 `NODE_ENV=test` 时必须使用 SQLite 内存库；Jest 不得读写 `backend/data/broadcast.db`，避免测试覆盖开发设置中的 API Key 或业务数据。
 - 创建 cron 任务的测试必须在 `afterEach` 中调用 `scheduler.shutdown()` 并清理表数据。
 - 后端改动至少运行 `npm test -- --runInBand`；前端改动至少运行 `npm run build`。
 - 如果 Jest 提示 open handles，必须用 `--detectOpenHandles` 定位并修复，不能仅靠强制退出掩盖。

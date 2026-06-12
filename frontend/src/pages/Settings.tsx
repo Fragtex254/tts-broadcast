@@ -54,7 +54,8 @@ export const Settings: React.FC = () => {
   const handleTestKey = async (type: 'llm' | 'tts') => {
     setIsTestingKey(type)
     try {
-      const result = await testApiKey(type)
+      const apiKey = type === 'tts' ? formData.mimo_tts_api_key : formData.mimo_api_key
+      const result = await testApiKey(type, apiKey)
       setTestResults((prev) => ({ ...prev, [type]: result }))
     } catch (e) {
       setTestResults((prev) => ({ ...prev, [type]: { valid: false, error: (e as Error).message } }))

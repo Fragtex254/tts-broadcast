@@ -298,7 +298,8 @@ function init(callback) {
 ### 连接与初始化
 
 - 使用 better-sqlite3 同步 API
-- 数据库文件位于 `backend/data/broadcast.db`（已 gitignore）
+- 开发/生产数据库文件位于 `backend/data/broadcast.db`（已 gitignore）
+- `NODE_ENV=test` 时数据库必须使用 SQLite 内存库，测试不得读写 `backend/data/broadcast.db`
 - Schema 定义维护在 `db/schema.sql`，保持**最新完整定义**
 
 ### 迁移模式
@@ -589,7 +590,8 @@ afterEach(() => {
 
 - 每个测试用例**独立运行**，不依赖其他测试的执行顺序
 - 外部 API 调用**必须 mock**（aihot、mimo）
-- 数据库操作使用**真实 SQLite**（内存或临时文件），不用 mock
+- 数据库操作使用**真实 SQLite**（默认内存库），不用 mock
+- 测试必须通过 `NODE_ENV=test` 自动隔离数据库，禁止把测试数据写入开发库
 - 每个 describe 块有自己的 `beforeEach` 清理逻辑
 - 测试数据通过 SQL INSERT 或 HTTP API 构造，不使用工厂函数
 

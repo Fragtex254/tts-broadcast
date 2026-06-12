@@ -104,7 +104,7 @@ export const settingsApi = {
   update: (data: Settings) =>
     api.put('/settings', data),
 
-  testKey: (type?: 'llm' | 'tts') => api.post('/settings/test-key', { type }),
+  testKey: (type?: 'llm' | 'tts', apiKey?: string) => api.post('/settings/test-key', { type, apiKey }),
 };
 
 // 定时任务 API

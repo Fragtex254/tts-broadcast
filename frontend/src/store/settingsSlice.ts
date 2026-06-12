@@ -33,9 +33,9 @@ export function createSettingsSlice(set: StoreSet): Pick<
       }
     },
 
-    testApiKey: async (type) => {
+    testApiKey: async (type, apiKey) => {
       try {
-        const response = await settingsApi.testKey(type);
+        const response = await settingsApi.testKey(type, apiKey);
         return response.data;
       } catch (error) {
         console.error('测试 API Key 失败:', error);
