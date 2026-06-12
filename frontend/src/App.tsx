@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { Sidebar } from './components/Layout/Sidebar'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { SourceCollection } from './pages/SourceCollection'
 import { ScriptEditor } from './pages/ScriptEditor'
 import { Transcribe } from './pages/Transcribe'
@@ -13,7 +14,7 @@ function App() {
 
   useEffect(() => {
     fetchSettings()
-  }, [])
+  }, [fetchSettings])
 
   return (
     <Router>
@@ -22,13 +23,15 @@ function App() {
         <Sidebar />
 
         {/* 主内容区域 */}
-        <Routes>
-          <Route path="/" element={<SourceCollection />} />
-          <Route path="/editor" element={<ScriptEditor />} />
-          <Route path="/transcribe" element={<Transcribe />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<SourceCollection />} />
+            <Route path="/editor" element={<ScriptEditor />} />
+            <Route path="/transcribe" element={<Transcribe />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </ErrorBoundary>
       </div>
     </Router>
   )

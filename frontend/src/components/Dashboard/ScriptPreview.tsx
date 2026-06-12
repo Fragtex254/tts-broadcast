@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
-import { useStore } from '../../store';
+import useStore from '../../store';
 
 export const ScriptPreview: React.FC = () => {
-  const { script, updateScript, settings, splitScriptAction, isSplitting, currentBroadcast, segments } = useStore();
+  const script = useStore((s) => s.script);
+  const updateScript = useStore((s) => s.updateScript);
+  const settings = useStore((s) => s.settings);
+  const splitScriptAction = useStore((s) => s.splitScriptAction);
+  const isSplitting = useStore((s) => s.isSplitting);
+  const currentBroadcast = useStore((s) => s.currentBroadcast);
+  const segments = useStore((s) => s.segments);
+
   const [isEditing, setIsEditing] = useState(false);
   const [localScript, setLocalScript] = useState(script);
   const [showSaved, setShowSaved] = useState(false);

@@ -9,7 +9,7 @@ const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
   { value: 'en', label: '英文' },
 ];
 
-const PHASE_LABELS = {
+const PHASE_LABELS: Record<string, string> = {
   idle: '待开始',
   uploading: '上传中',
   preparing: '准备中',
@@ -30,14 +30,13 @@ function getErrorMessage(error: unknown): string {
 export const Transcribe: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const {
-    transcriptionText,
-    isTranscribing,
-    transcribeProgress,
-    transcribeMedia,
-    setTranscriptionText,
-    updateScript,
-  } = useStore();
+
+  const transcriptionText = useStore((s) => s.transcriptionText);
+  const isTranscribing = useStore((s) => s.isTranscribing);
+  const transcribeProgress = useStore((s) => s.transcribeProgress);
+  const transcribeMedia = useStore((s) => s.transcribeMedia);
+  const setTranscriptionText = useStore((s) => s.setTranscriptionText);
+  const updateScript = useStore((s) => s.updateScript);
 
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState<AsrLanguage>('auto');
@@ -149,7 +148,7 @@ export const Transcribe: React.FC = () => {
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <div className="min-w-0">
                     <p className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">
-                      {PHASE_LABELS[transcribeProgress.phase]}
+                      {PHASE_LABELS[transcribeProgress.phase] ?? ''}
                     </p>
                     <p className="font-body text-[12px] text-ink truncate">
                       {transcribeProgress.message}

@@ -19,11 +19,17 @@ const cronExamples = [
 ];
 
 export const Settings: React.FC = () => {
-  const {
-    settings, isLoadingSettings, fetchSettings, updateSettings, testApiKey,
-    fetchLlmModels,
-    schedules, fetchSchedules, createSchedule, deleteSchedule, toggleSchedule,
-  } = useStore();
+  const settings = useStore((s) => s.settings);
+  const isLoadingSettings = useStore((s) => s.isLoadingSettings);
+  const fetchSettings = useStore((s) => s.fetchSettings);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const testApiKey = useStore((s) => s.testApiKey);
+  const fetchLlmModels = useStore((s) => s.fetchLlmModels);
+  const schedules = useStore((s) => s.schedules);
+  const fetchSchedules = useStore((s) => s.fetchSchedules);
+  const createSchedule = useStore((s) => s.createSchedule);
+  const deleteSchedule = useStore((s) => s.deleteSchedule);
+  const toggleSchedule = useStore((s) => s.toggleSchedule);
 
   const [formData, setFormData] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,22 +81,22 @@ export const Settings: React.FC = () => {
   };
 
   const handleTestKey = async (type: 'llm' | 'tts') => {
-    setIsTestingKey(type)
+    setIsTestingKey(type);
     try {
-      const apiKey = type === 'tts' ? formData.mimo_tts_api_key : formData.mimo_api_key
+      const apiKey = type === 'tts' ? formData.mimo_tts_api_key : formData.mimo_api_key;
       const llmConfig = type === 'llm' ? {
         apiFormat: formData.llm_api_format,
         baseUrl: formData.llm_base_url,
         model: formData.llm_model,
-      } : undefined
-      const result = await testApiKey(type, apiKey, llmConfig)
-      setTestResults((prev) => ({ ...prev, [type]: result }))
+      } : undefined;
+      const result = await testApiKey(type, apiKey, llmConfig);
+      setTestResults((prev) => ({ ...prev, [type]: result }));
     } catch (e) {
-      setTestResults((prev) => ({ ...prev, [type]: { valid: false, error: (e as Error).message } }))
+      setTestResults((prev) => ({ ...prev, [type]: { valid: false, error: (e as Error).message } }));
     } finally {
-      setIsTestingKey(null)
+      setIsTestingKey(null);
     }
-  }
+  };
 
   const handleFetchModels = async () => {
     setIsFetchingModels(true);

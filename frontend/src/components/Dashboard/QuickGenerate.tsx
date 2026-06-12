@@ -1,34 +1,38 @@
 import React, { useState } from 'react';
-import { useStore } from '../../store';
+import useStore from '../../store';
 
 interface QuickGenerateProps {
   onItemsLoaded?: () => void;
   onRewriteComplete?: () => void;
 }
 
+const CATEGORIES = [
+  { value: '', label: '全部' },
+  { value: 'ai-models', label: 'AI 模型' },
+  { value: 'ai-products', label: 'AI 产品' },
+  { value: 'industry', label: '行业动态' },
+  { value: 'paper', label: '论文' },
+  { value: 'tip', label: '技巧' },
+];
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'ai-models': 'bg-lemon/30',
+  'ai-products': 'bg-lilac/30',
+  'industry': 'bg-blush/40',
+  'paper': 'bg-sage/30',
+  'tip': 'bg-pink/20',
+};
+
 export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onRewriteComplete }) => {
-  const { todayItems, fetchTodayItems, rewriteScript, isRewriting } = useStore();
+  const todayItems = useStore((s) => s.todayItems);
+  const fetchTodayItems = useStore((s) => s.fetchTodayItems);
+  const rewriteScript = useStore((s) => s.rewriteScript);
+  const isRewriting = useStore((s) => s.isRewriting);
+
   const [category, setCategory] = useState<string>('');
   const [count, setCount] = useState<number>(10);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const categories = [
-    { value: '', label: '全部' },
-    { value: 'ai-models', label: 'AI 模型' },
-    { value: 'ai-products', label: 'AI 产品' },
-    { value: 'industry', label: '行业动态' },
-    { value: 'paper', label: '论文' },
-    { value: 'tip', label: '技巧' },
-  ];
-
-  const categoryColors: Record<string, string> = {
-    'ai-models': 'bg-lemon/30',
-    'ai-products': 'bg-lilac/30',
-    'industry': 'bg-blush/40',
-    'paper': 'bg-sage/30',
-    'tip': 'bg-pink/20',
-  };
 
   const handleFetch = async () => {
     setIsLoading(true);
@@ -77,7 +81,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
           onChange={(e) => setCategory(e.target.value)}
           className="flex-1 bg-white/70 text-ink rounded-full px-3.5 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] appearance-none cursor-pointer transition-colors"
         >
-          {categories.map((cat) => (
+          {CATEGORIES.map((cat) => (
             <option key={cat.value} value={cat.value}>{cat.label}</option>
           ))}
         </select>
@@ -132,8 +136,8 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
                     {item.title}
                   </h4>
                   {item.category && (
-                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md font-body text-[9px] font-medium uppercase tracking-wider text-ink ${categoryColors[item.category] || 'bg-paper-2'}`}>
-                      {categories.find(c => c.value === item.category)?.label || item.category}
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md font-body text-[9px] font-medium uppercase tracking-wider text-ink ${CATEGORY_COLORS[item.category] || 'bg-paper-2'}`}>
+                      {CATEGORIES.find(c => c.value === item.category)?.label || item.category}
                     </span>
                   )}
                 </div>
