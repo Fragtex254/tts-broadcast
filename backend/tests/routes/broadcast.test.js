@@ -1,13 +1,30 @@
+jest.mock('../../src/services/aihot', () => ({
+  getSelectedItems: jest.fn()
+}));
+
 const request = require('supertest');
 const app = require('../../src/app');
 const db = require('../../src/db');
+const aihot = require('../../src/services/aihot');
 
 describe('播报 API', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   test('GET /api/broadcast/today - 获取今日资讯', async () => {
-    const res = await request(app).get('/api/broadcast/today');
+    const items = [{ title: 'AI 新闻', url: 'https://example.com/news' }];
+    aihot.getSelectedItems.mockResolvedValue(items);
+
+    const res = await request(app).get('/api/broadcast/today?category=ai-models&take=5');
+
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('items');
-    expect(Array.isArray(res.body.items)).toBe(true);
+    expect(res.body.items).toEqual(items);
+    expect(aihot.getSelectedItems).toHaveBeenCalledWith({
+      category: 'ai-models',
+      since: expect.any(String),
+      take: 5
+    });
   });
 
   test('GET /api/broadcast/history - 获取历史记录', async () => {
