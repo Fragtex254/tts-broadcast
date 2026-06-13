@@ -1,394 +1,203 @@
-# TTS 每日 AI 简讯播报系统
+# TTS Broadcast
 
-基于 AI HOT 资讯数据源，自动抓取、改写、生成 TTS 语音播报的全栈应用。支持定时任务自动播报、多语音风格选择、历史记录管理等功能。
+把每天的 AI 资讯变成一段可以直接收听的中文播报。
 
-## 功能特性
+TTS Broadcast 是一个面向个人和小团队的 AI 新闻播报工作台：它从 AI HOT 拉取每日资讯，用 LLM 改写成更适合口播的稿件，再通过 MiMo TTS 生成音频。你可以手动编辑稿件、分段生成长音频、管理音色预设、上传音视频转写，也可以把整条流程交给定时任务自动运行。
 
-- **AI 资讯获取** - 从 AI HOT 获取每日精选 AI 资讯，支持按分类筛选
-- **智能改写** - 使用 MiMo 大模型将资讯改写为口播稿，支持自定义开场白和结束语
-- **TTS 语音生成** - 支持预设音色、语音克隆、音色设计等多种语音模式
-- **定时播报** - 基于 Cron 表达式的定时任务调度，自动执行播报流程
-- **历史管理** - 播报历史记录查看、音频回放、分页浏览
-- **设置管理** - API Key 配置、语音偏好、开场白/结束语自定义
-- **响应式前端** - 基于 React + Tailwind CSS 的现代化管理界面
+## 为什么做这个
+
+每天都有太多 AI 资讯，但真正值得听完、转发、复盘的内容需要被筛选、改写和包装。这个项目把“找资讯 -> 写口播稿 -> 试音色 -> 生成音频 -> 保存归档”的链路放进一个本地全栈应用里，让日报、播客片段、内部分享和语音内容生产变得更轻。
+
+## 核心能力
+
+- **资讯采集**：从 AI HOT 获取每日 AI 新闻，支持分类与数量控制。
+- **稿件改写**：使用可配置 LLM 将资讯改写为中文口播稿，支持自定义开场白、结束语和系统提示词。
+- **整篇/分段 TTS**：短稿可一键生成，长稿可切分成多个片段分别合成，降低失败成本。
+- **音色工作流**：支持预设音色、音色克隆、音色设计、试听音频和音色预设管理。
+- **音视频转写**：上传音频或视频，后端自动转码、切片并通过 ASR 输出文本，适合把素材快速变成稿件来源。
+- **定时播报**：使用 cron 表达式配置自动任务，定期抓取、改写并生成播报。
+- **历史与资产管理**：保存播报记录、音频文件、分段状态和生成参数，支持回放与清理策略。
+- **实时进度**：长任务通过 SSE 推送开始、进度、完成和失败状态，前端可持续反馈。
+
+## 工作流
+
+```mermaid
+flowchart LR
+  A["AI HOT 资讯"] --> B["筛选与汇总"]
+  B --> C["LLM 改写口播稿"]
+  C --> D{"生成方式"}
+  D -->|"整篇"| E["MiMo TTS"]
+  D -->|"分段"| F["切分稿件"]
+  F --> E
+  E --> G["音频试听"]
+  G --> H["保存播报历史"]
+  I["音视频上传"] --> J["ASR 转写"]
+  J --> C
+  K["Cron 定时任务"] --> A
+```
 
 ## 技术栈
 
-### 后端
-
-| 技术 | 说明 |
-|------|------|
-| Node.js | 运行环境 |
-| Express | Web 框架 |
-| better-sqlite3 | 嵌入式数据库 |
-| OpenAI SDK | MiMo API 调用 |
-| node-cron | 定时任务调度 |
-| axios | HTTP 请求 |
-
-### 前端
-
-| 技术 | 说明 |
-|------|------|
-| React 19 | UI 框架 |
-| TypeScript | 类型安全 |
-| Vite | 构建工具 |
-| Tailwind CSS 4 | 样式方案 |
-| Zustand | 状态管理 |
-| React Router | 路由管理 |
-| Axios | HTTP 客户端 |
+| 层 | 技术 |
+| --- | --- |
+| 后端 | Node.js, Express 5, better-sqlite3, Jest, node-cron |
+| AI / 音频 | MiMo TTS, MiMo ASR, Anthropic/OpenAI 兼容 LLM 接口, ffmpeg-static |
+| 前端 | React 19, TypeScript, Vite 8, Tailwind CSS 4, Zustand, React Router 7, Zod |
+| 工程化 | GitHub Actions, ESLint, Vitest, supertest |
 
 ## 快速开始
 
-### 前置要求
+### 1. 准备环境
 
-- Node.js >= 18.0.0
-- npm >= 9.0.0
-- MiMo API Key（用于 TTS 语音生成和文本改写）
+- Node.js 20 推荐；本地启动脚本最低检查 Node.js 18
+- npm
+- MiMo API Key
 
-### 安装
+### 2. 安装依赖
 
 ```bash
-# 克隆项目
-git clone <repository-url>
+git clone https://github.com/Fragtex254/tts-broadcast.git
 cd tts-broadcast
 
-# 安装后端依赖
 cd backend
 npm install
 
-# 安装前端依赖
 cd ../frontend
 npm install
 ```
 
-### 配置
+### 3. 配置服务与 API Key
 
-1. 在 `backend` 目录下创建 `.env` 文件：
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-2. 编辑 `.env`，填入你的 MiMo API Key：
+在 `backend/` 下创建 `.env`，用于服务级配置：
 
 ```env
-MIMO_API_KEY=your_mimo_api_key_here
 PORT=3001
 NODE_ENV=development
 ```
 
-### 启动
+启动应用后，在设置页填写 LLM API Key、TTS/ASR API Key、LLM base URL、模型和提示词等运行时设置。它们会持久化到 SQLite，不需要写进 `.env`。
 
-**一键启动（推荐）：**
+### 4. 启动应用
+
+推荐使用一键启动脚本：
 
 ```bash
 ./start.sh
 ```
 
-脚本会自动检查并安装依赖，同时启动前端和后端服务。按 `Ctrl+C` 停止所有服务。
-
-**手动启动：**
+也可以手动启动：
 
 ```bash
-# 终端 1：启动后端
 cd backend
 npm run dev
+```
 
-# 终端 2：启动前端
+```bash
 cd frontend
 npm run dev
 ```
 
-启动后访问 `http://localhost:5173`，后端运行在 `http://localhost:3001`。
+启动后访问：
 
-## API 文档
+- 前端：http://localhost:5173
+- 后端：http://localhost:3001
 
-### 播报接口
+## 常用命令
 
-#### 获取今日资讯
+后端：
 
-```
-GET /api/broadcast/today
-```
-
-**查询参数：**
-- `category` (string, 可选) - 资讯分类
-- `take` (number, 可选, 默认 30) - 返回数量，最大 100
-
-**响应示例：**
-```json
-{
-  "items": [
-    {
-      "title": "资讯标题",
-      "content": "资讯内容",
-      "category": "AI"
-    }
-  ]
-}
+```bash
+cd backend
+npm run dev
+npm test -- --runInBand
 ```
 
-#### 改写口播稿
+前端：
 
+```bash
+cd frontend
+npm run dev
+npm run lint
+npm run build
+npm run test
 ```
-POST /api/broadcast/rewrite
-```
-
-**请求体：**
-```json
-{
-  "items": [{ "title": "...", "content": "..." }],
-  "opening": "自定义开场白",
-  "closing": "自定义结束语"
-}
-```
-
-**响应示例：**
-```json
-{
-  "script": "改写后的口播稿内容..."
-}
-```
-
-#### 生成 TTS 语音
-
-```
-POST /api/broadcast/generate
-```
-
-**请求体：**
-```json
-{
-  "text": "口播稿内容",
-  "voice": "预设音色名称",
-  "voiceType": "preset | clone | design",
-  "voiceDesign": "音色描述",
-  "voiceClone": "克隆音频 URL",
-  "stylePrompt": "风格提示词",
-  "sourceItems": [{ "title": "...", "content": "..." }]
-}
-```
-
-**响应示例：**
-```json
-{
-  "broadcast": {
-    "id": 1,
-    "title": "口播稿标题...",
-    "content": "口播稿内容",
-    "audio_path": "/audio/broadcast_1234567890.wav",
-    "status": "generated"
-  },
-  "audioUrl": "/audio/broadcast_1234567890.wav"
-}
-```
-
-#### 获取历史播报
-
-```
-GET /api/broadcast/history
-```
-
-**查询参数：**
-- `page` (number, 可选, 默认 1) - 页码
-- `limit` (number, 可选, 默认 20) - 每页数量
-
-**响应示例：**
-```json
-{
-  "broadcasts": [...],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 100
-  }
-}
-```
-
-#### 获取播报详情
-
-```
-GET /api/broadcast/:id
-```
-
-#### 获取播报音频
-
-```
-GET /api/broadcast/:id/audio
-```
-
-返回 WAV 格式音频文件。
-
----
-
-### 设置接口
-
-#### 获取设置
-
-```
-GET /api/settings
-```
-
-**响应示例：**
-```json
-{
-  "settings": {
-    "api_key": "sk-...",
-    "default_voice": "zh-CN-YunxiNeural",
-    "opening_script": "大家好，欢迎收听今日 AI 简讯。",
-    "closing_script": "以上就是今天的 AI 简讯，我们下期再见。"
-  }
-}
-```
-
-#### 更新设置
-
-```
-PUT /api/settings
-```
-
-**请求体：**
-```json
-{
-  "default_voice": "zh-CN-YunxiNeural",
-  "opening_script": "自定义开场白",
-  "closing_script": "自定义结束语"
-}
-```
-
-#### 测试 API Key
-
-```
-POST /api/settings/test-key
-```
-
-**响应示例：**
-```json
-{
-  "valid": true
-}
-```
-
----
-
-### 定时任务接口
-
-#### 获取任务列表
-
-```
-GET /api/schedules
-```
-
-**响应示例：**
-```json
-{
-  "schedules": [
-    {
-      "id": 1,
-      "name": "每日早间播报",
-      "cron_expression": "0 8 * * *",
-      "content_types": "[\"AI\"]",
-      "is_active": 1,
-      "last_run_at": "2025-05-27T08:00:00.000Z"
-    }
-  ]
-}
-```
-
-#### 创建定时任务
-
-```
-POST /api/schedules
-```
-
-**请求体：**
-```json
-{
-  "name": "每日早间播报",
-  "cron_expression": "0 8 * * *",
-  "content_types": "[\"AI\", \"LLM\"]"
-}
-```
-
-#### 更新定时任务
-
-```
-PUT /api/schedules/:id
-```
-
-#### 删除定时任务
-
-```
-DELETE /api/schedules/:id
-```
-
-#### 切换任务状态
-
-```
-POST /api/schedules/:id/toggle
-```
-
-启用或禁用定时任务。
-
-## Cron 表达式示例
-
-```
-┌────────── 分钟 (0-59)
-│ ┌──────── 小时 (0-23)
-│ │ ┌────── 日 (1-31)
-│ │ │ ┌──── 月 (1-12)
-│ │ │ │ ┌── 星期 (0-7, 0 和 7 都是周日)
-│ │ │ │ │
-* * * * *
-```
-
-| 表达式 | 说明 |
-|--------|------|
-| `0 8 * * *` | 每天早上 8:00 |
-| `0 12 * * *` | 每天中午 12:00 |
-| `0 20 * * 1-5` | 工作日晚上 8:00 |
-| `0 9 * * 1` | 每周一早上 9:00 |
-| `30 8,12,18 * * *` | 每天 8:30、12:30、18:30 |
-| `0 */2 * * *` | 每隔 2 小时 |
-| `0 8 1 * *` | 每月 1 号早上 8:00 |
 
 ## 项目结构
 
-```
+```text
 tts-broadcast/
 ├── backend/
 │   ├── src/
-│   │   ├── app.js            # Express 应用入口
-│   │   ├── db/
-│   │   │   ├── index.js      # 数据库初始化
-│   │   │   └── schema.sql    # 数据库表结构
-│   │   ├── routes/
-│   │   │   ├── broadcast.js  # 播报相关路由
-│   │   │   ├── settings.js   # 设置相关路由
-│   │   │   └── schedule.js   # 定时任务路由
-│   │   └── services/
-│   │       ├── aihot.js      # AI HOT 资讯服务
-│   │       ├── mimo.js       # MiMo TTS/LLM 服务
-│   │       └── scheduler.js  # 定时调度服务
-│   ├── audio/                # 生成的音频文件（git 忽略）
-│   ├── data/                 # SQLite 数据库文件（git 忽略）
-│   ├── tests/                # 测试文件
-│   ├── package.json
-│   └── .env.example
+│   │   ├── app.js              # Express 应用入口
+│   │   ├── db/                 # SQLite 初始化与 schema
+│   │   ├── routes/             # HTTP 路由
+│   │   ├── services/           # 业务逻辑、外部 API、DAL 与任务编排
+│   │   └── utils/              # 共享工具
+│   ├── tests/                  # Jest + supertest 测试
+│   ├── audio/                  # 生成音频，已 gitignore
+│   └── data/                   # SQLite 数据库，已 gitignore
 ├── frontend/
 │   ├── src/
-│   │   ├── components/       # React 组件
-│   │   ├── pages/            # 页面组件
-│   │   ├── services/         # API 服务层
-│   │   ├── store/            # Zustand 状态管理
-│   │   ├── App.tsx           # 路由配置
-│   │   └── main.tsx          # 应用入口
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.ts
-├── README.md
-└── .gitignore
+│   │   ├── pages/              # SourceCollection, ScriptEditor, Transcribe, History, Settings
+│   │   ├── components/         # 可复用 UI 和工作台组件
+│   │   ├── services/           # API、SSE、错误处理与 schema 校验
+│   │   └── store/              # Zustand slices
+├── docs/                       # 项目事实、设计文档和外部 API 资料
+├── start.sh
+├── AGENTS.md                   # Agent 开发入口规范
+└── README.md
 ```
+
+## 主要 API
+
+后端接口统一挂载在 `/api` 下。常用资源包括：
+
+| 资源 | 用途 |
+| --- | --- |
+| `/api/broadcast/*` | 获取资讯、改写稿件、生成音频、保存历史、获取播报详情 |
+| `/api/segments/*` | 分段稿件、分段 TTS 和片段状态管理 |
+| `/api/transcribe/*` | 音视频上传、ASR 转写和任务进度 |
+| `/api/settings/*` | API Key、LLM、TTS、提示词和默认偏好设置 |
+| `/api/schedules/*` | 定时任务的创建、更新、启停和删除 |
+| `/api/voice-presets/*` | 克隆/设计音色预设与试听资产管理 |
+| `/api/sse/:taskId` | 长任务实时事件流 |
+
+更完整的接口、数据模型和外部 API 背景见 [docs/project-facts.md](docs/project-facts.md)。
+
+## 数据与文件
+
+项目使用 SQLite 作为本地持久化层，主要保存播报、分段、设置、定时任务和音色预设。生成音频写入 `backend/audio/`，数据库文件写入 `backend/data/`，这两个目录都不会提交到 Git。
+
+音频生命周期由后端统一管理：
+
+- 未保存音频只保留最近 10 条。
+- 已保存音频最多保留 50 条，超出后淘汰最旧记录。
+- 删除音频统一走受保护的文件清理逻辑，避免误删任意路径。
+
+## 开发约定
+
+仓库根目录的 `CLAUDE.md` 是 `AGENTS.md` 的 symlink，所有 agent 开发任务都从这里读取规则。关键约束包括：
+
+- 后端路由只做 HTTP 翻译，不直接写 SQL。
+- 数据访问通过 `services/*Store.js` 等 DAL 层。
+- 外部 API 测试必须 mock，不依赖真实网络或真实业务密钥。
+- 长任务必须有 loading/error 状态；已接入 SSE 的任务必须推送开始、进度、完成和失败事件。
+- 新增持久化字段要同步 schema、迁移、后端返回、前端类型和 UI。
+
+详细背景见：
+
+- [docs/project-facts.md](docs/project-facts.md)
+- [backend/BACKEND_CONVENTIONS.md](backend/BACKEND_CONVENTIONS.md)
+- [frontend/FRONTEND_CONVENTIONS.md](frontend/FRONTEND_CONVENTIONS.md)
+
+## CI
+
+GitHub Actions 会在 PR 和 `main` 分支 push 时运行质量检查：
+
+- 后端：`npm ci` + `NODE_ENV=test npm test -- --runInBand`
+- 前端：`npm ci` + `npm run lint` + `npm run build`
+
+CI 不配置真实 MiMo、AI HOT、TTS 或 ASR Key。涉及外部服务的测试必须使用 mock。
 
 ## 许可证
 
