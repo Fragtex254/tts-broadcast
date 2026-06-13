@@ -215,6 +215,47 @@ export default MyComponent;
 5. **`lang` 属性** — `index.html` 已设置 `lang="zh-CN"`。
 6. **色彩对比度** — `text-ink` (#2A241B) 在 `bg-paper` (#F2EEDF) 上的对比度 > 10:1，满足 WCAG AAA。
 
+### 测试与质量门禁
+
+**框架：**
+
+- **Vitest** + **@testing-library/react** + **@testing-library/jest-dom** + **jsdom**
+- 测试文件命名：`*.test.{ts,tsx}`
+- 测试配置在 `vite.config.ts`，setup 在 `vitest.setup.ts`
+
+**必跑命令：** 每次前端代码变更后，至少运行：
+
+```bash
+npm run lint
+npm run build
+npm run test
+```
+
+如果只改文档，可以不跑 build/test，但需要确认文档与现有实现一致。
+
+**新增功能必须伴随测试：**
+
+| 测试类型 | 范围 | 示例 |
+|---------|------|------|
+| 单元测试 | `services/` 工具函数 | `apiError.test.ts` |
+| 纯逻辑测试 | 页面 draft/helper、数据转换 | `settingsDraft.test.ts` |
+| 组件测试 | 纯展示组件渲染 | 后续新增复杂组件时补充 |
+
+**最小测试要求：**
+
+- 工具函数（`apiError.ts`、`formatters` 等）必须有单元测试
+- 页面私有 helper（如 `settingsDraft.ts`）必须有单元测试
+- 复杂交互组件（如 `VoiceGenerator`、`SegmentEditor`）鼓励添加组件测试
+
+### 性能
+
+1. **图片** — 使用 WebP 格式，配合 `loading="lazy"`。
+2. **字体** — `index.html` 中使用 `preconnect` + `display=swap` 预加载。
+3. **代码分割** — 非首屏路由页面使用 `React.lazy()` + `Suspense` 懒加载；首屏 `SourceCollection` 保持直接导入。
+4. **Store 选择器** — 使用 Zustand selector 避免不必要的重渲染（只订阅需要的值，不订阅整个 store）。
+5. **`useCallback`** — 传递给子组件的回调函数用 `useCallback` 包裹。
+6. **列表 `key`** — 使用稳定唯一 ID，不用 index（除非列表不会重排）。
+
 ## Checklist
 
 新增一个页面时，按顺序完成：
