@@ -193,27 +193,11 @@ export default MyComponent;
 
 ### 命名规范
 
-| 类型 | 规范 | 示例 |
-|------|------|------|
-| 组件文件 | PascalCase `.tsx` | `QuickGenerate.tsx` |
-| 页面文件 | PascalCase `.tsx` | `SourceCollection.tsx` |
-| 工具/service 文件 | camelCase `.ts` | `api.ts` |
-| 组件名 | PascalCase | `ScriptPreview`, `AudioPlayer` |
-| Hook/函数 | camelCase | `useStore`, `handleFetch` |
-| 常量 | UPPER_SNAKE_CASE | `VOICE_OPTIONS`, `WAVEFORM_BARS` |
-| CSS 变量 | kebab-case with `--` 前缀 | `--color-paper`, `--radius-card` |
-| Tailwind 自定义 class | kebab-case | `bg-paper`, `rounded-card`, `animate-fade-in-up` |
-| 接口 | PascalCase（无 `I` 前缀） | `Broadcast`, `AppState`, `Segment` |
-| 布尔状态 | `is` / `has` 前缀 | `isLoading`, `isPlaying`, `hasError` |
+完整的文件/组件/Hook/常量/CSS 变量/接口/布尔状态命名规则见 `frontend/FRONTEND_CONVENTIONS.md`「命名规范」（背景文档，单一归属，不在此重复）。组件层面记住要点：
 
-**文件命名与组件对应：**
-
-```
-文件路径                              → 组件名
-components/Dashboard/AudioPlayer.tsx → AudioPlayer
-components/Layout/Sidebar.tsx        → Sidebar
-pages/SourceCollection.tsx           → SourceCollection
-```
+- 组件文件与组件名 PascalCase（`QuickGenerate.tsx` → `QuickGenerate`）
+- props interface 命名 `{Component}Props`，接口无 `I` 前缀
+- 布尔状态用 `is` / `has` 前缀（`isLoading`、`hasError`）
 
 ### 错误边界
 
