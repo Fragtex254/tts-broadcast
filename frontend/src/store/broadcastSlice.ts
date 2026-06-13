@@ -1,5 +1,5 @@
 import { broadcastApi } from '../services/api';
-import { safeParseArray, safeParse, BroadcastSchema, TodayItemSchema } from '../services/schemas';
+import { safeParseArray, safeParseStrict, BroadcastSchema, TodayItemSchema } from '../services/schemas';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
 
@@ -59,7 +59,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
       set({ isGenerating: true });
       try {
         const response = await broadcastApi.generate(data);
-        const broadcast = safeParse(BroadcastSchema, response.data.broadcast) || response.data.broadcast;
+        const broadcast = safeParseStrict(BroadcastSchema, response.data.broadcast);
         const audioUrl = response.data.audioUrl as string;
         set((state) => ({
           broadcasts: [broadcast, ...state.broadcasts],
@@ -94,7 +94,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
     saveBroadcast: async (id) => {
       try {
         const response = await broadcastApi.save(id);
-        const updated = safeParse(BroadcastSchema, response.data.broadcast) || response.data.broadcast;
+        const updated = safeParseStrict(BroadcastSchema, response.data.broadcast);
         set((state) => ({
           broadcasts: state.broadcasts.map((b) => (b.id === id ? updated : b)),
           currentBroadcast: state.currentBroadcast?.id === id ? updated : state.currentBroadcast,

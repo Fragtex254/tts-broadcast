@@ -12,18 +12,42 @@ describe('播报 API', () => {
     jest.clearAllMocks();
   });
 
-  test('GET /api/broadcast/today - 获取今日资讯', async () => {
-    const items = [{ title: 'AI 新闻', url: 'https://example.com/news' }];
+  test('GET /api/broadcast/today - 获取今日资讯（归一化驼峰字段为蛇形）', async () => {
+    const items = [
+      { title: 'AI 新闻', url: 'https://example.com/news', publishedAt: '2026-06-13T00:00:00.000Z' }
+    ];
     aihot.getSelectedItems.mockResolvedValue(items);
 
     const res = await request(app).get('/api/broadcast/today?category=ai-models&take=5');
 
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual(items);
+    // 路由层将 AI HOT 的驼峰字段映射为前端约定的蛇形字段，同时保留原始字段
+    expect(res.body.items).toEqual([
+      {
+        title: 'AI 新闻',
+        url: 'https://example.com/news',
+        publishedAt: '2026-06-13T00:00:00.000Z',
+        source_url: 'https://example.com/news',
+        published_at: '2026-06-13T00:00:00.000Z'
+      }
+    ]);
     expect(aihot.getSelectedItems).toHaveBeenCalledWith({
       category: 'ai-models',
       since: expect.any(String),
       take: 5
+    });
+  });
+
+  test('GET /api/broadcast/today - 原始数据缺少 url/publishedAt 时归一化为空字符串', async () => {
+    aihot.getSelectedItems.mockResolvedValue([{ title: '无链接资讯' }]);
+
+    const res = await request(app).get('/api/broadcast/today');
+
+    expect(res.status).toBe(200);
+    expect(res.body.items[0]).toMatchObject({
+      title: '无链接资讯',
+      source_url: '',
+      published_at: ''
     });
   });
 

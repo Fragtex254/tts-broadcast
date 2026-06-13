@@ -106,6 +106,9 @@ export const ApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
 
 /**
  * 安全解析 API 响应数据，失败时返回 null 并打印警告
+ *
+ * 注意：仅在调用方明确希望"宽容降级"时使用（如 settings 字段多、偶发字段缺失）。
+ * 列表/必填对象应当使用 `safeParseArray` / `safeParseStrict`，让校验失败显式抛出。
  */
 export function safeParse<T>(schema: z.ZodType<T>, data: unknown): T | null {
   const result = schema.safeParse(data);
@@ -117,13 +120,35 @@ export function safeParse<T>(schema: z.ZodType<T>, data: unknown): T | null {
 }
 
 /**
- * 安全解析数组，过滤掉不符合 schema 的项
+ * 严格解析 API 响应数据，校验失败时抛出错误。
+ * 用于"理应必填"的业务对象（如 broadcast 单条记录），不能静默降级。
+ */
+export function safeParseStrict<T>(schema: z.ZodType<T>, data: unknown): T {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    throw new Error(`响应数据校验失败：${result.error.message}`);
+  }
+  return result.data;
+}
+
+/**
+ * 严格解析数组，校验失败时抛出错误。
+ * 用于"理应必填且完整"的列表（如今日资讯、播报历史），
+ * 任一条目校验失败都应当让上层 catch 显式提示用户，而不是静默丢弃。
  */
 export function safeParseArray<T>(schema: z.ZodType<T>, data: unknown[]): T[] {
+  if (!Array.isArray(data)) {
+    throw new Error('响应数据格式错误：期望数组');
+  }
   const results: T[] = [];
-  for (const item of data) {
-    const parsed = safeParse(schema, item);
-    if (parsed) results.push(parsed);
+  for (let i = 0; i < data.length; i++) {
+    const item = data[i];
+    const result = schema.safeParse(item);
+    if (!result.success) {
+      const detail = JSON.stringify(result.error.format(), null, 2);
+      throw new Error(`第 ${i + 1} 条数据校验失败：${result.error.message}\n${detail}`);
+    }
+    results.push(result.data);
   }
   return results;
 }

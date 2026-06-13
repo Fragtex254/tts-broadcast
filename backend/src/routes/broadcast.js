@@ -28,7 +28,16 @@ router.get('/today', async (req, res) => {
       take: Math.min(parseInt(take, 10) || 30, 100)
     });
 
-    res.json({ items });
+    // 归一化字段：AI HOT 原始数据是驼峰（url/publishedAt/source），
+    // 前端 TodayItemSchema 约定使用蛇形（source_url/published_at），
+    // 在路由层做映射，保留原始字段以便 LLM 改写与后续分析可读
+    const normalized = items.map((item) => ({
+      ...item,
+      source_url: item.url ?? item.source_url ?? '',
+      published_at: item.publishedAt ?? item.published_at ?? '',
+    }));
+
+    res.json({ items: normalized });
   } catch (error) {
     console.error('获取资讯失败:', error);
     res.status(500).json({ error: '获取资讯失败' });

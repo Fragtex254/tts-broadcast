@@ -5,7 +5,7 @@ interface AudioPlayerProps {
   title?: string;
   broadcastId?: number;
   isSaved?: boolean;
-  onSave?: (id: number) => void;
+  onSave?: (id: number) => void | Promise<unknown>;
   mode?: string | null;
 }
 
@@ -42,6 +42,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -89,6 +91,23 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     a.click();
   };
 
+  // 保存可能因后端返回畸形数据而抛错（saveBroadcast 走 safeParseStrict），
+  // 这里兜底 catch，避免未处理的 Promise rejection，并给出可感知的失败反馈
+  const handleSave = useCallback(async () => {
+    if (!onSave || broadcastId == null) return;
+    setSaveError(false);
+    setIsSaving(true);
+    try {
+      await onSave(broadcastId);
+    } catch (err) {
+      console.error('保存播报失败:', err);
+      setSaveError(true);
+      window.setTimeout(() => setSaveError(false), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [onSave, broadcastId]);
+
   const progress = duration > 0 ? currentTime / duration : 0;
 
   if (!audioUrl) {
@@ -117,9 +136,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         <div className="flex items-center gap-3">
           {broadcastId && onSave && (
             <button
-              onClick={() => onSave(broadcastId)}
-              className={`font-body text-[11px] transition-colors flex items-center gap-1 uppercase tracking-wider ${isSaved ? 'text-lemon' : 'text-ink-soft/40 hover:text-lemon'}`}
-              title={isSaved ? '取消保存' : '保存此播报'}
+              onClick={handleSave}
+              disabled={isSaving}
+              className={`font-body text-[11px] transition-colors flex items-center gap-1 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ${saveError ? 'text-pink animate-shake' : isSaved ? 'text-lemon' : 'text-ink-soft/40 hover:text-lemon'}`}
+              title={saveError ? '保存失败，请重试' : isSaved ? '取消保存' : '保存此播报'}
             >
               <svg className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
