@@ -1,0 +1,99 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { Writable } = require('stream');
+
+function createMemoryStream() {
+  const chunks = [];
+  const stream = new Writable({
+    write(chunk, encoding, callback) {
+      chunks.push(chunk.toString());
+      callback();
+    },
+  });
+  return {
+    stream,
+    lines: () => chunks.join('').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)),
+  };
+}
+
+describe('logger 服务', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...originalEnv, NODE_ENV: 'test' };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  test('createScopedLogger 写入 scope、ISO 时间和消息', () => {
+    const { createScopedLogger } = require('../../src/services/logger');
+    const memory = createMemoryStream();
+    const now = () => new Date('2026-06-14T09:52:01.123Z');
+    const logger = createScopedLogger('scheduler', { stream: memory.stream, now });
+
+    logger.info({ count: 2 }, '已加载定时任务');
+
+    const [line] = memory.lines();
+    expect(line).toMatchObject({
+      level: 30,
+      time: '2026-06-14T09:52:01.123Z',
+      scope: 'scheduler',
+      msg: '已加载定时任务',
+      count: 2,
+    });
+  });
+
+  test('error 日志保留 err.message 和 err.stack', () => {
+    const { createScopedLogger } = require('../../src/services/logger');
+    const memory = createMemoryStream();
+    const logger = createScopedLogger('broadcast-route', { stream: memory.stream });
+    const error = new Error('生成失败');
+
+    logger.error({ err: error, broadcastId: 12 }, '生成语音失败');
+
+    const [line] = memory.lines();
+    expect(line.scope).toBe('broadcast-route');
+    expect(line.broadcastId).toBe(12);
+    expect(line.err.message).toBe('生成失败');
+    expect(line.err.stack).toContain('生成失败');
+  });
+
+  test('NODE_ENV=test 默认不创建真实 backend/logs 目录', () => {
+    const { createScopedLogger, DEFAULT_LOG_DIR } = require('../../src/services/logger');
+    fs.rmSync(DEFAULT_LOG_DIR, { recursive: true, force: true });
+
+    const logger = createScopedLogger('test-scope');
+    logger.info('测试日志');
+
+    expect(fs.existsSync(DEFAULT_LOG_DIR)).toBe(false);
+  });
+
+  test('传入 logDir 和 writeFiles 时写入当天 JSONL 文件', () => {
+    const { createScopedLogger, getLogFilePath } = require('../../src/services/logger');
+    const logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-logs-'));
+    const now = () => new Date('2026-06-14T09:52:01.123Z');
+
+    const logger = createScopedLogger('sse-manager', {
+      logDir,
+      now,
+      writeFiles: true,
+      includeConsole: false,
+    });
+
+    logger.warn({ taskId: 'task-1' }, 'SSE 推送失败');
+
+    const logFile = getLogFilePath({ logDir, now });
+    const [line] = fs.readFileSync(logFile, 'utf8').trim().split('\n').map(item => JSON.parse(item));
+    expect(line).toMatchObject({
+      level: 40,
+      time: '2026-06-14T09:52:01.123Z',
+      scope: 'sse-manager',
+      msg: 'SSE 推送失败',
+      taskId: 'task-1',
+    });
+  });
+});
