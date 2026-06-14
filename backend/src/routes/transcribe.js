@@ -5,8 +5,10 @@ const path = require('path');
 const multer = require('multer');
 const asr = require('../services/asr');
 const sseManager = require('../services/sseManager');
+const { createScopedLogger } = require('../services/logger');
 
 const router = express.Router();
+const logger = createScopedLogger('transcribe-route');
 const TRANSCRIBE_UPLOAD_LIMIT_BYTES = Number(process.env.TRANSCRIBE_UPLOAD_LIMIT_BYTES || 500 * 1024 * 1024);
 const uploadDir = path.join(os.tmpdir(), 'tts-broadcast-transcribe');
 
@@ -34,7 +36,7 @@ function handleUploadError(error, res) {
     return res.status(413).json({ error: '上传文件过大，请压缩音频或上传 500MB 以内的文件' });
   }
 
-  console.error('转录上传失败:', error);
+  logger.error({ err: error }, '转录上传失败');
   return res.status(500).json({ error: error.message || '上传失败' });
 }
 
@@ -92,8 +94,8 @@ router.post('/', (req, res) => {
 
       res.json(result);
     } catch (error) {
-      console.error('转录失败:', error);
       const taskId = buildTaskId(req);
+      logger.error({ err: error, taskId }, '转录失败');
       if (taskId) {
         sseManager.sendError(taskId, error.message || '转录失败');
       }

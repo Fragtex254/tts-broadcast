@@ -4,6 +4,16 @@ const { Writable } = require('stream');
 const pino = require('pino');
 
 const DEFAULT_LOG_DIR = path.join(__dirname, '../../logs');
+const REDACT_PATHS = [
+  'err.config',
+  'err.request',
+  'err.response.config',
+  'err.response.request',
+  'err.cause.config',
+  'err.cause.request',
+  'err.cause.response.config',
+  'err.cause.response.request',
+];
 
 function getNow(options) {
   return options && options.now ? options.now : () => new Date();
@@ -67,6 +77,7 @@ function createRootLogger(options = {}) {
     {
       level: 'info',
       base: null,
+      redact: REDACT_PATHS,
       timestamp: () => `,"time":"${now().toISOString()}"`,
     },
     createDestination(options)

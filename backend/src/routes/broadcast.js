@@ -11,7 +11,10 @@ const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
 const voiceConfigService = require('../services/voiceConfig');
 const audioAsset = require('../services/audioAsset');
+const { createScopedLogger } = require('../services/logger');
 const { validateId, cleanAudioFile } = require('../utils/validation');
+
+const logger = createScopedLogger('broadcast-route');
 
 /**
  * GET /api/broadcast/today
@@ -39,7 +42,7 @@ router.get('/today', async (req, res) => {
 
     res.json({ items: normalized });
   } catch (error) {
-    console.error('获取资讯失败:', error);
+    logger.error({ err: error }, '获取资讯失败');
     res.status(500).json({ error: '获取资讯失败' });
   }
 });
@@ -68,7 +71,7 @@ router.post('/rewrite', async (req, res) => {
 
     res.json({ script });
   } catch (error) {
-    console.error('改写失败:', error);
+    logger.error({ err: error }, '改写失败');
     res.status(500).json({ error: error.message || '改写失败' });
   }
 });
@@ -146,7 +149,7 @@ router.post('/generate', async (req, res) => {
       audioUrl: audioPath
     });
   } catch (error) {
-    console.error('生成语音失败:', error);
+    logger.error({ err: error }, '生成语音失败');
     res.status(500).json({ error: error.message || '生成语音失败' });
   }
 });
@@ -169,7 +172,7 @@ router.get('/history', (req, res) => {
       pagination: { page, limit, total }
     });
   } catch (error) {
-    console.error('获取历史记录失败:', error);
+    logger.error({ err: error }, '获取历史记录失败');
     res.status(500).json({ error: '获取历史记录失败' });
   }
 });
@@ -214,7 +217,7 @@ router.post('/batch-delete', (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error('批量删除失败:', error);
+    logger.error({ err: error }, '批量删除失败');
     res.status(500).json({ error: error.message || '批量删除失败' });
   }
 });
@@ -233,7 +236,7 @@ router.get('/:id', (req, res) => {
 
     res.json({ broadcast });
   } catch (error) {
-    console.error('获取播报详情失败:', error);
+    logger.error({ err: error, broadcastId: req.params.id }, '获取播报详情失败');
     res.status(500).json({ error: '获取播报详情失败' });
   }
 });
@@ -267,7 +270,7 @@ router.patch('/:id/voice-config', (req, res) => {
     const broadcast = broadcastStore.getById(idCheck.id);
     res.json({ broadcast });
   } catch (error) {
-    console.error('更新音色配置失败:', error);
+    logger.error({ err: error, broadcastId: req.params.id }, '更新音色配置失败');
     res.status(500).json({ error: '更新音色配置失败' });
   }
 });
@@ -307,7 +310,7 @@ router.post('/:id/save', (req, res) => {
     const updated = broadcastStore.getById(idCheck.id);
     res.json({ broadcast: updated });
   } catch (error) {
-    console.error('保存播报失败:', error);
+    logger.error({ err: error, broadcastId: req.params.id }, '保存播报失败');
     res.status(500).json({ error: '保存播报失败' });
   }
 });
@@ -335,7 +338,7 @@ router.get('/:id/audio', (req, res) => {
 
     res.sendFile(filepath);
   } catch (error) {
-    console.error('获取音频失败:', error);
+    logger.error({ err: error, broadcastId: req.params.id }, '获取音频失败');
     res.status(500).json({ error: '获取音频失败' });
   }
 });
