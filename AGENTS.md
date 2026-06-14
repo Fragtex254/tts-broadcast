@@ -17,7 +17,7 @@
 | 改/加后端服务、接外部 API | `.claude/skills/backend-service/SKILL.md` |
 | 改 DB schema / 写迁移 / DAL | `.claude/skills/backend-database/SKILL.md` |
 | 写后端测试 | `.claude/skills/backend-testing/SKILL.md` |
-| 新增/替换/查询调试日志 | `.claude/skills/debug-logging/SKILL.md` |
+| 新增/替换/查询/审查调试日志 | `.claude/skills/debug-logging/SKILL.md` |
 | 改/加前端组件或页面 | `.claude/skills/frontend-component/SKILL.md` |
 | 调样式 / 套设计系统 | `.claude/skills/frontend-styling/SKILL.md` |
 | 改前端状态 / 数据流 | `.claude/skills/frontend-state-data/SKILL.md` |

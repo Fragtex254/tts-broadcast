@@ -1,6 +1,6 @@
 ---
 name: convention-skills
-description: 新建、修改、拆分、退役或周期体检本项目的开发规范 skill（backend-*/frontend-*/add-persisted-field）时使用。维护 skill registry、规定何时更新 skill、更新协议、健康度评价标准。触发场景：新建 skill、改规范 skill、skill 太大要拆、skill 过时、skill 体检、skill 健康度、规范 skill 索引、引入新模式后同步规范。
+description: 新建、修改、拆分、退役或周期体检本项目的开发规范 skill 时使用。维护 skill registry、规定何时更新 skill、更新协议、健康度评价标准。触发场景：新建 skill、改规范 skill、skill 太大要拆、skill 过时、skill 体检、skill 健康度、规范 skill 索引、引入新模式后同步规范。
 ---
 
 # 规范 skill 治理
