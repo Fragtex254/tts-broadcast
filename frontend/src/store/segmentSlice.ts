@@ -1,6 +1,9 @@
 import { broadcastApi } from '../services/api';
+import { createScopedLogger, toLogError } from '../services/logger';
 import type { AppState } from './types';
 import type { StoreGet, StoreSet } from './storeTypes';
+
+const logger = createScopedLogger('segment-slice');
 
 function buildVoicePayload(voiceConfig: AppState['voiceConfig']) {
   return {
@@ -54,7 +57,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         set({ segments, isSplitting: false });
       } catch (error) {
         set({ isSplitting: false });
-        console.error('切分口播稿失败:', error);
+        logger.error({ err: toLogError(error), textLength: text.length }, '切分口播稿失败');
         throw error;
       }
     },
@@ -68,7 +71,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         return segments;
       } catch (error) {
         set({ isSplitting: false });
-        console.error('切分失败:', error);
+        logger.error({ err: toLogError(error), broadcastId }, '切分失败');
         throw error;
       }
     },
@@ -80,7 +83,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         set({ segments });
         return segments;
       } catch (error) {
-        console.error('获取 segments 失败:', error);
+        logger.error({ err: toLogError(error), broadcastId }, '获取 segments 失败');
         throw error;
       }
     },
@@ -94,7 +97,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         }));
         return updated;
       } catch (error) {
-        console.error('编辑句子失败:', error);
+        logger.error({ err: toLogError(error), broadcastId, segmentId: segId, textLength: text.length }, '编辑句子失败');
         throw error;
       }
     },
@@ -122,7 +125,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
             s.id === segId ? { ...s, status: 'failed' as const } : s
           ),
         }));
-        console.error('重新生成失败:', error);
+        logger.error({ err: toLogError(error), broadcastId, segmentId: segId }, '重新生成失败');
         throw error;
       }
     },
@@ -142,7 +145,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         set({ segments });
         return { segments, results };
       } catch (error) {
-        console.error('批量生成失败:', error);
+        logger.error({ err: toLogError(error), broadcastId }, '批量生成失败');
         throw error;
       }
     },
@@ -154,7 +157,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         set({ segments });
         return segments;
       } catch (error) {
-        console.error('删除句子失败:', error);
+        logger.error({ err: toLogError(error), broadcastId, segmentId: segId }, '删除句子失败');
         throw error;
       }
     },
@@ -172,7 +175,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         return broadcast;
       } catch (error) {
         set({ isMerging: false });
-        console.error('合并失败:', error);
+        logger.error({ err: toLogError(error), broadcastId }, '合并失败');
         throw error;
       }
     },

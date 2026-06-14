@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { createScopedLogger, toLogError } from '../services/logger';
 import useStore from '../store';
 import type { Broadcast } from '../store';
+
+const logger = createScopedLogger('history-page');
 
 const formatDuration = (seconds: number | null): string => {
   if (seconds === null || seconds === undefined) return '--:--';
@@ -155,7 +158,7 @@ export const History: React.FC = () => {
       handleExitMultiSelect();
       await loadBroadcasts(page);
     } catch (error) {
-      console.error('批量删除失败:', error);
+      logger.error({ err: toLogError(error), count: selectedIds.size, page }, '批量删除失败');
       setDeleteError('删除失败，请稍后重试');
       setShowConfirmDialog(false);
     }

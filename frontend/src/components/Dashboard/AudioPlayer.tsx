@@ -1,4 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { createScopedLogger, toLogError } from '../../services/logger';
+
+const logger = createScopedLogger('audio-player');
 
 interface AudioPlayerProps {
   audioUrl: string | null;
@@ -100,13 +103,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     try {
       await onSave(broadcastId);
     } catch (err) {
-      console.error('保存播报失败:', err);
+      logger.error({ err: toLogError(err), broadcastId, hasAudioUrl: Boolean(audioUrl) }, '保存播报失败');
       setSaveError(true);
       window.setTimeout(() => setSaveError(false), 3000);
     } finally {
       setIsSaving(false);
     }
-  }, [onSave, broadcastId]);
+  }, [onSave, broadcastId, audioUrl]);
 
   const progress = duration > 0 ? currentTime / duration : 0;
 

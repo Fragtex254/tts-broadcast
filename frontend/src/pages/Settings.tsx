@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Header } from '../components/Layout/Header';
 import { PasswordField } from '../components/PasswordField';
+import { createScopedLogger, toLogError } from '../services/logger';
 import useStore, { type LlmModelOption, type Settings as AppSettings } from '../store';
 import { buildAutoSaveUpdate, changeBaseUrl } from './settingsDraft';
+
+const logger = createScopedLogger('settings-page');
 
 const voiceOptions = [
   { value: '冰糖', label: '冰糖' },
@@ -82,7 +85,7 @@ export const Settings: React.FC = () => {
       const nextDirtyFields = new Set(dirtyFieldsRef.current);
       nextDirtyFields.delete(field);
       setDirtyFieldsState(nextDirtyFields);
-    } catch (e) { console.error(`自动保存 ${String(field)} 失败:`, e); }
+    } catch (e) { logger.error({ err: toLogError(e), field: String(field) }, '自动保存设置失败'); }
   }, [setDirtyFieldsState, updateSettings]);
 
   /** debounce 自动保存，用于文本输入 */
@@ -125,7 +128,7 @@ export const Settings: React.FC = () => {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     }
-    catch (e) { console.error('保存设置失败:', e); }
+    catch (e) { logger.error({ err: toLogError(e), dirtyFieldCount: dirtyFieldsRef.current.size }, '保存设置失败'); }
     finally { setIsSaving(false); }
   };
 
@@ -181,11 +184,11 @@ export const Settings: React.FC = () => {
 
   const handleDeleteSchedule = async (id: number) => {
     if (!window.confirm('确定要删除此定时任务吗？')) return;
-    try { await deleteSchedule(id); } catch (e) { console.error(e); }
+    try { await deleteSchedule(id); } catch (e) { logger.error({ err: toLogError(e), scheduleId: id }, '删除定时任务失败'); }
   };
 
   const handleToggleSchedule = async (id: number) => {
-    try { await toggleSchedule(id); } catch (e) { console.error(e); }
+    try { await toggleSchedule(id); } catch (e) { logger.error({ err: toLogError(e), scheduleId: id }, '切换任务状态失败'); }
   };
 
   const formatCronExpression = (cron: string) => cronExamples.find((e) => e.value === cron)?.label || cron;

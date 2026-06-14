@@ -1,6 +1,9 @@
 import { scheduleApi } from '../services/api';
+import { createScopedLogger, toLogError } from '../services/logger';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
+
+const logger = createScopedLogger('schedule-slice');
 
 export function createScheduleSlice(set: StoreSet): Pick<
   AppState,
@@ -14,7 +17,7 @@ export function createScheduleSlice(set: StoreSet): Pick<
         const response = await scheduleApi.getAll();
         set({ schedules: response.data.schedules });
       } catch (error) {
-        console.error('获取定时任务失败:', error);
+        logger.error({ err: toLogError(error) }, '获取定时任务失败');
         throw error;
       }
     },
@@ -28,7 +31,7 @@ export function createScheduleSlice(set: StoreSet): Pick<
         }));
         return schedule;
       } catch (error) {
-        console.error('创建定时任务失败:', error);
+        logger.error({ err: toLogError(error), hasContentTypes: Boolean(data.content_types) }, '创建定时任务失败');
         throw error;
       }
     },
@@ -42,7 +45,7 @@ export function createScheduleSlice(set: StoreSet): Pick<
         }));
         return updated;
       } catch (error) {
-        console.error('更新定时任务失败:', error);
+        logger.error({ err: toLogError(error), scheduleId: id, fieldCount: Object.keys(data).length }, '更新定时任务失败');
         throw error;
       }
     },
@@ -54,7 +57,7 @@ export function createScheduleSlice(set: StoreSet): Pick<
           schedules: state.schedules.filter((s) => s.id !== id),
         }));
       } catch (error) {
-        console.error('删除定时任务失败:', error);
+        logger.error({ err: toLogError(error), scheduleId: id }, '删除定时任务失败');
         throw error;
       }
     },
@@ -68,7 +71,7 @@ export function createScheduleSlice(set: StoreSet): Pick<
         }));
         return updated;
       } catch (error) {
-        console.error('切换任务状态失败:', error);
+        logger.error({ err: toLogError(error), scheduleId: id }, '切换任务状态失败');
         throw error;
       }
     },

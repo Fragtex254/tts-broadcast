@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
+import { createScopedLogger, toLogError } from '../../services/logger';
 import useStore from '../../store';
+
+const logger = createScopedLogger('quick-generate');
 
 interface QuickGenerateProps {
   onItemsLoaded?: () => void;
@@ -45,7 +48,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
       onItemsLoaded?.();
     } catch (err) {
       setError('获取资讯失败，请稍后重试');
-      console.error(err);
+      logger.error({ err: toLogError(err), hasCategory: Boolean(category), take: count }, '获取资讯失败');
     } finally {
       setIsLoading(false);
     }
@@ -62,7 +65,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
       onRewriteComplete?.();
     } catch (err) {
       setError('改写口播稿失败，请稍后重试');
-      console.error(err);
+      logger.error({ err: toLogError(err), itemCount: todayItems.length }, '改写口播稿失败');
     }
   };
 

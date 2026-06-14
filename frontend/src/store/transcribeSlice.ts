@@ -1,7 +1,10 @@
 import { transcribeApi } from '../services/api';
+import { createScopedLogger, toLogError } from '../services/logger';
 import { createSSEClient, type SSECompleteEvent, type SSEErrorEvent, type SSEProgressEvent } from '../services/sseClient';
 import type { AppState, AsrLanguage, TranscriptionProgress, TranscriptionResult } from './types';
 import type { StoreSet } from './storeTypes';
+
+const logger = createScopedLogger('transcribe-slice');
 
 const IDLE_PROGRESS: TranscriptionProgress = {
   phase: 'idle',
@@ -141,7 +144,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             message: '转录失败',
           },
         });
-        console.error('转录失败:', error);
+        logger.error({ err: toLogError(error), fileSize: file.size, language, taskIdLength: taskId.length }, '转录失败');
         throw error;
       } finally {
         sseClient.close();

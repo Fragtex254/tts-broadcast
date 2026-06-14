@@ -20,3 +20,13 @@ const rootLogger = pino({
 export function createScopedLogger(scope: string): Logger {
   return rootLogger.child({ scope });
 }
+
+export function toLogError(error: unknown): Error {
+  if (error instanceof Error) {
+    const safeError = new Error(error.message);
+    safeError.name = error.name;
+    safeError.stack = error.stack;
+    return safeError;
+  }
+  return new Error(typeof error === 'string' ? error : 'Non-Error thrown');
+}

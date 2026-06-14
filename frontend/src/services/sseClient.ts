@@ -1,5 +1,8 @@
 // SSE 客户端封装
 // 提供类型安全的 SSE 连接管理
+import { createScopedLogger, toLogError } from './logger';
+
+const logger = createScopedLogger('sse-client');
 
 export interface SSEProgressEvent {
   segmentId?: number;
@@ -69,7 +72,10 @@ export class SSEClient {
 
     // 连接成功事件
     this.eventSource.addEventListener('connected', () => {
-      console.log(`SSE 连接成功: ${this.taskId}`);
+      logger.info(
+        { hasTaskId: Boolean(this.taskId), taskIdLength: this.taskId.length },
+        'SSE 连接成功'
+      );
     });
 
     // 进度事件
@@ -97,7 +103,14 @@ export class SSEClient {
 
     // 默认错误处理（连接断开）
     this.eventSource.onerror = (error) => {
-      console.error(`SSE 连接错误: ${this.taskId}`, error);
+      logger.error(
+        {
+          eventType: error.type,
+          hasTaskId: Boolean(this.taskId),
+          taskIdLength: this.taskId.length,
+        },
+        'SSE 连接错误'
+      );
     };
   }
 
@@ -131,7 +144,7 @@ export class SSEClient {
         try {
           handler(data);
         } catch (error) {
-          console.error(`SSE 事件处理错误: ${eventType}`, error);
+          logger.error({ err: toLogError(error), eventType }, 'SSE 事件处理错误');
         }
       }
     }
