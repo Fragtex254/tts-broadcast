@@ -48,7 +48,11 @@ router.post('/:id/split', async (req, res) => {
     const segments = segmentStore.getByBroadcastId(idCheck.id);
     res.json({ segments });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '切分失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '切分失败');
     res.status(500).json({ error: error.message || '切分失败' });
   }
 });
@@ -68,7 +72,11 @@ router.get('/:id/segments', (req, res) => {
     const segments = segmentStore.getByBroadcastId(idCheck.id);
     res.json({ segments });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '获取 segments 失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '获取 segments 失败');
     res.status(500).json({ error: '获取 segments 失败' });
   }
 });
@@ -186,7 +194,11 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     // 仍然返回 HTTP 响应（向后兼容）
     res.json({ segments, results });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '批量生成失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '批量生成失败');
     sseManager.sendError(String(idCheck.id), error.message || '批量生成失败');
     res.status(500).json({ error: error.message || '批量生成失败' });
   }
@@ -230,7 +242,11 @@ router.post('/:id/segments/merge', (req, res) => {
     const updated = broadcastStore.getById(idCheck.id);
     res.json({ broadcast: updated });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '合并失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '合并失败');
     res.status(500).json({ error: error.message || '合并失败' });
   }
 });
@@ -260,7 +276,11 @@ router.post('/:id/segments/reorder', (req, res) => {
     const segments = segmentStore.getByBroadcastId(idCheck.id);
     res.json({ segments });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '重排序失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '重排序失败');
     res.status(500).json({ error: '重排序失败' });
   }
 });
@@ -290,7 +310,13 @@ router.put('/:id/segments/:segId', (req, res) => {
     const updated = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
     res.json({ segment: updated });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id, segmentId: req.params.segId }, '编辑句子失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+      hasSegmentId: Boolean(req.params.segId),
+      segmentIdParamLength: typeof req.params.segId === 'string' ? req.params.segId.length : undefined,
+    }, '编辑句子失败');
     res.status(500).json({ error: '编辑句子失败' });
   }
 });
@@ -334,7 +360,13 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
     const updated = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
     res.json({ segment: updated });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id, segmentId: req.params.segId }, '重新生成失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+      hasSegmentId: Boolean(req.params.segId),
+      segmentIdParamLength: typeof req.params.segId === 'string' ? req.params.segId.length : undefined,
+    }, '重新生成失败');
     res.status(500).json({ error: '重新生成失败' });
   }
 });
@@ -359,7 +391,13 @@ router.delete('/:id/segments/:segId', (req, res) => {
     const segments = segmentStore.getByBroadcastId(idCheck.id);
     res.json({ segments });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id, segmentId: req.params.segId }, '删除句子失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+      hasSegmentId: Boolean(req.params.segId),
+      segmentIdParamLength: typeof req.params.segId === 'string' ? req.params.segId.length : undefined,
+    }, '删除句子失败');
     res.status(500).json({ error: '删除句子失败' });
   }
 });

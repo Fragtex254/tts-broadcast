@@ -277,7 +277,11 @@ router.delete('/:id', (req, res) => {
 
     res.json({ message: '预设已删除', id });
   } catch (error) {
-    logger.error({ err: error, presetId: req.params.id }, '删除预设失败');
+    logger.error({
+      err: error,
+      hasPresetId: Boolean(req.params.id),
+      presetIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '删除预设失败');
     res.status(500).json({ error: '删除预设失败' });
   }
 });

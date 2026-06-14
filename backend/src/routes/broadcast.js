@@ -236,7 +236,11 @@ router.get('/:id', (req, res) => {
 
     res.json({ broadcast });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '获取播报详情失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '获取播报详情失败');
     res.status(500).json({ error: '获取播报详情失败' });
   }
 });
@@ -270,7 +274,11 @@ router.patch('/:id/voice-config', (req, res) => {
     const broadcast = broadcastStore.getById(idCheck.id);
     res.json({ broadcast });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '更新音色配置失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '更新音色配置失败');
     res.status(500).json({ error: '更新音色配置失败' });
   }
 });
@@ -310,7 +318,11 @@ router.post('/:id/save', (req, res) => {
     const updated = broadcastStore.getById(idCheck.id);
     res.json({ broadcast: updated });
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '保存播报失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '保存播报失败');
     res.status(500).json({ error: '保存播报失败' });
   }
 });
@@ -338,7 +350,11 @@ router.get('/:id/audio', (req, res) => {
 
     res.sendFile(filepath);
   } catch (error) {
-    logger.error({ err: error, broadcastId: req.params.id }, '获取音频失败');
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '获取音频失败');
     res.status(500).json({ error: '获取音频失败' });
   }
 });

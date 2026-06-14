@@ -45,12 +45,20 @@ function startJob(schedule) {
   }
 
   if (!cron.validate(schedule.cron_expression)) {
-    logger.warn({ cronExpression: schedule.cron_expression }, '无效的 cron 表达式');
+    logger.warn({
+      scheduleId: schedule.id,
+      hasCronExpression: Boolean(schedule.cron_expression),
+      cronExpressionLength: typeof schedule.cron_expression === 'string' ? schedule.cron_expression.length : undefined,
+    }, '无效的 cron 表达式');
     return;
   }
 
   const job = cron.schedule(schedule.cron_expression, async () => {
-    logger.info({ scheduleId: schedule.id, scheduleName: schedule.name }, '执行定时任务');
+    logger.info({
+      scheduleId: schedule.id,
+      hasScheduleName: Boolean(schedule.name),
+      scheduleNameLength: typeof schedule.name === 'string' ? schedule.name.length : undefined,
+    }, '执行定时任务');
     try {
       if (onTriggerCallback) {
         await onTriggerCallback(schedule);
@@ -58,7 +66,12 @@ function startJob(schedule) {
       // 任务成功后更新时间
       db.prepare('UPDATE schedules SET last_run_at = CURRENT_TIMESTAMP WHERE id = ?').run(schedule.id);
     } catch (error) {
-      logger.error({ err: error, scheduleId: schedule.id, scheduleName: schedule.name }, '定时任务执行失败');
+      logger.error({
+        err: error,
+        scheduleId: schedule.id,
+        hasScheduleName: Boolean(schedule.name),
+        scheduleNameLength: typeof schedule.name === 'string' ? schedule.name.length : undefined,
+      }, '定时任务执行失败');
     }
   });
 
