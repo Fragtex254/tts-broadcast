@@ -83,6 +83,9 @@ describe('logger 服务', () => {
     const secret = 'secret-api-key';
     const requestBody = '完整用户内容';
     const base64Audio = 'data:audio/wav;base64,AAAASECRETBASE64';
+    const responseSecret = 'response-secret-token';
+    const responseUserContent = '响应里的完整用户内容';
+    const responseBase64Audio = 'data:audio/mp3;base64,RESPONSESECRETBASE64';
 
     error.config = {
       headers: { 'api-key': secret },
@@ -95,12 +98,19 @@ describe('logger 服务', () => {
         headers: { Authorization: `Bearer ${secret}` },
         data: { audio: base64Audio },
       },
+      headers: { 'x-api-key': responseSecret },
+      data: { content: responseUserContent, audio: responseBase64Audio },
       request: { body: requestBody },
     };
-    error.cause = new Error('底层错误');
-    error.cause.config = {
-      headers: { 'api-key': secret },
-      data: requestBody,
+    error.cause = {
+      config: {
+        headers: { 'api-key': secret },
+        data: requestBody,
+      },
+      response: {
+        headers: { Authorization: `Bearer ${responseSecret}` },
+        data: { transcript: responseUserContent, audio: responseBase64Audio },
+      },
     };
 
     logger.error({ err: error }, '测试 API Key 失败');
@@ -113,9 +123,16 @@ describe('logger 服务', () => {
     expect(line.err.request).toBe('[Redacted]');
     expect(line.err.response.config).toBe('[Redacted]');
     expect(line.err.response.request).toBe('[Redacted]');
+    expect(line.err.response.headers).toBe('[Redacted]');
+    expect(line.err.response.data).toBe('[Redacted]');
+    expect(line.err.cause.response.headers).toBe('[Redacted]');
+    expect(line.err.cause.response.data).toBe('[Redacted]');
     expect(rawLog).not.toContain(secret);
     expect(rawLog).not.toContain(requestBody);
     expect(rawLog).not.toContain(base64Audio);
+    expect(rawLog).not.toContain(responseSecret);
+    expect(rawLog).not.toContain(responseUserContent);
+    expect(rawLog).not.toContain(responseBase64Audio);
   });
 
   test('NODE_ENV=test 默认不创建真实 backend/logs 目录', () => {

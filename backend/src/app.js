@@ -39,7 +39,11 @@ app.use('/api/sse', require('./routes/sse'));
 // 错误处理中间件
 app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') {
-    logger.warn({ method: req.method, path: req.path }, '请求体过大');
+    logger.warn({
+      method: req.method,
+      hasPath: Boolean(req.path),
+      pathLength: typeof req.path === 'string' ? req.path.length : undefined,
+    }, '请求体过大');
     return res.status(413).json({ error: '请求体过大，请压缩音频或使用更短的参考音频' });
   }
 

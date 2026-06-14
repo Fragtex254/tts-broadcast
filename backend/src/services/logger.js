@@ -7,10 +7,14 @@ const DEFAULT_LOG_DIR = path.join(__dirname, '../../logs');
 const REDACT_PATHS = [
   'err.config',
   'err.request',
+  'err.response.data',
+  'err.response.headers',
   'err.response.config',
   'err.response.request',
   'err.cause.config',
   'err.cause.request',
+  'err.cause.response.data',
+  'err.cause.response.headers',
   'err.cause.response.config',
   'err.cause.response.request',
 ];
