@@ -20,13 +20,25 @@ function createMemoryStream() {
 describe('logger 服务', () => {
   const originalEnv = { ...process.env };
   const realLogDir = path.join(__dirname, '../../logs');
+  let tempDirs = [];
+
+  function createTempDir(prefix) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    tempDirs.push(dir);
+    return dir;
+  }
 
   beforeEach(() => {
     jest.resetModules();
+    jest.dontMock('pino');
+    tempDirs = [];
     process.env = { ...originalEnv, NODE_ENV: 'test' };
   });
 
   afterEach(() => {
+    tempDirs.forEach(dir => {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
     process.env = originalEnv;
   });
 
@@ -67,14 +79,14 @@ describe('logger 服务', () => {
     fs.rmSync(realLogDir, { recursive: true, force: true });
     const { createScopedLogger, DEFAULT_LOG_DIR } = require('../../src/services/logger');
 
-    const logger = createScopedLogger('test-scope');
+    const logger = createScopedLogger('test-scope', { includeConsole: false });
     logger.info('测试日志');
 
     expect(fs.existsSync(DEFAULT_LOG_DIR)).toBe(false);
   });
 
   test('getLogFilePath 默认不读取 LOG_DIR 环境变量', () => {
-    const envLogDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-env-logs-'));
+    const envLogDir = createTempDir('tts-env-logs-');
     process.env.LOG_DIR = envLogDir;
     const { DEFAULT_LOG_DIR, getLogFilePath } = require('../../src/services/logger');
     const now = () => new Date('2026-06-14T09:52:01.123Z');
@@ -98,9 +110,29 @@ describe('logger 服务', () => {
     });
   });
 
+  test('includeConsole 和 writeFiles 均关闭时使用本地 no-op stream', () => {
+    const destination = jest.fn(() => {
+      throw new Error('不应使用文件目标');
+    });
+    jest.doMock('pino', () => {
+      const actualPino = jest.requireActual('pino');
+      const mockedPino = (...args) => actualPino(...args);
+      return Object.assign(mockedPino, actualPino, { destination });
+    });
+
+    const { createScopedLogger } = require('../../src/services/logger');
+    const logger = createScopedLogger('noop-scope', {
+      includeConsole: false,
+      writeFiles: false,
+    });
+
+    expect(() => logger.info('静默日志')).not.toThrow();
+    expect(destination).not.toHaveBeenCalled();
+  });
+
   test('传入 logDir 和 writeFiles 时写入当天 JSONL 文件', () => {
     const { createScopedLogger, getLogFilePath } = require('../../src/services/logger');
-    const logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-logs-'));
+    const logDir = createTempDir('tts-logs-');
     const now = () => new Date('2026-06-14T09:52:01.123Z');
 
     const logger = createScopedLogger('sse-manager', {

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { Writable } = require('stream');
 const pino = require('pino');
 
 const DEFAULT_LOG_DIR = path.join(__dirname, '../../logs');
@@ -25,6 +26,14 @@ function createFileDestination({ logDir, now }) {
   return pino.destination({ dest: getLogFilePath({ logDir, now }), sync: true });
 }
 
+function createNoopDestination() {
+  return new Writable({
+    write(chunk, encoding, callback) {
+      callback();
+    },
+  });
+}
+
 function createDestination(options) {
   const streams = [];
   const includeConsole = options.includeConsole !== false;
@@ -42,7 +51,7 @@ function createDestination(options) {
   }
 
   if (streams.length === 0) {
-    return pino.destination({ dest: '/dev/null', sync: true });
+    return createNoopDestination();
   }
 
   if (streams.length === 1) {
