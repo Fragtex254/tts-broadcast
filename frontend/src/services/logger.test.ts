@@ -26,6 +26,19 @@ describe('frontend logger', () => {
     expect(JSON.stringify(call)).toContain('200');
   });
 
+  test('日志对象包含 ISO 格式 time 字段', async () => {
+    const { createScopedLogger } = await import('./logger');
+    const logger = createScopedLogger('api');
+
+    logger.info({ status: 200 }, '请求成功');
+
+    expect(console.info).toHaveBeenCalled();
+    const call = vi.mocked(console.info).mock.calls[0];
+    expect(call[0]).toMatchObject({
+      time: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+    });
+  });
+
   test('error 日志可以携带错误对象', async () => {
     const { createScopedLogger } = await import('./logger');
     const logger = createScopedLogger('sse-client');

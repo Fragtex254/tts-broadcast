@@ -11,7 +11,7 @@ const rootLogger = pino({
     serialize: true,
   },
   base: undefined,
-  timestamp: () => `,"time":"${new Date().toISOString()}"`,
+  timestamp: () => new Date().toISOString(),
 });
 
 export function createScopedLogger(scope: string): Logger {
