@@ -61,7 +61,12 @@ class SSEManager {
       try {
         res.write(message);
       } catch (error) {
-        logger.error({ err: error, taskId, eventType }, 'SSE 推送失败');
+        logger.error({
+          err: error,
+          hasTaskId: Boolean(taskId),
+          taskIdLength: typeof taskId === 'string' ? taskId.length : undefined,
+          eventType,
+        }, 'SSE 推送失败');
         this.removeClient(taskId, res);
       }
     }
