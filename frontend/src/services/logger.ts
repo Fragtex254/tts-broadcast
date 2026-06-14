@@ -6,6 +6,9 @@ const DEFAULT_LOG_LEVEL: LogLevel = (import.meta.env.VITE_LOG_LEVEL as LogLevel 
 
 const rootLogger = pino({
   level: DEFAULT_LOG_LEVEL,
+  serializers: {
+    err: pino.stdSerializers.err,
+  },
   browser: {
     asObject: true,
     serialize: true,

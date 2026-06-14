@@ -50,6 +50,14 @@ describe('frontend logger', () => {
     expect(JSON.stringify(call)).toContain('sse-client');
     expect(JSON.stringify(call)).toContain('SSE 连接错误');
     expect(JSON.stringify(call)).toContain('task-1');
+    const errorDetails = call[0]?.err;
+    expect(call[0]).toMatchObject({
+      err: {
+        type: 'Error',
+        stack: expect.stringContaining('连接失败'),
+      },
+    });
+    expect(JSON.stringify(errorDetails)).toMatch(/"(message|msg)":"连接失败"/);
   });
 
   test('前端 logger 不写入浏览器存储', async () => {
