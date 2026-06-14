@@ -95,7 +95,7 @@ router.post('/', (req, res) => {
       res.json(result);
     } catch (error) {
       const taskId = buildTaskId(req);
-      logger.error({ err: error, taskId }, '转录失败');
+      logger.error({ err: error, hasTaskId: Boolean(taskId) }, '转录失败');
       if (taskId) {
         sseManager.sendError(taskId, error.message || '转录失败');
       }

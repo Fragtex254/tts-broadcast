@@ -75,6 +75,49 @@ describe('logger 服务', () => {
     expect(line.err.stack).toContain('生成失败');
   });
 
+  test('error 日志脱敏 Axios 请求配置和请求对象', () => {
+    const { createScopedLogger } = require('../../src/services/logger');
+    const memory = createMemoryStream();
+    const logger = createScopedLogger('mimo-service', { stream: memory.stream });
+    const error = new Error('API 调用失败');
+    const secret = 'secret-api-key';
+    const requestBody = '完整用户内容';
+    const base64Audio = 'data:audio/wav;base64,AAAASECRETBASE64';
+
+    error.config = {
+      headers: { 'api-key': secret },
+      data: { messages: [{ content: requestBody }], audio: { voice: base64Audio } },
+    };
+    error.request = { rawHeaders: ['api-key', secret], body: requestBody };
+    error.response = {
+      status: 500,
+      config: {
+        headers: { Authorization: `Bearer ${secret}` },
+        data: { audio: base64Audio },
+      },
+      request: { body: requestBody },
+    };
+    error.cause = new Error('底层错误');
+    error.cause.config = {
+      headers: { 'api-key': secret },
+      data: requestBody,
+    };
+
+    logger.error({ err: error }, '测试 API Key 失败');
+
+    const rawLog = JSON.stringify(memory.lines()[0]);
+    const [line] = memory.lines();
+    expect(line.err.message).toContain('API 调用失败');
+    expect(line.err.stack).toContain('API 调用失败');
+    expect(line.err.config).toBe('[Redacted]');
+    expect(line.err.request).toBe('[Redacted]');
+    expect(line.err.response.config).toBe('[Redacted]');
+    expect(line.err.response.request).toBe('[Redacted]');
+    expect(rawLog).not.toContain(secret);
+    expect(rawLog).not.toContain(requestBody);
+    expect(rawLog).not.toContain(base64Audio);
+  });
+
   test('NODE_ENV=test 默认不创建真实 backend/logs 目录', () => {
     fs.rmSync(realLogDir, { recursive: true, force: true });
     const { createScopedLogger, DEFAULT_LOG_DIR } = require('../../src/services/logger');
