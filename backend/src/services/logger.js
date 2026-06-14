@@ -8,7 +8,7 @@ function getNow(options) {
   return options && options.now ? options.now : () => new Date();
 }
 
-function getLogFilePath({ logDir = process.env.LOG_DIR || DEFAULT_LOG_DIR, now = () => new Date() } = {}) {
+function getLogFilePath({ logDir = DEFAULT_LOG_DIR, now = () => new Date() } = {}) {
   const date = now().toISOString().slice(0, 10);
   return path.join(logDir, `app-${date}.log`);
 }
@@ -28,7 +28,7 @@ function createFileDestination({ logDir, now }) {
 function createDestination(options) {
   const streams = [];
   const includeConsole = options.includeConsole !== false;
-  const logDir = options.logDir || process.env.LOG_DIR || DEFAULT_LOG_DIR;
+  const logDir = options.logDir || DEFAULT_LOG_DIR;
   const now = getNow(options);
 
   if (options.stream) {
@@ -56,7 +56,7 @@ function createRootLogger(options = {}) {
   const now = getNow(options);
   return pino(
     {
-      level: options.level || process.env.LOG_LEVEL || 'info',
+      level: 'info',
       base: null,
       timestamp: () => `,"time":"${now().toISOString()}"`,
     },
