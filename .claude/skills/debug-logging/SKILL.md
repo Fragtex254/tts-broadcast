@@ -39,7 +39,18 @@ logger.error({ err: error, scheduleName: schedule.name }, '定时任务执行失
 
 ## 前端用法
 
-前端 import 路径按当前文件位置调整：store 文件通常用 `../services/logger`，dashboard 组件通常用 `../../services/logger`。
+前端 import 路径按当前文件位置调整：
+
+```ts
+// service file
+import { createScopedLogger } from './logger';
+
+// store file
+import { createScopedLogger } from '../services/logger';
+
+// dashboard component
+import { createScopedLogger } from '../../services/logger';
+```
 
 ```ts
 import { createScopedLogger } from './logger';
@@ -52,6 +63,8 @@ logger.error({ err: error, status }, 'API 请求失败');
 ```
 
 ## Agent 查询后端日志
+
+后端日志文件名使用 UTC 日期；agent 通常直接查最新文件，避免本地时区和 UTC 日期不一致。
 
 ```bash
 ls -t backend/logs/app-*.log | head -1
