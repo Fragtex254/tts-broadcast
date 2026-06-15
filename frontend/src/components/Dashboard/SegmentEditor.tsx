@@ -144,6 +144,16 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
     fetchSegments(broadcastId).catch(() => setError('加载句子列表失败'));
   }, [broadcastId, fetchSegments]);
 
+  // popover 打开时按 Esc 关闭
+  useEffect(() => {
+    if (openTagPickerId === null) return undefined;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenTagPickerId(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [openTagPickerId]);
+
   if (!segments.length && !isSplitting) return null;
 
   const hasPendingOrFailed = segments.some((s) => s.status === 'pending' || s.status === 'failed');

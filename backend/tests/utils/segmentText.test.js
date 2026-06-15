@@ -2,10 +2,13 @@ const { prependStyleTag, sanitizeStyleTag } = require('../../src/utils/segmentTe
 
 describe('segmentText', () => {
   describe('sanitizeStyleTag', () => {
-    test('剥离半角/全角括号与方括号并 trim', () => {
+    test('剥离半角/全角圆括号并 trim', () => {
       expect(sanitizeStyleTag(' (平静) ')).toBe('平静');
       expect(sanitizeStyleTag('（严肃）')).toBe('严肃');
-      expect(sanitizeStyleTag('[活泼]')).toBe('活泼');
+    });
+    test('不剥方括号（方括号是细粒度音频标签的语义边界）', () => {
+      expect(sanitizeStyleTag('[活泼]')).toBe('[活泼]');
+      expect(sanitizeStyleTag('a[b]c')).toBe('a[b]c');
     });
     test('空值返回空串', () => {
       expect(sanitizeStyleTag('')).toBe('');

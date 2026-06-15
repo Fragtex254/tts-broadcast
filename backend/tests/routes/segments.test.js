@@ -10,6 +10,7 @@ const tts = require('../../src/services/tts');
 const audio = require('../../src/services/audio');
 const audioAsset = require('../../src/services/audioAsset');
 const mimo = require('../../src/services/mimo');
+const segmentStore = require('../../src/services/segmentStore');
 
 describe('Segments API', () => {
   let broadcastId;
@@ -199,6 +200,22 @@ describe('Segments API', () => {
       expect(res.status).toBe(400);
     });
 
+    test('同时传 text 与 styleTag 时两者都生效（含清洗）', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '旧文本', 'generated', '/audio/x.wav');
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({ text: '新文本', styleTag: '（严肃）' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segment.text).toBe('新文本');
+      expect(res.body.segment.style_tag).toBe('严肃');
+      expect(res.body.segment.status).toBe('pending');
+      expect(res.body.segment.audio_path).toBeNull();
+    });
+
     test('不存在的 segment 返回 404', async () => {
       const res = await request(app)
         .put(`/api/broadcast/${broadcastId}/segments/99999`)
@@ -348,6 +365,20 @@ describe('Segments API', () => {
         .post('/api/broadcast/99999/segments/suggest-tags')
         .send({ allowedTags: ['平静'] });
       expect(res.status).toBe(404);
+    });
+
+    test('AI 调用抛错时不写库（事务回滚：style_tag 保持原值）', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, 'A', 'pending', '原值');
+      jest.spyOn(mimo, 'suggestStyleTags').mockRejectedValue(new Error('LLM 超时'));
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-tags`)
+        .send({ allowedTags: ['平静', '严肃'] });
+
+      expect(res.status).toBe(500);
+      const after = segmentStore.getByBroadcastId(broadcastId);
+      expect(after[0].style_tag).toBe('原值');
     });
   });
 
