@@ -60,6 +60,44 @@ describe('frontend logger', () => {
     expect(JSON.stringify(errorDetails)).toMatch(/"(message|msg)":"连接失败"/);
   });
 
+  test('toLogError strips enumerable request metadata before logging', async () => {
+    const { createScopedLogger, toLogError } = await import('./logger');
+    const logger = createScopedLogger('api-client');
+    const error = new Error('上传失败') as Error & Record<string, unknown>;
+    error.config = {
+      headers: { 'api-key': 'secret-key' },
+      data: 'data:audio/wav;base64,SECRET_AUDIO',
+    };
+    error.request = { body: 'secret body' };
+    error.response = {
+      headers: { authorization: 'Bearer secret' },
+      data: 'user content secret',
+    };
+
+    logger.error({ err: toLogError(error) }, 'Sanitized frontend error');
+
+    expect(console.error).toHaveBeenCalled();
+    const call = vi.mocked(console.error).mock.calls[0];
+    const serialized = JSON.stringify(call);
+    expect(serialized).toContain('上传失败');
+    expect(call[0]).toMatchObject({
+      err: {
+        stack: expect.stringContaining('上传失败'),
+      },
+    });
+    expect(serialized).not.toContain('config');
+    expect(serialized).not.toContain('request');
+    expect(serialized).not.toContain('response');
+    expect(serialized).not.toContain('api-key');
+    expect(serialized).not.toContain('secret-key');
+    expect(serialized).not.toContain('authorization');
+    expect(serialized).not.toContain('Bearer secret');
+    expect(serialized).not.toContain('data:audio/wav;base64,SECRET_AUDIO');
+    expect(serialized).not.toContain('SECRET_AUDIO');
+    expect(serialized).not.toContain('secret body');
+    expect(serialized).not.toContain('user content secret');
+  });
+
   test('前端 logger 不写入浏览器存储', async () => {
     const { createScopedLogger } = await import('./logger');
     const logger = createScopedLogger('settings-slice');
