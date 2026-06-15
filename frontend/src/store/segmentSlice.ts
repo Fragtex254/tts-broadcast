@@ -1,5 +1,6 @@
 import { broadcastApi } from '../services/api';
 import { createScopedLogger, toLogError } from '../services/logger';
+import { STYLE_TAGS } from '../constants/toneTags';
 import type { AppState } from './types';
 import type { StoreGet, StoreSet } from './storeTypes';
 
@@ -31,12 +32,16 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
   | 'batchGenerateSegments'
   | 'deleteSegment'
   | 'mergeSegments'
+  | 'isSuggestingTags'
+  | 'updateSegmentStyleTag'
+  | 'suggestTags'
   | 'clearSegments'
 > {
   return {
     segments: [],
     isSplitting: false,
     isMerging: false,
+    isSuggestingTags: false,
 
     splitScriptAction: async (text) => {
       set({ isSplitting: true });
@@ -176,6 +181,34 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       } catch (error) {
         set({ isMerging: false });
         logger.error({ err: toLogError(error), broadcastId }, '合并失败');
+        throw error;
+      }
+    },
+
+    updateSegmentStyleTag: async (broadcastId, segId, styleTag) => {
+      try {
+        const response = await broadcastApi.updateSegment(broadcastId, segId, { styleTag });
+        const updated = response.data.segment;
+        set((state) => ({
+          segments: state.segments.map((s) => (s.id === segId ? updated : s)),
+        }));
+        return updated;
+      } catch (error) {
+        logger.error({ err: toLogError(error), broadcastId, segmentId: segId }, '设置风格标签失败');
+        throw error;
+      }
+    },
+
+    suggestTags: async (broadcastId) => {
+      set({ isSuggestingTags: true });
+      try {
+        const response = await broadcastApi.suggestSegmentTags(broadcastId, STYLE_TAGS);
+        const segments = response.data.segments;
+        set({ segments, isSuggestingTags: false });
+        return segments;
+      } catch (error) {
+        set({ isSuggestingTags: false });
+        logger.error({ err: toLogError(error), broadcastId }, 'AI 建议风格失败');
         throw error;
       }
     },

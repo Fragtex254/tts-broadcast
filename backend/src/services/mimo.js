@@ -337,6 +337,63 @@ ${text}`;
 }
 
 /**
+ * 为各段建议整体风格标签
+ * @param {string[]} texts - 各段文本（按 index）
+ * @param {string[]} allowedTags - 候选风格标签集
+ * @returns {Promise<string[]>} 与 texts 等长的标签数组（候选之一或空串）
+ */
+async function suggestStyleTags(texts, allowedTags) {
+  if (!Array.isArray(texts) || texts.length === 0) {
+    throw new Error('请提供有效的句子列表');
+  }
+  if (!Array.isArray(allowedTags) || allowedTags.length === 0) {
+    throw new Error('请提供候选风格标签');
+  }
+
+  const config = getLlmConfig();
+  const numbered = texts.map((t, i) => `${i + 1}. ${t}`).join('\n');
+  const prompt = `你是一个语音风格标注助手。下面是一篇新闻播报被切分后的若干句子。请为【每一句】从候选风格标签中选出最贴合的一个，用于控制该句的语音语气；如果都不贴合就返回空字符串。
+
+候选风格标签：${allowedTags.join('、')}
+
+要求：
+1. 以 JSON 数组格式输出，数组长度必须等于句子数量（${texts.length}）
+2. 每个元素是候选标签之一，或空字符串 ""
+3. 不要修改句子、不要解释，只输出 JSON 数组
+
+句子列表：
+${numbered}`;
+
+  const rawText = await createLlmMessage({
+    prompt,
+    systemPrompt: '你是一个语音风格标注助手，只输出 JSON 数组格式。',
+    maxTokens: Math.min(4000, 200 + texts.length * 20),
+    thinkingEnabled: config.splitThinkingEnabled,
+  });
+
+  const trimmed = rawText.trim();
+  let jsonStr = trimmed;
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  }
+
+  let tags;
+  try {
+    tags = JSON.parse(jsonStr);
+  } catch (e) {
+    throw new Error(`AI 风格建议结果解析失败: ${e.message}`);
+  }
+
+  if (!Array.isArray(tags) || tags.length !== texts.length) {
+    throw new Error('AI 风格建议结果数量与句子数量不一致');
+  }
+
+  const allowed = new Set(allowedTags);
+  return tags.map((t) => (typeof t === 'string' && allowed.has(t) ? t : ''));
+}
+
+/**
  * 测试 API Key 是否有效
  * @param {string} type - Key 类型: 'anthropic' 或 'tts'
  * @param {string} [apiKeyOverride] - 临时验证用 API Key，不传则读取已保存设置
@@ -388,6 +445,7 @@ module.exports = {
   getLlmConfig,
   rewriteToScript,
   splitScript,
+  suggestStyleTags,
   testApiKey,
 };
 

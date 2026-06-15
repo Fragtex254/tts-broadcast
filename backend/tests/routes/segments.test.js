@@ -9,6 +9,8 @@ jest.mock('../../src/services/tts', () => ({
 const tts = require('../../src/services/tts');
 const audio = require('../../src/services/audio');
 const audioAsset = require('../../src/services/audioAsset');
+const mimo = require('../../src/services/mimo');
+const segmentStore = require('../../src/services/segmentStore');
 
 describe('Segments API', () => {
   let broadcastId;
@@ -108,6 +110,42 @@ describe('Segments API', () => {
     });
   });
 
+  describe('batch-generate 注入风格标签', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+      tts.generateSpeech.mockReset();
+    });
+
+    test('生成时把 (风格) 前置到合成文本', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句', 'pending', '平静');
+      tts.generateSpeech.mockResolvedValue(Buffer.from('wav'));
+      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/seg_0.wav');
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/batch-generate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      expect(tts.generateSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({ text: '(平静)第一句' })
+      );
+    }, 15000);
+
+    test('无 style_tag 时文本原样传入', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第二句', 'pending', '');
+      tts.generateSpeech.mockResolvedValue(Buffer.from('wav'));
+      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/seg_0.wav');
+
+      await request(app).post(`/api/broadcast/${broadcastId}/segments/batch-generate`).send();
+
+      expect(tts.generateSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({ text: '第二句' })
+      );
+    }, 15000);
+  });
+
   describe('POST /api/broadcast/:id/segments/merge', () => {
     test('无 segments 时返回 400', async () => {
       const res = await request(app)
@@ -162,6 +200,22 @@ describe('Segments API', () => {
       expect(res.status).toBe(400);
     });
 
+    test('同时传 text 与 styleTag 时两者都生效（含清洗）', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '旧文本', 'generated', '/audio/x.wav');
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({ text: '新文本', styleTag: '（严肃）' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segment.text).toBe('新文本');
+      expect(res.body.segment.style_tag).toBe('严肃');
+      expect(res.body.segment.status).toBe('pending');
+      expect(res.body.segment.audio_path).toBeNull();
+    });
+
     test('不存在的 segment 返回 404', async () => {
       const res = await request(app)
         .put(`/api/broadcast/${broadcastId}/segments/99999`)
@@ -180,6 +234,60 @@ describe('Segments API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.segment.status).toBe('pending');
+    });
+
+    test('设置 styleTag 并重置为 pending（含清洗括号）', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '文本', 'generated', '/audio/x.wav');
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({ styleTag: '(平静)' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segment.style_tag).toBe('平静');
+      expect(res.body.segment.status).toBe('pending');
+    });
+
+    test('设置 styleTag 不带括号时原样入库', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '文本', 'pending');
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({ styleTag: '活泼' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segment.style_tag).toBe('活泼');
+    });
+
+    test('suggest-tags 写回时对 AI 返回值做 sanitize 兜底', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, 'A', 'pending');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 1, 'B', 'pending');
+      // AI 偶发返回带括号值：sanitize 兜底剥括号
+      jest.spyOn(mimo, 'suggestStyleTags').mockResolvedValue(['(平静)', '严肃']);
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-tags`)
+        .send({ allowedTags: ['平静', '严肃'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segments.map((s) => s.style_tag)).toEqual(['平静', '严肃']);
+    });
+
+    test('text 与 styleTag 都不传返回 400', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '文本', 'pending');
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({});
+      expect(res.status).toBe(400);
     });
   });
 
@@ -224,6 +332,53 @@ describe('Segments API', () => {
       const res = await request(app)
         .delete(`/api/broadcast/${broadcastId}/segments/99999`);
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /api/broadcast/:id/segments/suggest-tags', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    test('写回 AI 建议的风格标签', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, 'A', 'pending');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 1, 'B', 'pending');
+      jest.spyOn(mimo, 'suggestStyleTags').mockResolvedValue(['平静', '严肃']);
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-tags`)
+        .send({ allowedTags: ['平静', '严肃'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segments.map((s) => s.style_tag)).toEqual(['平静', '严肃']);
+    });
+
+    test('缺少 allowedTags 返回 400', async () => {
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-tags`)
+        .send({});
+      expect(res.status).toBe(400);
+    });
+
+    test('不存在的 broadcast 返回 404', async () => {
+      const res = await request(app)
+        .post('/api/broadcast/99999/segments/suggest-tags')
+        .send({ allowedTags: ['平静'] });
+      expect(res.status).toBe(404);
+    });
+
+    test('AI 调用抛错时不写库（事务回滚：style_tag 保持原值）', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, 'A', 'pending', '原值');
+      jest.spyOn(mimo, 'suggestStyleTags').mockRejectedValue(new Error('LLM 超时'));
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-tags`)
+        .send({ allowedTags: ['平静', '严肃'] });
+
+      expect(res.status).toBe(500);
+      const after = segmentStore.getByBroadcastId(broadcastId);
+      expect(after[0].style_tag).toBe('原值');
     });
   });
 

@@ -35,6 +35,7 @@ export interface Segment {
   text: string;
   audio_path: string | null;
   status: 'pending' | 'generating' | 'generated' | 'failed';
+  style_tag: string;
   created_at: string;
   updated_at: string;
 }
@@ -202,6 +203,9 @@ export interface AppState {
   batchGenerateSegments: (broadcastId: number) => Promise<{ segments: Segment[]; results: BatchGenerateResult[] }>;
   deleteSegment: (broadcastId: number, segId: number) => Promise<Segment[]>;
   mergeSegments: (broadcastId: number) => Promise<Broadcast>;
+  isSuggestingTags: boolean;
+  updateSegmentStyleTag: (broadcastId: number, segId: number, styleTag: string) => Promise<Segment>;
+  suggestTags: (broadcastId: number) => Promise<Segment[]>;
   clearSegments: () => void;
 
   transcribeMedia: (file: File, language: AsrLanguage) => Promise<TranscriptionResult>;

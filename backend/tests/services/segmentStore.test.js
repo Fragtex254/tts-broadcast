@@ -160,4 +160,53 @@ describe('segmentStore', () => {
       expect(segmentStore.countByIds(broadcastId, [segs[0].id, 99999])).toBe(1);
     });
   });
+
+  describe('updateStyleTag', () => {
+    test('写入 style_tag 并重置状态/音频', () => {
+      segmentStore.createMany(broadcastId, ['句子']);
+      const seg = segmentStore.getByBroadcastId(broadcastId)[0];
+      segmentStore.updateStatus(seg.id, 'generated', '/audio/seg.wav');
+      segmentStore.updateStyleTag(seg.id, '平静');
+      const updated = segmentStore.getByIdAndBroadcastId(seg.id, broadcastId);
+      expect(updated.style_tag).toBe('平静');
+      expect(updated.status).toBe('pending');
+      expect(updated.audio_path).toBeNull();
+    });
+  });
+
+  describe('updateText 保留 style_tag', () => {
+    test('改文本不丢 style_tag', () => {
+      segmentStore.createMany(broadcastId, ['旧']);
+      const seg = segmentStore.getByBroadcastId(broadcastId)[0];
+      segmentStore.updateStyleTag(seg.id, '严肃');
+      segmentStore.updateText(seg.id, '新');
+      const updated = segmentStore.getByIdAndBroadcastId(seg.id, broadcastId);
+      expect(updated.text).toBe('新');
+      expect(updated.style_tag).toBe('严肃');
+    });
+  });
+
+  describe('bulkUpdateStyleTags', () => {
+    test('只重置 tag 变化的段', () => {
+      segmentStore.createMany(broadcastId, ['A', 'B']);
+      const segs = segmentStore.getByBroadcastId(broadcastId);
+      segmentStore.updateStyleTag(segs[0].id, '平静');
+      segmentStore.updateStatus(segs[0].id, 'generated', '/audio/a.wav');
+      segmentStore.updateStatus(segs[1].id, 'generated', '/audio/b.wav');
+
+      segmentStore.bulkUpdateStyleTags(broadcastId, [
+        { id: segs[0].id, styleTag: '平静' }, // 不变
+        { id: segs[1].id, styleTag: '严肃' }, // 变化
+      ]);
+
+      const after = segmentStore.getByBroadcastId(broadcastId);
+      const a = after.find((s) => s.id === segs[0].id);
+      const b = after.find((s) => s.id === segs[1].id);
+      expect(a.style_tag).toBe('平静');
+      expect(a.status).toBe('generated'); // 未变 → 不重置
+      expect(b.style_tag).toBe('严肃');
+      expect(b.status).toBe('pending');   // 变化 → 重置
+      expect(b.audio_path).toBeNull();
+    });
+  });
 });

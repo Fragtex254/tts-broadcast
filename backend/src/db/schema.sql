@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS segments (
   text TEXT NOT NULL,
   audio_path TEXT,
   status TEXT DEFAULT 'pending',
+  style_tag TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE

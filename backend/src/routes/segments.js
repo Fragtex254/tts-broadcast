@@ -13,6 +13,7 @@ const sseManager = require('../services/sseManager');
 const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
 const { validateId, cleanAudioFile } = require('../utils/validation');
+const { prependStyleTag, sanitizeStyleTag } = require('../utils/segmentText');
 
 const logger = createScopedLogger('segments-route');
 
@@ -82,6 +83,45 @@ router.get('/:id/segments', (req, res) => {
 });
 
 /**
+ * POST /api/broadcast/:id/segments/suggest-tags
+ * AI 为各段建议整体风格标签
+ */
+router.post('/:id/segments/suggest-tags', async (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const { allowedTags } = req.body;
+    if (!Array.isArray(allowedTags) || allowedTags.length === 0
+        || !allowedTags.every((t) => typeof t === 'string')) {
+      return res.status(400).json({ error: '请提供候选风格标签 allowedTags' });
+    }
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+    if (segments.length === 0) return res.status(400).json({ error: '没有可建议的句子' });
+
+    const tags = await mimo.suggestStyleTags(segments.map((s) => s.text), allowedTags);
+    segmentStore.bulkUpdateStyleTags(
+      idCheck.id,
+      segments.map((s, i) => ({ id: s.id, styleTag: sanitizeStyleTag(tags[i] || '') }))
+    );
+
+    const updated = segmentStore.getByBroadcastId(idCheck.id);
+    res.json({ segments: updated });
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, 'AI 建议风格失败');
+    res.status(500).json({ error: error.message || 'AI 建议风格失败' });
+  }
+});
+
+/**
  * POST /api/broadcast/:id/segments/batch-generate
  * 批量生成 segment 音频（支持 SSE 实时推送）
  */
@@ -146,7 +186,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
         // 使用队列管理 TTS 请求，避免触发限流
         const audioBuffer = await ttsQueue.enqueue(async () => {
           const speechParams = await voiceConfigService.toSpeechParams({
-            text: segment.text,
+            text: prependStyleTag(segment.text, segment.style_tag),
             voiceType,
             voiceConfig: resolvedVoiceConfig,
             resolveClone: false // clone 音色已在批量开始时统一解析
@@ -287,7 +327,7 @@ router.post('/:id/segments/reorder', (req, res) => {
 
 /**
  * PUT /api/broadcast/:id/segments/:segId
- * 编辑单个 segment 文本
+ * 编辑单个 segment（支持 text 和/或 styleTag）
  */
 router.put('/:id/segments/:segId', (req, res) => {
   try {
@@ -296,16 +336,23 @@ router.put('/:id/segments/:segId', (req, res) => {
     const segIdCheck = validateId(req.params.segId, '句子 ID');
     if (!segIdCheck.valid) return res.status(400).json({ error: segIdCheck.error });
 
-    const { text } = req.body;
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    const { text, styleTag } = req.body;
+    const hasText = text !== undefined;
+    const hasStyleTag = styleTag !== undefined;
+    if (!hasText && !hasStyleTag) {
+      return res.status(400).json({ error: '请提供 text 或 styleTag' });
+    }
+    if (hasText && (typeof text !== 'string' || text.trim().length === 0)) {
       return res.status(400).json({ error: '请提供有效的文本内容' });
     }
 
     const segment = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
     if (!segment) return res.status(404).json({ error: '句子不存在' });
 
+    // 改文本或改风格都会改变合成结果，统一清旧音频并由 DAL 重置为 pending
     cleanAudioFile(segment.audio_path);
-    segmentStore.updateText(segIdCheck.id, text.trim());
+    if (hasText) segmentStore.updateText(segIdCheck.id, text.trim());
+    if (hasStyleTag) segmentStore.updateStyleTag(segIdCheck.id, sanitizeStyleTag(styleTag));
 
     const updated = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
     res.json({ segment: updated });
@@ -342,7 +389,7 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
 
     try {
       const speechParams = await voiceConfigService.toSpeechParams({
-        text: segment.text,
+        text: prependStyleTag(segment.text, segment.style_tag),
         voiceType,
         voiceConfig,
         resolveClone: true
