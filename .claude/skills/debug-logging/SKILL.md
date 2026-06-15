@@ -57,7 +57,7 @@ import { createScopedLogger } from './logger';
 
 const logger = createScopedLogger('api-client');
 
-logger.info({ taskId }, 'SSE 连接成功');
+logger.info({ hasTaskId: Boolean(taskId), taskIdLength: taskId?.length ?? 0 }, 'SSE 连接成功');
 logger.warn({ validationError }, 'Schema validation failed');
 logger.error({ err: error, status }, 'API 请求失败');
 ```
@@ -82,6 +82,6 @@ rg '"level":50|"level":40' backend/logs
 - [ ] 使用 `createScopedLogger()`，不新增裸 `console.*`
 - [ ] `scope` 稳定且可搜索
 - [ ] 错误对象放入 `{ err: error }`
-- [ ] metadata 不包含 API Key、完整 token 或大体积 base64/audio 内容
+- [ ] metadata 不包含 API Key、完整 token、完整 taskId 或大体积 base64/audio 内容
 - [ ] 后端日志可通过 `backend/logs/app-YYYY-MM-DD.log` 查询
 - [ ] 前端日志只在浏览器控制台输出

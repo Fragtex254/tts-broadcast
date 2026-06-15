@@ -91,7 +91,7 @@ The frontend wrapper will:
 Frontend usage pattern:
 
 ```ts
-logger.info({ taskId }, 'SSE 连接成功');
+logger.info({ hasTaskId: Boolean(taskId), taskIdLength: taskId?.length ?? 0 }, 'SSE 连接成功');
 logger.warn({ validationError }, 'Schema validation failed');
 logger.error({ err: error, status }, 'API 请求失败');
 ```

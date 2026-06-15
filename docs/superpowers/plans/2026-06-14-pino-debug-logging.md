@@ -185,7 +185,7 @@ describe('logger 服务', () => {
       includeConsole: false,
     });
 
-    logger.warn({ taskId: 'task-1' }, 'SSE 推送失败');
+    logger.warn({ hasTaskId: true, taskIdLength: 6 }, 'SSE 推送失败');
 
     const logFile = getLogFilePath({ logDir, now });
     const [line] = fs.readFileSync(logFile, 'utf8').trim().split('\n').map(item => JSON.parse(item));
@@ -194,7 +194,8 @@ describe('logger 服务', () => {
       time: '2026-06-14T09:52:01.123Z',
       scope: 'sse-manager',
       msg: 'SSE 推送失败',
-      taskId: 'task-1',
+      hasTaskId: true,
+      taskIdLength: 6,
     });
   });
 });
@@ -358,13 +359,13 @@ describe('frontend logger', () => {
     const { createScopedLogger } = await import('./logger');
     const logger = createScopedLogger('sse-client');
 
-    logger.error({ err: new Error('连接失败'), taskId: 'task-1' }, 'SSE 连接错误');
+    logger.error({ err: new Error('连接失败'), hasTaskId: true, taskIdLength: 6 }, 'SSE 连接错误');
 
     expect(console.error).toHaveBeenCalled();
     const call = vi.mocked(console.error).mock.calls[0];
     expect(JSON.stringify(call)).toContain('sse-client');
     expect(JSON.stringify(call)).toContain('SSE 连接错误');
-    expect(JSON.stringify(call)).toContain('task-1');
+    expect(JSON.stringify(call)).toContain('taskIdLength');
   });
 
   test('前端 logger 不写入浏览器存储', async () => {
@@ -489,7 +490,7 @@ import { createScopedLogger } from './logger';
 
 const logger = createScopedLogger('api-client');
 
-logger.info({ taskId }, 'SSE 连接成功');
+logger.info({ hasTaskId: Boolean(taskId), taskIdLength: taskId?.length ?? 0 }, 'SSE 连接成功');
 logger.warn({ validationError }, 'Schema validation failed');
 logger.error({ err: error, status }, 'API 请求失败');
 ```
@@ -512,7 +513,7 @@ rg '"level":50|"level":40' backend/logs
 - [ ] 使用 `createScopedLogger()`，不新增裸 `console.*`
 - [ ] `scope` 稳定且可搜索
 - [ ] 错误对象放入 `{ err: error }`
-- [ ] metadata 不包含 API Key、完整 token 或大体积 base64/audio 内容
+- [ ] metadata 不包含 API Key、完整 token、完整 taskId 或大体积 base64/audio 内容
 - [ ] 后端日志可通过 `backend/logs/app-YYYY-MM-DD.log` 查询
 - [ ] 前端日志只在浏览器控制台输出
 ```
@@ -767,8 +768,8 @@ private logger = createScopedLogger('sse-client');
 Replace current console calls:
 
 ```ts
-this.logger.info({ taskId: this.taskId }, 'SSE 连接成功');
-this.logger.error({ err: error, taskId: this.taskId }, 'SSE 连接错误');
+this.logger.info({ hasTaskId: Boolean(this.taskId), taskIdLength: this.taskId?.length ?? 0 }, 'SSE 连接成功');
+this.logger.error({ err: error, hasTaskId: Boolean(this.taskId), taskIdLength: this.taskId?.length ?? 0 }, 'SSE 连接错误');
 this.logger.error({ err: error, eventType }, 'SSE 事件处理错误');
 ```
 
