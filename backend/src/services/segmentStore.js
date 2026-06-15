@@ -80,6 +80,40 @@ function updateText(segId, text) {
 }
 
 /**
+ * 更新 segment 的整体风格标签，并重置状态为 pending、清空音频
+ * @param {number} segId - segment ID
+ * @param {string} styleTag - 已清洗的风格标签（空串=无）
+ */
+function updateStyleTag(segId, styleTag) {
+  db.prepare(
+    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+  ).run(styleTag, segId);
+}
+
+/**
+ * 批量更新风格标签（仅对 tag 实际变化的段重置状态/音频）
+ * @param {number} broadcastId - 播报 ID
+ * @param {Array<{id:number, styleTag:string}>} items
+ */
+function bulkUpdateStyleTags(broadcastId, items) {
+  const getStmt = db.prepare('SELECT style_tag FROM segments WHERE id = ? AND broadcast_id = ?');
+  const updateStmt = db.prepare(
+    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?"
+  );
+  const run = db.transaction((list) => {
+    for (const { id, styleTag } of list) {
+      const current = getStmt.get(id, broadcastId);
+      if (!current) continue;
+      const next = styleTag || '';
+      if (current.style_tag !== next) {
+        updateStmt.run(next, id, broadcastId);
+      }
+    }
+  });
+  run(items);
+}
+
+/**
  * 按新 ID 顺序重排 segments 的 index
  * @param {number} broadcastId - 播报 ID
  * @param {number[]} segmentIds - 新排序后的 segment ID 数组
@@ -173,6 +207,8 @@ module.exports = {
   getPendingByBroadcastId,
   updateStatus,
   updateText,
+  updateStyleTag,
+  bulkUpdateStyleTags,
   reorder,
   deleteById,
   deleteByBroadcastId,
