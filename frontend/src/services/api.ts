@@ -1,5 +1,8 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
 import type { NewsItem, Settings } from '../store/types';
+import { createScopedLogger, toLogError } from './logger';
+
+const logger = createScopedLogger('api-client');
 
 const api = axios.create({
   baseURL: '/api',
@@ -13,9 +16,9 @@ api.interceptors.response.use(
     // 网络错误 / 请求中断
     if (!error.response) {
       if (axios.isCancel(error)) {
-        console.log('Request cancelled');
+        logger.info('Request cancelled');
       } else {
-        console.error('Network error:', error.message);
+        logger.error({ err: toLogError(error), message: error.message }, 'Network error');
       }
       return Promise.reject(error);
     }
@@ -25,21 +28,21 @@ api.interceptors.response.use(
 
     switch (status) {
       case 401:
-        console.error('Unauthorized — 请检查 API Key 配置');
+        logger.error({ status }, 'Unauthorized — 请检查 API Key 配置');
         break;
       case 403:
-        console.error('Forbidden — 无权访问该资源');
+        logger.error({ status }, 'Forbidden — 无权访问该资源');
         break;
       case 429:
-        console.error('Rate limited — 请求过于频繁，请稍后重试');
+        logger.error({ status }, 'Rate limited — 请求过于频繁，请稍后重试');
         break;
       case 500:
       case 502:
       case 503:
-        console.error(`Server error (${status}) — 服务端异常`);
+        logger.error({ status }, 'Server error — 服务端异常');
         break;
       default:
-        console.error(`API error (${status}):`, data?.error || error.message);
+        logger.error({ status, hasServerError: Boolean(data?.error), message: error.message }, 'API error');
     }
 
     return Promise.reject(error);

@@ -1,7 +1,10 @@
 import { broadcastApi } from '../services/api';
+import { createScopedLogger, toLogError } from '../services/logger';
 import { safeParseArray, safeParseStrict, BroadcastSchema, TodayItemSchema } from '../services/schemas';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
+
+const logger = createScopedLogger('broadcast-slice');
 
 export function createBroadcastSlice(set: StoreSet): Pick<
   AppState,
@@ -36,7 +39,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         const items = safeParseArray(TodayItemSchema, response.data.items || []);
         set({ todayItems: items });
       } catch (error) {
-        console.error('获取今日资讯失败:', error);
+        logger.error({ err: toLogError(error), hasCategory: Boolean(params?.category), take: params?.take }, '获取今日资讯失败');
         throw error;
       }
     },
@@ -50,7 +53,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         return script;
       } catch (error) {
         set({ isRewriting: false });
-        console.error('改写口播稿失败:', error);
+        logger.error({ err: toLogError(error), itemCount: data.items.length }, '改写口播稿失败');
         throw error;
       }
     },
@@ -69,7 +72,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         return { broadcast, audioUrl };
       } catch (error) {
         set({ isGenerating: false });
-        console.error('生成播报失败:', error);
+        logger.error({ err: toLogError(error), mode: data.mode, textLength: data.text.length }, '生成播报失败');
         throw error;
       }
     },
@@ -82,7 +85,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         set({ broadcasts });
         return { broadcasts, pagination };
       } catch (error) {
-        console.error('获取历史播报失败:', error);
+        logger.error({ err: toLogError(error), page: params?.page, limit: params?.limit }, '获取历史播报失败');
         throw error;
       }
     },
@@ -101,7 +104,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         }));
         return updated;
       } catch (error) {
-        console.error('保存播报失败:', error);
+        logger.error({ err: toLogError(error), broadcastId: id }, '保存播报失败');
         throw error;
       }
     },
@@ -119,7 +122,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         return result;
       } catch (error) {
         set({ isBatchDeleting: false });
-        console.error('批量删除失败:', error);
+        logger.error({ err: toLogError(error), count: ids.length }, '批量删除失败');
         throw error;
       }
     },

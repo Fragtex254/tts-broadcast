@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const scheduler = require('../services/scheduler');
+const { createScopedLogger } = require('../services/logger');
+
+const logger = createScopedLogger('schedule-route');
 
 /**
  * GET /api/schedules
@@ -11,7 +14,7 @@ router.get('/', (req, res) => {
     const schedules = scheduler.getSchedules();
     res.json({ schedules });
   } catch (error) {
-    console.error('获取任务列表失败:', error);
+    logger.error({ err: error }, '获取任务列表失败');
     res.status(500).json({ error: '获取任务列表失败' });
   }
 });
@@ -36,7 +39,7 @@ router.post('/', (req, res) => {
 
     res.status(201).json({ schedule });
   } catch (error) {
-    console.error('创建任务失败:', error);
+    logger.error({ err: error }, '创建任务失败');
     res.status(400).json({ error: error.message });
   }
 });
@@ -71,7 +74,11 @@ router.put('/:id', (req, res) => {
 
     res.json({ schedule });
   } catch (error) {
-    console.error('更新任务失败:', error);
+    logger.error({
+      err: error,
+      hasScheduleId: Boolean(req.params.id),
+      scheduleIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '更新任务失败');
     if (error.message === '任务不存在') {
       res.status(404).json({ error: error.message });
     } else {
@@ -101,7 +108,11 @@ router.delete('/:id', (req, res) => {
     scheduler.removeSchedule(id);
     res.json({ message: '任务已删除' });
   } catch (error) {
-    console.error('删除任务失败:', error);
+    logger.error({
+      err: error,
+      hasScheduleId: Boolean(req.params.id),
+      scheduleIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '删除任务失败');
     res.status(400).json({ error: error.message });
   }
 });
@@ -120,7 +131,11 @@ router.post('/:id/toggle', (req, res) => {
     const schedule = scheduler.toggleSchedule(id);
     res.json({ schedule });
   } catch (error) {
-    console.error('切换任务状态失败:', error);
+    logger.error({
+      err: error,
+      hasScheduleId: Boolean(req.params.id),
+      scheduleIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '切换任务状态失败');
     if (error.message === '任务不存在') {
       res.status(404).json({ error: error.message });
     } else {

@@ -17,6 +17,16 @@ jest.mock('../../src/services/sseManager', () => ({
   removeClient: jest.fn()
 }));
 
+const mockLogger = {
+  error: jest.fn(),
+  warn: jest.fn(),
+  info: jest.fn(),
+};
+
+jest.mock('../../src/services/logger', () => ({
+  createScopedLogger: jest.fn(() => mockLogger),
+}));
+
 const app = require('../../src/app');
 const asr = require('../../src/services/asr');
 const sseManager = require('../../src/services/sseManager');
@@ -111,15 +121,22 @@ describe('转录 API', () => {
   });
 
   test('service 抛出的业务错误返回 500 和中文消息', async () => {
-    jest.spyOn(console, 'error').mockImplementation(() => {});
     asr.transcribeMedia.mockRejectedValue(new Error('MiMo ASR API 请求超时，请稍后再试'));
 
     const res = await request(app)
       .post('/api/transcribe')
+      .field('taskId', 'secret-user-controlled-task-id')
       .attach('media', Buffer.from('fake-wav'), 'sample.wav');
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('MiMo ASR API 请求超时，请稍后再试');
-    console.error.mockRestore();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.any(Error),
+        hasTaskId: true,
+      }),
+      '转录失败'
+    );
+    expect(mockLogger.error.mock.calls[0][0]).not.toHaveProperty('taskId');
   });
 });

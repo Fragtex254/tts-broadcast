@@ -1,6 +1,9 @@
 // backend/src/services/scheduler.js
 const cron = require('node-cron');
 const db = require('../db');
+const { createScopedLogger } = require('./logger');
+
+const logger = createScopedLogger('scheduler');
 
 // 存储活跃的 cron 任务
 const activeJobs = new Map();
@@ -18,7 +21,7 @@ function init(onTrigger) {
   schedules.forEach(schedule => {
     startJob(schedule);
   });
-  console.log(`已加载 ${schedules.length} 个定时任务`);
+  logger.info({ count: schedules.length }, '已加载定时任务');
 }
 
 /**
@@ -29,7 +32,7 @@ function shutdown() {
     job.stop();
   }
   activeJobs.clear();
-  console.log('调度器已关闭');
+  logger.info({}, '调度器已关闭');
 }
 
 /**
@@ -42,12 +45,20 @@ function startJob(schedule) {
   }
 
   if (!cron.validate(schedule.cron_expression)) {
-    console.error(`无效的 cron 表达式: ${schedule.cron_expression}`);
+    logger.warn({
+      scheduleId: schedule.id,
+      hasCronExpression: Boolean(schedule.cron_expression),
+      cronExpressionLength: typeof schedule.cron_expression === 'string' ? schedule.cron_expression.length : undefined,
+    }, '无效的 cron 表达式');
     return;
   }
 
   const job = cron.schedule(schedule.cron_expression, async () => {
-    console.log(`执行定时任务: ${schedule.name}`);
+    logger.info({
+      scheduleId: schedule.id,
+      hasScheduleName: Boolean(schedule.name),
+      scheduleNameLength: typeof schedule.name === 'string' ? schedule.name.length : undefined,
+    }, '执行定时任务');
     try {
       if (onTriggerCallback) {
         await onTriggerCallback(schedule);
@@ -55,7 +66,12 @@ function startJob(schedule) {
       // 任务成功后更新时间
       db.prepare('UPDATE schedules SET last_run_at = CURRENT_TIMESTAMP WHERE id = ?').run(schedule.id);
     } catch (error) {
-      console.error(`定时任务执行失败: ${schedule.name}`, error);
+      logger.error({
+        err: error,
+        scheduleId: schedule.id,
+        hasScheduleName: Boolean(schedule.name),
+        scheduleNameLength: typeof schedule.name === 'string' ? schedule.name.length : undefined,
+      }, '定时任务执行失败');
     }
   });
 

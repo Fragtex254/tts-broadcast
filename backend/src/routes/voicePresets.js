@@ -7,7 +7,10 @@ const fs = require('fs');
 const tts = require('../services/tts');
 const voicePresetStore = require('../services/voicePresetStore');
 const audioAsset = require('../services/audioAsset');
+const { createScopedLogger } = require('../services/logger');
 const { cleanAudioFile, audioDir } = require('../utils/validation');
+
+const logger = createScopedLogger('voice-presets-route');
 
 // multer：内存存储，仅接受 reference_audio 字段，10MB 上限
 const upload = multer({
@@ -101,7 +104,7 @@ router.post('/trial/clone', upload.single('reference_audio'), async (req, res) =
 
     res.json({ audioUrl });
   } catch (error) {
-    console.error('克隆试听失败:', error);
+    logger.error({ err: error }, '克隆试听失败');
     res.status(500).json({ error: error.message || '克隆试听失败' });
   }
 });
@@ -140,7 +143,7 @@ router.post('/trial/design', async (req, res) => {
 
     res.json({ audioUrl });
   } catch (error) {
-    console.error('设计试听失败:', error);
+    logger.error({ err: error }, '设计试听失败');
     res.status(500).json({ error: error.message || '设计试听失败' });
   }
 });
@@ -156,7 +159,7 @@ router.get('/', (req, res) => {
     const presets = voicePresetStore.getAll();
     res.json({ presets });
   } catch (error) {
-    console.error('查询预设失败:', error);
+    logger.error({ err: error }, '查询预设失败');
     res.status(500).json({ error: '查询预设失败' });
   }
 });
@@ -241,7 +244,7 @@ router.post('/', createUpload, (req, res) => {
 
     res.status(201).json({ preset: updatedPreset });
   } catch (error) {
-    console.error('创建预设失败:', error);
+    logger.error({ err: error }, '创建预设失败');
     res.status(500).json({ error: error.message || '创建预设失败' });
   }
 });
@@ -274,7 +277,11 @@ router.delete('/:id', (req, res) => {
 
     res.json({ message: '预设已删除', id });
   } catch (error) {
-    console.error('删除预设失败:', error);
+    logger.error({
+      err: error,
+      hasPresetId: Boolean(req.params.id),
+      presetIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '删除预设失败');
     res.status(500).json({ error: '删除预设失败' });
   }
 });

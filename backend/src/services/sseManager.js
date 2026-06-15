@@ -3,6 +3,10 @@
  * 管理所有客户端的 SSE 连接，支持按任务 ID 推送事件
  */
 
+const { createScopedLogger } = require('./logger');
+
+const logger = createScopedLogger('sse-manager');
+
 class SSEManager {
   constructor() {
     // Map<taskId, Set<res>>
@@ -57,7 +61,12 @@ class SSEManager {
       try {
         res.write(message);
       } catch (error) {
-        console.error('SSE 推送失败:', error);
+        logger.error({
+          err: error,
+          hasTaskId: Boolean(taskId),
+          taskIdLength: typeof taskId === 'string' ? taskId.length : undefined,
+          eventType,
+        }, 'SSE 推送失败');
         this.removeClient(taskId, res);
       }
     }

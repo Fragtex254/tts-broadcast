@@ -1,0 +1,32 @@
+import pino, { type Logger } from 'pino/browser';
+
+type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'silent';
+
+const DEFAULT_LOG_LEVEL: LogLevel = (import.meta.env.VITE_LOG_LEVEL as LogLevel | undefined) ?? 'info';
+
+const rootLogger = pino({
+  level: DEFAULT_LOG_LEVEL,
+  serializers: {
+    err: pino.stdSerializers.err,
+  },
+  browser: {
+    asObject: true,
+    serialize: true,
+  },
+  base: undefined,
+  timestamp: () => new Date().toISOString(),
+});
+
+export function createScopedLogger(scope: string): Logger {
+  return rootLogger.child({ scope });
+}
+
+export function toLogError(error: unknown): Error {
+  if (error instanceof Error) {
+    const safeError = new Error(error.message);
+    safeError.name = error.name;
+    safeError.stack = error.stack;
+    return safeError;
+  }
+  return new Error(typeof error === 'string' ? error : 'Non-Error thrown');
+}

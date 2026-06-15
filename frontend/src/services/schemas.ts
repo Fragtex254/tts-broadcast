@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { createScopedLogger } from './logger';
+
+const logger = createScopedLogger('schema-validation');
 
 // === 基础类型 ===
 
@@ -113,7 +116,7 @@ export const ApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
 export function safeParse<T>(schema: z.ZodType<T>, data: unknown): T | null {
   const result = schema.safeParse(data);
   if (!result.success) {
-    console.warn('Schema validation failed:', result.error.format());
+    logger.warn({ validationError: result.error.format() }, 'Schema validation failed');
     return null;
   }
   return result.data;

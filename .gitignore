@@ -42,5 +42,6 @@ Desktop.ini
 # Database and Audio
 backend/data/
 backend/audio/*.wav
+backend/logs/
 .superpowers/
 .workbuddy/

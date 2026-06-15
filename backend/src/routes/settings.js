@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const mimo = require('../services/mimo');
+const { createScopedLogger } = require('../services/logger');
+
+const logger = createScopedLogger('settings-route');
 
 /**
  * GET /api/settings
@@ -16,7 +19,7 @@ router.get('/', (req, res) => {
     });
     res.json({ settings });
   } catch (error) {
-    console.error('获取设置失败:', error);
+    logger.error({ err: error }, '获取设置失败');
     res.status(500).json({ error: '获取设置失败' });
   }
 });
@@ -56,7 +59,7 @@ router.put('/', (req, res) => {
 
     res.json({ settings });
   } catch (error) {
-    console.error('更新设置失败:', error);
+    logger.error({ err: error }, '更新设置失败');
     res.status(500).json({ error: '更新设置失败' });
   }
 });
@@ -74,7 +77,7 @@ router.post('/test-key', async (req, res) => {
     const isValid = await mimo.testApiKey(mimoType, keyToTest || undefined, llmConfig);
     res.json({ valid: isValid });
   } catch (error) {
-    console.error('测试 API Key 失败:', error);
+    logger.error({ err: error }, '测试 API Key 失败');
     res.json({ valid: false, error: error.message });
   }
 });

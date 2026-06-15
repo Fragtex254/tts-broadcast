@@ -2,6 +2,9 @@ const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
 const db = require('../db');
 const llmModels = require('./llmModels');
+const { createScopedLogger } = require('./logger');
+
+const logger = createScopedLogger('mimo-service');
 
 const DEFAULT_LLM_SETTINGS = {
   llm_api_format: 'anthropic',
@@ -371,7 +374,7 @@ async function testApiKey(type = 'anthropic', apiKeyOverride, configOverride) {
     }
     return true;
   } catch (error) {
-    console.error('测试 API Key 失败:', error.message);
+    logger.error({ err: error }, '测试 API Key 失败');
     return false;
   }
 }

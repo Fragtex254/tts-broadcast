@@ -2,8 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+const { createScopedLogger } = require('./services/logger');
 
 const app = express();
+const logger = createScopedLogger('app');
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -37,11 +39,15 @@ app.use('/api/sse', require('./routes/sse'));
 // 错误处理中间件
 app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') {
-    console.warn(`请求体过大: ${req.method} ${req.originalUrl}`);
+    logger.warn({
+      method: req.method,
+      hasPath: Boolean(req.path),
+      pathLength: typeof req.path === 'string' ? req.path.length : undefined,
+    }, '请求体过大');
     return res.status(413).json({ error: '请求体过大，请压缩音频或使用更短的参考音频' });
   }
 
-  console.error(err.stack);
+  logger.error({ err }, '服务器内部错误');
   res.status(500).json({ error: '服务器内部错误' });
 });
 
@@ -54,7 +60,7 @@ function start() {
   scheduler.init();
 
   return app.listen(PORT, () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
+    logger.info({ port: PORT }, `服务器运行在 http://localhost:${PORT}`);
   });
 }
 
