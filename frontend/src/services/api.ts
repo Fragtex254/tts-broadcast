@@ -86,7 +86,7 @@ export const broadcastApi = {
   getSegments: (id: number) =>
     api.get(`/broadcast/${id}/segments`),
 
-  updateSegment: (broadcastId: number, segId: number, data: { text: string }) =>
+  updateSegment: (broadcastId: number, segId: number, data: { text?: string; styleTag?: string }) =>
     api.put(`/broadcast/${broadcastId}/segments/${segId}`, data),
 
   regenerateSegment: (broadcastId: number, segId: number) =>
@@ -103,6 +103,9 @@ export const broadcastApi = {
 
   reorderSegments: (broadcastId: number, segmentIds: number[]) =>
     api.post(`/broadcast/${broadcastId}/segments/reorder`, { segmentIds }),
+
+  suggestSegmentTags: (broadcastId: number, allowedTags: string[]) =>
+    api.post(`/broadcast/${broadcastId}/segments/suggest-tags`, { allowedTags }),
 
   updateVoiceConfig: (broadcastId: number, data: {
     voiceType: string;
