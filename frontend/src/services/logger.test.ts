@@ -43,13 +43,13 @@ describe('frontend logger', () => {
     const { createScopedLogger } = await import('./logger');
     const logger = createScopedLogger('sse-client');
 
-    logger.error({ err: new Error('连接失败'), taskId: 'task-1' }, 'SSE 连接错误');
+    logger.error({ err: new Error('连接失败'), hasTaskId: true, taskIdLength: 6 }, 'SSE 连接错误');
 
     expect(console.error).toHaveBeenCalled();
     const call = vi.mocked(console.error).mock.calls[0];
     expect(JSON.stringify(call)).toContain('sse-client');
     expect(JSON.stringify(call)).toContain('SSE 连接错误');
-    expect(JSON.stringify(call)).toContain('task-1');
+    expect(JSON.stringify(call)).toContain('taskIdLength');
     const errorDetails = call[0]?.err;
     expect(call[0]).toMatchObject({
       err: {
