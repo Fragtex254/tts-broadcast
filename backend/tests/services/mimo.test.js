@@ -220,4 +220,37 @@ describe('MiMo 服务', () => {
         .rejects.toThrow('请提供有效的口播稿文本');
     });
   });
+
+  describe('suggestStyleTags', () => {
+    test('为每句返回候选标签之一', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '["平静","严肃","活泼"]' }],
+      });
+      const tags = await mimo.suggestStyleTags(['第一句', '第二句', '第三句'], ['平静', '严肃', '活泼']);
+      expect(tags).toEqual(['平静', '严肃', '活泼']);
+    });
+
+    test('非候选标签归为空串', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '["平静","唱歌"]' }],
+      });
+      const tags = await mimo.suggestStyleTags(['A', 'B'], ['平静', '严肃']);
+      expect(tags).toEqual(['平静', '']);
+    });
+
+    test('数量不一致时抛错', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '["平静"]' }],
+      });
+      await expect(mimo.suggestStyleTags(['A', 'B'], ['平静'])).rejects.toThrow('数量');
+    });
+
+    test('剥离 markdown 代码块', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '```json\n["平静","严肃"]\n```' }],
+      });
+      const tags = await mimo.suggestStyleTags(['A', 'B'], ['平静', '严肃']);
+      expect(tags).toEqual(['平静', '严肃']);
+    });
+  });
 });
