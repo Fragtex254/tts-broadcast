@@ -106,7 +106,7 @@ router.post('/:id/segments/suggest-tags', async (req, res) => {
     const tags = await mimo.suggestStyleTags(segments.map((s) => s.text), allowedTags);
     segmentStore.bulkUpdateStyleTags(
       idCheck.id,
-      segments.map((s, i) => ({ id: s.id, styleTag: tags[i] || '' }))
+      segments.map((s, i) => ({ id: s.id, styleTag: sanitizeStyleTag(tags[i] || '') }))
     );
 
     const updated = segmentStore.getByBroadcastId(idCheck.id);

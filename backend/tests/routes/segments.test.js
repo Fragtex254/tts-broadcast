@@ -233,6 +233,35 @@ describe('Segments API', () => {
       expect(res.body.segment.status).toBe('pending');
     });
 
+    test('设置 styleTag 不带括号时原样入库', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '文本', 'pending');
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({ styleTag: '活泼' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segment.style_tag).toBe('活泼');
+    });
+
+    test('suggest-tags 写回时对 AI 返回值做 sanitize 兜底', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, 'A', 'pending');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 1, 'B', 'pending');
+      // AI 偶发返回带括号值：sanitize 兜底剥括号
+      jest.spyOn(mimo, 'suggestStyleTags').mockResolvedValue(['(平静)', '严肃']);
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-tags`)
+        .send({ allowedTags: ['平静', '严肃'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segments.map((s) => s.style_tag)).toEqual(['平静', '严肃']);
+    });
+
     test('text 与 styleTag 都不传返回 400', async () => {
       db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
         .run(broadcastId, 0, '文本', 'pending');

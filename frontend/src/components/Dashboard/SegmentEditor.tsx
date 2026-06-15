@@ -322,7 +322,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
         </button>
         <button
           onClick={handleBatchGenerate}
-          disabled={!hasPendingOrFailed}
+          disabled={!hasPendingOrFailed || isSuggestingTags}
           className="flex-1 bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
         >
           全部生成
