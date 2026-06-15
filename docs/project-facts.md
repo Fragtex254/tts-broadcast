@@ -116,6 +116,7 @@ SQLite 数据库包含 5 张表：
 - `segments.text`：该段稿件文本
 - `segments.audio_path`：该段音频路径
 - `segments.status`：该段状态
+- `segments.style_tag`：该段整体风格标签（如 `平静`；空串=无），生成时前置为 `(风格)`，细粒度 `[音频标签]` 内联在 `segments.text`
 - `voice_presets.type`：`clone`（克隆）或 `design`（设计）
 - `voice_presets.trial_audio_path`：试听音频路径
 - `voice_presets.original_audio_path`：克隆原始音频路径（仅 clone 类型）
@@ -168,6 +169,7 @@ SQLite 数据库包含 5 张表：
 
 - 后端通过 `services/mimo.js` 统一处理 LLM：Anthropic 兼容格式使用 Anthropic SDK，OpenAI 兼容格式使用 Axios 调 `/chat/completions`；`llm_rewrite_system_prompt` 与 `llm_split_system_prompt` 分别控制改写和切分的 system prompt，`llm_rewrite_thinking_enabled` 与 `llm_split_thinking_enabled` 控制 Anthropic 格式下是否禁用 thinking；通过 Axios 调用 MiMo TTS API（`services/tts.js`）
 - ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，上传先写入系统临时目录并在请求结束后清理；前端上传进度使用 axios `onUploadProgress`，后端按 `taskId` 通过 `/api/sse/:taskId` 推送 `transcribe-start`、`progress`、`complete`、`error`；`services/media.js` 支持 multer 的 `buffer` 或 `path` 输入，并转为一个或多个 ASR data URL（长音频优先按静音点切片，目标 15 秒、最大 30 秒，并转为 MP3 降低体积）；`services/asr.js` 串行调用 MiMo ASR、按分片回调累计文本，并拼接最终文本，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
+- 分段生成时由 `routes/segments.js` 经 `utils/segmentText.js` 的 `prependStyleTag` 将 `segment.style_tag` 前置到合成文本；`POST /api/broadcast/:id/segments/suggest-tags` 调 `mimo.suggestStyleTags` 为各段建议风格标签
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
 - 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`
