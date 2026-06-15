@@ -41,6 +41,13 @@ try {
   db.exec("ALTER TABLE broadcasts ADD COLUMN mode TEXT DEFAULT 'whole'");
 }
 
+// 迁移：为旧数据库的 segments 添加 style_tag 列
+try {
+  db.prepare('SELECT style_tag FROM segments LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE segments ADD COLUMN style_tag TEXT DEFAULT ''");
+}
+
 // 迁移：确保 voice_presets 表存在
 try {
   db.prepare('SELECT id FROM voice_presets LIMIT 1').get();
