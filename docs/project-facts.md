@@ -23,6 +23,7 @@ TTS Broadcast 是一个全栈应用，用于自动化 AI 新闻播报。它从 A
 - Tailwind CSS 4 样式
 - Zustand 状态管理
 - React Router 7 路由
+- JSZip（批量转录结果打包下载为 ZIP 压缩包）
 
 ## 常用命令
 
@@ -135,7 +136,7 @@ SQLite 数据库包含 5 张表：
 ## 外部 API
 
 - **MiMo TTS API**（`https://api.xiaomimimo.com/v1`）：语音合成
-- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`；上传文件先落系统临时目录，默认支持 500MB 内音视频；单次请求遵守 Base64 data URL 10MB 上限，后端自动按静音切片长音频；长音频转录通过 SSE 推送分片进度和累计文本
+- **MiMo ASR API**（`https://api.xiaomimimo.com/v1`）：语音识别（音频转文本），通过 `services/asr.js` 调用，复用 `mimo_tts_api_key`；上传文件先落系统临时目录，默认支持 500MB 内音视频；单次请求遵守 Base64 data URL 10MB 上限，后端自动按静音切片长音频；长音频转录通过 SSE 推送分片进度和累计文本；批量转录（`POST /api/transcribe/batch`）支持一次上传多个文件（默认上限 50，环境变量 `TRANSCRIBE_BATCH_MAX_FILES` 可调），后端串行转录（遵守 MiMo RPM 限流），单文件失败隔离不影响其他文件，采用「提交即返回 202 + SSE 推送全部进度和最终结果」的异步模型避免长任务触发 HTTP 超时
 - **LLM API**（默认 `https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写与文本切分，通过 `settings` 中的 `llm_api_format`、`llm_base_url`、`llm_model` 配置，可选择 Anthropic 兼容或 OpenAI 兼容格式；模型发现通过 `POST /api/settings/llm-models` 探测 OpenAI-compatible `/models` 端点
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 
@@ -169,6 +170,7 @@ SQLite 数据库包含 5 张表：
 
 - 后端通过 `services/mimo.js` 统一处理 LLM：Anthropic 兼容格式使用 Anthropic SDK，OpenAI 兼容格式使用 Axios 调 `/chat/completions`；`llm_rewrite_system_prompt` 与 `llm_split_system_prompt` 分别控制改写和切分的 system prompt，`llm_rewrite_thinking_enabled` 与 `llm_split_thinking_enabled` 控制 Anthropic 格式下是否禁用 thinking；通过 Axios 调用 MiMo TTS API（`services/tts.js`）
 - ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，上传先写入系统临时目录并在请求结束后清理；前端上传进度使用 axios `onUploadProgress`，后端按 `taskId` 通过 `/api/sse/:taskId` 推送 `transcribe-start`、`progress`、`complete`、`error`；`services/media.js` 支持 multer 的 `buffer` 或 `path` 输入，并转为一个或多个 ASR data URL（长音频优先按静音点切片，目标 15 秒、最大 30 秒，并转为 MP3 降低体积）；`services/asr.js` 串行调用 MiMo ASR、按分片回调累计文本，并拼接最终文本，`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
+- 批量转录（`POST /api/transcribe/batch`）采用异步模型：multer `upload.array` 接收多文件后立即返回 202，实际转录在后台 `runBatchTranscription` 串行进行，所有进度和最终结果通过 SSE 推送（`phase` 为 `batch-preparing`/`file-start`/`file-progress`/`file-complete`/`file-error`/`completed`）；后台任务开始前 `waitForSseConnection` 等待 SSE 连接建立避免早期事件丢失；前端通过 `relativePaths`（JSON 字符串）保留子目录结构；multer/busboy 默认用 latin1 解码 multipart filename 导致中文乱码，`decodeFileName` 重编码为 utf8 修复
 - 分段生成时由 `routes/segments.js` 经 `utils/segmentText.js` 的 `prependStyleTag` 将 `segment.style_tag` 前置到合成文本；`POST /api/broadcast/:id/segments/suggest-tags` 调 `mimo.suggestStyleTags` 为各段建议风格标签
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
