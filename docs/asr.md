@@ -200,7 +200,7 @@ for chunk in completion:
 
 ## 项目集成规划
 
-> 以下为本项目当前的 ASR 集成方式。历史设计见 [ASR + LiteLLM 设计文档](../superpowers/specs/2026-06-10-asr-litellm-design.md) 和 [ASR 上传转录设计文档](../superpowers/specs/2026-06-11-asr-transcribe-design.md)。
+> 以下为本项目当前的 ASR 集成方式。设计背景见 [ASR 上传转录设计文档](superpowers/specs/2026-06-11-asr-transcribe-design.md)。
 
 ### 调用方式
 
