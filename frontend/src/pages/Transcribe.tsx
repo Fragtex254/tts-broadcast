@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import JSZip from 'jszip';
 import { Header } from '../components/Layout/Header';
 import useStore, { type AsrLanguage, type BatchTranscriptionItem } from '../store';
 
@@ -95,6 +96,26 @@ function downloadTextFile(filename: string, content: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * 将相对路径转为 zip 内的 txt 路径，保留子目录结构。
+ * 如「子目录/a.mp3」→「子目录/a.txt」
+ */
+function relativePathToZipEntry(relativePath: string): string {
+  const noExt = relativePath.replace(/\.[^./\\]+$/, '');
+  return `${noExt}.txt`;
 }
 
 export const Transcribe: React.FC = () => {
@@ -244,11 +265,36 @@ export const Transcribe: React.FC = () => {
     downloadTextFile(relativePathToTxtName(item.relativePath), item.text);
   };
 
-  const handleDownloadAll = () => {
+  const [isZipping, setIsZipping] = useState(false);
+
+  const handleDownloadAll = async () => {
     const completed = batchTranscriptionItems.filter((i) => i.status === 'completed' && i.text.trim());
     if (completed.length === 0) return;
-    const merged = completed.map((i) => `【${i.relativePath}】\n${i.text.trim()}`).join('\n\n');
-    downloadTextFile(`批量转录_${formatTimestamp(new Date())}.txt`, merged);
+    setIsZipping(true);
+    try {
+      const zip = new JSZip();
+      const usedNames = new Map<string, number>();
+      completed.forEach((item) => {
+        let entry = relativePathToZipEntry(item.relativePath);
+        // 同名冲突时追加序号，避免覆盖
+        if (usedNames.has(entry)) {
+          const count = usedNames.get(entry)! + 1;
+          usedNames.set(entry, count);
+          const slashIndex = entry.lastIndexOf('/');
+          const dir = slashIndex >= 0 ? entry.slice(0, slashIndex + 1) : '';
+          const base = slashIndex >= 0 ? entry.slice(slashIndex + 1) : entry;
+          const dotIndex = base.lastIndexOf('.');
+          entry = `${dir}${dotIndex >= 0 ? base.slice(0, dotIndex) : base}_${count}${dotIndex >= 0 ? base.slice(dotIndex) : ''}`;
+        } else {
+          usedNames.set(entry, 1);
+        }
+        zip.file(entry, item.text.trim());
+      });
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      downloadBlob(`批量转录_${formatTimestamp(new Date())}.zip`, blob);
+    } finally {
+      setIsZipping(false);
+    }
   };
 
   const switchMode = (next: TranscribeMode) => {
@@ -533,10 +579,10 @@ export const Transcribe: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleDownloadAll}
-                        disabled={completedCount === 0 || isBatchTranscribing}
+                        disabled={completedCount === 0 || isBatchTranscribing || isZipping}
                         className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/60 hover:bg-white/80 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
                       >
-                        下载全部（{completedCount}）
+                        {isZipping ? '打包中...' : `下载压缩包（${completedCount}）`}
                       </button>
                       <button
                         onClick={handleMergeAll}
