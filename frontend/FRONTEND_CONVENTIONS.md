@@ -25,8 +25,9 @@
 | HTTP | Axios | 1.x |
 | 运行时校验 | Zod | 4 |
 | 测试 | Vitest + Testing Library | 4 / 16 |
+| 压缩包生成 | JSZip | 3.x（批量转录结果打包下载为 ZIP） |
 
-**原则：谨慎引入新依赖。** UI 和普通交互优先用 CSS/原生 API 实现；运行时契约校验使用现有 Zod；测试使用现有 Vitest/Testing Library。确需新增依赖时，先评估 bundle size、维护成本和 CI 影响。
+**原则：谨慎引入新依赖。** UI 和普通交互优先用 CSS/原生 API 实现；运行时契约校验使用现有 Zod；测试使用现有 Vitest/Testing Library。确需新增依赖时，先评估 bundle size、维护成本和 CI 影响。JSZip 用于批量转录结果打包下载，浏览器原生无 zip 生成能力，属于合理新增。
 
 ---
 

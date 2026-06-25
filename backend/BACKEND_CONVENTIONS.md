@@ -43,7 +43,7 @@ backend/src/
 │   ├── segments.js         # Segment 子路由（split、batch-generate、merge、reorder）
 │   ├── settings.js
 │   ├── schedule.js
-│   ├── transcribe.js       # ASR 上传转录
+│   ├── transcribe.js       # ASR 上传转录（单文件 + 批量）
 │   └── voicePresets.js
 ├── services/               # 服务层：外部 API 调用、业务逻辑、数据访问
 │   ├── aihot.js            # AI HOT API 客户端
