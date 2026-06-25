@@ -134,6 +134,37 @@ export interface TranscriptionProgress {
   message: string;
 }
 
+export type BatchTranscriptionItemStatus = 'pending' | 'transcribing' | 'completed' | 'failed';
+
+export interface BatchTranscriptionItem {
+  fileName: string;
+  relativePath: string;
+  text: string;
+  usage?: Record<string, unknown> | null;
+  status: BatchTranscriptionItemStatus;
+  error?: string;
+}
+
+export type BatchTranscriptionPhase =
+  | 'idle'
+  | 'uploading'
+  | 'batch-preparing'
+  | 'file-start'
+  | 'file-progress'
+  | 'file-complete'
+  | 'file-error'
+  | 'completed'
+  | 'failed';
+
+export interface BatchTranscriptionProgress {
+  phase: BatchTranscriptionPhase;
+  percent: number;
+  currentIndex: number;
+  total: number;
+  currentFileName: string;
+  message: string;
+}
+
 /** 确认对话框 */
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -163,6 +194,10 @@ export interface AppState {
   transcriptionText: string;
   isTranscribing: boolean;
   transcribeProgress: TranscriptionProgress;
+
+  batchTranscriptionItems: BatchTranscriptionItem[];
+  isBatchTranscribing: boolean;
+  batchTranscribeProgress: BatchTranscriptionProgress;
 
   voiceConfig: VoiceConfig;
   updateVoiceConfig: (config: Partial<VoiceConfig>) => void;
@@ -211,6 +246,8 @@ export interface AppState {
   transcribeMedia: (file: File, language: AsrLanguage) => Promise<TranscriptionResult>;
   setTranscriptionText: (text: string) => void;
   clearTranscription: () => void;
+  batchTranscribeMedia: (files: File[], language: AsrLanguage) => Promise<BatchTranscriptionItem[]>;
+  clearBatchTranscription: () => void;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;
