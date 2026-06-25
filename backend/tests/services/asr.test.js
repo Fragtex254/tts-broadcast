@@ -14,9 +14,17 @@ jest.mock('../../src/services/mimoApiClient', () => ({
   })
 }));
 
+jest.mock('../../src/services/qwenAsr', () => ({
+  transcribeDataUrl: jest.fn().mockResolvedValue({
+    text: '本地转录文本',
+    usage: null
+  })
+}));
+
 const mimo = require('../../src/services/mimo');
 const media = require('../../src/services/media');
 const mimoApiClient = require('../../src/services/mimoApiClient');
+const qwenAsr = require('../../src/services/qwenAsr');
 const asr = require('../../src/services/asr');
 
 describe('ASR 服务', () => {
@@ -29,6 +37,10 @@ describe('ASR 服务', () => {
       choices: [{ message: { content: '转录文本' } }],
       usage: { total_tokens: 12 }
     });
+    qwenAsr.transcribeDataUrl.mockResolvedValue({
+      text: '本地转录文本',
+      usage: null
+    });
   });
 
   test('成功调用 MiMo ASR 并返回文本与 usage', async () => {
@@ -38,7 +50,11 @@ describe('ASR 服务', () => {
 
     expect(result).toEqual({ text: '转录文本', usage: { total_tokens: 12 } });
     expect(mimo.getApiKey).toHaveBeenCalledWith('tts');
-    expect(media.fileToAsrDataUrls).toHaveBeenCalledWith({ file, maxDataUrlSize: 10 * 1024 * 1024 });
+    expect(media.fileToAsrDataUrls).toHaveBeenCalledWith({
+      file,
+      maxDataUrlSize: 10 * 1024 * 1024,
+      chunkOptions: undefined
+    });
     expect(mimoApiClient.postChatCompletions).toHaveBeenCalledWith({
       apiKey: 'fake-tts-key',
       serviceName: 'ASR',
@@ -61,6 +77,33 @@ describe('ASR 服务', () => {
 
     const call = mimoApiClient.postChatCompletions.mock.calls[0][0];
     expect(call.payload.asr_options.language).toBe('auto');
+  });
+
+  test('选择 Qwen 本地 provider 时调用本地 ASR 且不读取 MiMo Key', async () => {
+    const file = { originalname: 'local.wav', buffer: Buffer.from('a') };
+
+    const result = await asr.transcribeMedia({ file, language: 'zh', provider: 'qwen_mlx' });
+
+    expect(result).toEqual({ text: '本地转录文本', usage: null });
+    expect(mimo.getApiKey).not.toHaveBeenCalled();
+    expect(mimoApiClient.postChatCompletions).not.toHaveBeenCalled();
+    expect(qwenAsr.transcribeDataUrl).toHaveBeenCalledWith({
+      dataUrl: 'data:audio/wav;base64,AAAA',
+      language: 'zh',
+      baseUrl: 'http://localhost:8765/v1',
+      model: 'Qwen/Qwen3-ASR-1.7B',
+      apiKey: ''
+    });
+    expect(media.fileToAsrDataUrls).toHaveBeenCalledWith({
+      file,
+      maxDataUrlSize: 256 * 1024 * 1024,
+      chunkOptions: {
+        targetSeconds: 600,
+        minSeconds: 60,
+        maxSeconds: 1200,
+        tooLargeMessage: '音频内容过大，转换后超过 Qwen 本地 ASR 单片限制'
+      }
+    });
   });
 
   test('自动转录多个音频切片并按顺序合并文本', async () => {

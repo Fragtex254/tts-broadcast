@@ -2,12 +2,17 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { Header } from '../components/Layout/Header';
-import useStore, { type AsrLanguage, type BatchTranscriptionItem } from '../store';
+import useStore, { type AsrProvider, type AsrLanguage, type BatchTranscriptionItem } from '../store';
 
 const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
   { value: 'auto', label: '自动检测' },
   { value: 'zh', label: '中文' },
   { value: 'en', label: '英文' },
+];
+
+const ASR_PROVIDER_OPTIONS: { value: AsrProvider; label: string }[] = [
+  { value: 'mimo', label: 'MiMo 云端' },
+  { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）' },
 ];
 
 const PHASE_LABELS: Record<string, string> = {
@@ -135,15 +140,19 @@ export const Transcribe: React.FC = () => {
   const batchTranscribeProgress = useStore((s) => s.batchTranscribeProgress);
   const batchTranscribeMedia = useStore((s) => s.batchTranscribeMedia);
   const clearBatchTranscription = useStore((s) => s.clearBatchTranscription);
+  const settings = useStore((s) => s.settings);
 
   const [mode, setMode] = useState<TranscribeMode>('single');
   const [file, setFile] = useState<File | null>(null);
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [language, setLanguage] = useState<AsrLanguage>('auto');
+  const [selectedAsrProvider, setSelectedAsrProvider] = useState<AsrProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [batchCopiedIndex, setBatchCopiedIndex] = useState<number | null>(null);
+
+  const asrProvider = selectedAsrProvider ?? settings.asr_provider;
 
   const handleFile = useCallback((nextFile: File | null) => {
     setError(null);
@@ -200,7 +209,7 @@ export const Transcribe: React.FC = () => {
     }
     setError(null);
     try {
-      await transcribeMedia(file, language);
+      await transcribeMedia(file, language, asrProvider);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -214,7 +223,7 @@ export const Transcribe: React.FC = () => {
     }
     setError(null);
     try {
-      await batchTranscribeMedia(selectedFiles, language);
+      await batchTranscribeMedia(selectedFiles, language, asrProvider);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -372,6 +381,15 @@ export const Transcribe: React.FC = () => {
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
+                  <select
+                    value={asrProvider}
+                    onChange={(e) => setSelectedAsrProvider(e.target.value as AsrProvider)}
+                    className="bg-white/70 text-ink rounded-full px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
+                  >
+                    {ASR_PROVIDER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
                   <button
                     onClick={handleSubmit}
                     disabled={isTranscribing}
@@ -383,6 +401,11 @@ export const Transcribe: React.FC = () => {
                     <span className="relative">{isTranscribing ? '转录中...' : '开始转录'}</span>
                   </button>
                 </div>
+                {asrProvider === 'qwen_mlx' && (
+                  <p className="mt-2 font-body text-[11px] text-ink-soft/45 animate-fade-in">
+                    将连接 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，请先在 Mac 上启动 mlx-qwen3-asr serve。
+                  </p>
+                )}
 
                 {error && (
                   <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
@@ -513,6 +536,16 @@ export const Transcribe: React.FC = () => {
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
+                  <select
+                    value={asrProvider}
+                    onChange={(e) => setSelectedAsrProvider(e.target.value as AsrProvider)}
+                    disabled={isBatchTranscribing}
+                    className="bg-white/70 text-ink rounded-full px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
+                  >
+                    {ASR_PROVIDER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
                   <button
                     onClick={handleBatchSubmit}
                     disabled={isBatchTranscribing || selectedIndexes.size === 0}
@@ -528,6 +561,11 @@ export const Transcribe: React.FC = () => {
                     </span>
                   </button>
                 </div>
+                {asrProvider === 'qwen_mlx' && (
+                  <p className="mt-2 font-body text-[11px] text-ink-soft/45 animate-fade-in">
+                    批量文件会串行发送到 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，建议 Mac 先用 1 个任务验证负载。
+                  </p>
+                )}
 
                 {error && (
                   <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">

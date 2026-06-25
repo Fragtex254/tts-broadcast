@@ -70,6 +70,11 @@ function buildTaskId(req) {
   return typeof taskId === 'string' && taskId.trim() ? taskId.trim() : null;
 }
 
+function buildAsrProvider(req) {
+  const provider = req.body.provider;
+  return typeof provider === 'string' && provider.trim() ? provider.trim() : undefined;
+}
+
 /**
  * POST /api/transcribe
  * 上传音频或视频并转录为文本
@@ -103,6 +108,7 @@ router.post('/', (req, res) => {
       const result = await asr.transcribeMedia({
         file: req.file,
         language: req.body.language || 'auto',
+        provider: buildAsrProvider(req),
         onProgress: taskId
           ? (progress) => sseManager.sendProgress(taskId, { ...progress, timestamp: Date.now() })
           : undefined
@@ -161,7 +167,7 @@ async function waitForSseConnection(taskId, timeoutMs = 3000) {
  * 后台串行转录批量文件，所有进度与最终结果通过 SSE 推送。
  * 单文件失败隔离，不影响其他文件。
  */
-async function runBatchTranscription({ files, taskId, language, relativePaths }) {
+async function runBatchTranscription({ files, taskId, language, provider, relativePaths }) {
   const total = files.length;
   const results = [];
 
@@ -196,6 +202,7 @@ async function runBatchTranscription({ files, taskId, language, relativePaths })
       const result = await asr.transcribeMedia({
         file,
         language,
+        provider,
         onProgress: taskId
           ? (progress) => {
               const filePercent = progress.percent ?? 0;
@@ -287,13 +294,14 @@ router.post('/batch', (req, res) => {
 
     const taskId = buildTaskId(req);
     const language = req.body.language || 'auto';
+    const provider = buildAsrProvider(req);
     const relativePaths = parseRelativePaths(req.body.relativePaths);
     const total = files.length;
 
     // 立即返回任务受理，转录在后台异步进行，结果通过 SSE 推送
     res.status(202).json({ taskId, total, accepted: true });
 
-    runBatchTranscription({ files, taskId, language, relativePaths }).catch((error) => {
+    runBatchTranscription({ files, taskId, language, provider, relativePaths }).catch((error) => {
       logger.error({ err: error, hasTaskId: Boolean(taskId) }, '批量转录后台任务异常');
       cleanUploadedFiles(files);
       if (taskId) {

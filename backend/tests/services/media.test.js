@@ -97,4 +97,20 @@ describe('媒体转 ASR data URL 服务', () => {
       { start: 60, duration: 5 }
     ]);
   });
+
+  test('支持 Qwen 本地 ASR 使用更长切片范围', () => {
+    const ranges = buildChunkRanges({
+      duration: 1900,
+      silencePoints: [590, 1210],
+      targetSeconds: 600,
+      minSeconds: 60,
+      maxSeconds: 1200
+    });
+
+    expect(ranges).toEqual([
+      { start: 0, duration: 590 },
+      { start: 590, duration: 620 },
+      { start: 1210, duration: 690 }
+    ]);
+  });
 });

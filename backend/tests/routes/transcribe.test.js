@@ -54,7 +54,22 @@ describe('转录 API', () => {
     });
     expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       file: expect.objectContaining({ originalname: 'sample.wav' }),
-      language: 'zh'
+      language: 'zh',
+      provider: undefined
+    }));
+  });
+
+  test('POST /api/transcribe 透传 ASR provider', async () => {
+    const res = await request(app)
+      .post('/api/transcribe')
+      .field('language', 'zh')
+      .field('provider', 'qwen_mlx')
+      .attach('media', Buffer.from('fake-wav'), 'sample.wav');
+
+    expect(res.status).toBe(200);
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'zh',
+      provider: 'qwen_mlx'
     }));
   });
 
@@ -70,7 +85,8 @@ describe('转录 API', () => {
         originalname: 'long.mp3',
         path: expect.any(String)
       }),
-      language: 'zh'
+      language: 'zh',
+      provider: undefined
     }));
     expect(fs.existsSync(asr.transcribeMedia.mock.calls[0][0].file.path)).toBe(false);
   });
@@ -159,6 +175,7 @@ describe('批量转录 API', () => {
     const res = await request(app)
       .post('/api/transcribe/batch')
       .field('language', 'zh')
+      .field('provider', 'qwen_mlx')
       .field('taskId', 'batch-test')
       .attach('media', Buffer.from('fake-mp3'), 'a.mp3')
       .attach('media', Buffer.from('fake-mp4'), 'b.mp4');
@@ -171,11 +188,13 @@ describe('批量转录 API', () => {
     expect(asr.transcribeMedia).toHaveBeenCalledTimes(2);
     expect(asr.transcribeMedia.mock.calls[0][0]).toMatchObject({
       file: expect.objectContaining({ originalname: 'a.mp3' }),
-      language: 'zh'
+      language: 'zh',
+      provider: 'qwen_mlx'
     });
     expect(asr.transcribeMedia.mock.calls[1][0]).toMatchObject({
       file: expect.objectContaining({ originalname: 'b.mp4' }),
-      language: 'zh'
+      language: 'zh',
+      provider: 'qwen_mlx'
     });
     expect(sseManager.sendComplete).toHaveBeenCalledWith('batch-test', expect.objectContaining({
       phase: 'completed',

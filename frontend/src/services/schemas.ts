@@ -16,6 +16,7 @@ export const NewsItemSchema = z.object({
 }).catchall(z.unknown());
 
 export const LlmApiFormatSchema = z.enum(['openai', 'anthropic']);
+export const AsrProviderSchema = z.enum(['mimo', 'qwen_mlx']);
 
 export const SettingsSchema = z.object({
   mimo_api_key: z.string(),
@@ -27,6 +28,10 @@ export const SettingsSchema = z.object({
   llm_split_system_prompt: z.string(),
   llm_rewrite_thinking_enabled: z.boolean(),
   llm_split_thinking_enabled: z.boolean(),
+  asr_provider: AsrProviderSchema,
+  qwen_asr_base_url: z.string(),
+  qwen_asr_model: z.string(),
+  qwen_asr_api_key: z.string(),
   default_voice: z.string(),
   opening_script: z.string(),
   closing_script: z.string(),

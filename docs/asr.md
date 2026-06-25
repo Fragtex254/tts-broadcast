@@ -204,7 +204,7 @@ for chunk in completion:
 
 ### 调用方式
 
-项目使用独立的 MiMo 标准 API client 调用 ASR，不经过 Anthropic SDK：
+项目使用独立 ASR provider 调用转录服务，不经过 Anthropic SDK。默认 provider 是 MiMo 云端，也可以切换到 Mac 本地 Qwen/MLX 服务：
 
 ```
 前端页面
@@ -212,9 +212,42 @@ for chunk in completion:
     → routes/transcribe.js
       → services/media.js: fileToAsrDataUrls()
       → services/asr.js: transcribeMedia()
-        → POST https://api.xiaomimimo.com/v1/chat/completions
+        → provider=mimo:
+          POST https://api.xiaomimimo.com/v1/chat/completions
           (model: mimo-v2.5-asr)
+        → provider=qwen_mlx:
+          POST {qwen_asr_base_url}/audio/transcriptions
+          (model: qwen_asr_model)
 ```
+
+### Mac 本地 Qwen/MLX provider
+
+设置页的「ASR 转录引擎」可选择 `Qwen 本地（Mac MLX）`。该 provider 调用本地 OpenAI-compatible `/v1/audio/transcriptions` 端点，继续复用项目现有 ffmpeg 切片、SSE 进度和批量串行处理逻辑。
+
+推荐 Mac 启动方式：
+
+```bash
+brew install ffmpeg
+python3 -m venv .venv-qwen-asr
+source .venv-qwen-asr/bin/activate
+pip install "mlx-qwen3-asr[serve]"
+
+mlx-qwen3-asr --doctor
+mlx-qwen3-asr serve --api-key your-local-key --model Qwen/Qwen3-ASR-1.7B
+```
+
+> 实测留痕：`mlx-qwen3-asr 0.3.5` 官方 `serve` 在当前 Mac/MLX 组合下，转录请求可能报 `There is no Stream(gpu, 1) in current thread.`。原因是 server 端通过 `asyncio.to_thread()` 跑推理，MLX 的 GPU stream 与线程绑定。临时规避方案是启动一个同步兼容服务：仍暴露 `/v1/audio/transcriptions`，但在主线程调用 `Session.transcribe()`。本次本地验证使用的同步服务位于 `~/Library/Caches/tts-broadcast/qwen_asr_sync_server.py`，API Key 为 `local-qwen-asr`。如果后续升级 `mlx-qwen3-asr` 后官方 server 修复该问题，可切回官方 `serve`。
+
+对应设置：
+
+| **设置项** | **默认值** | **说明** |
+| --- | --- | --- |
+| `asr_provider` | `mimo` | `mimo` 或 `qwen_mlx` |
+| `qwen_asr_base_url` | `http://localhost:8765/v1` | 本地 OpenAI-compatible Base URL；本机代理环境建议用 `http://127.0.0.1:8765/v1` |
+| `qwen_asr_model` | `Qwen/Qwen3-ASR-1.7B` | 本地模型 ID，可按服务实际加载模型调整 |
+| `qwen_asr_api_key` | 空 | 若 serve 使用 `--api-key`，这里填写同一个 Bearer Token |
+
+注意：Qwen3-ASR 官方单段长音频能力约 20 分钟。项目对 `qwen_mlx` 使用单独的低密度切片策略：单片 data URL 上限 256MB，目标 10 分钟、最大 20 分钟；MiMo provider 仍保持 10MB 上限和 15-30 秒切片。前端请求超时和 Node 到本地 Qwen 的请求超时均按长任务放宽到 30 分钟，必要时可通过 `QWEN_ASR_TIMEOUT_MS` 调大后端到本地 Qwen 的超时时间。
 
 ### 请求参数说明
 
@@ -263,7 +296,8 @@ for chunk in completion:
         for each file:
           → services/media.js: fileToAsrDataUrls()
           → services/asr.js: transcribeMedia()
-            → POST https://api.xiaomimimo.com/v1/chat/completions (mimo-v2.5-asr)
+            → provider=mimo 调 MiMo ASR
+            → provider=qwen_mlx 调 Mac 本地 Qwen/MLX ASR
           → SSE 推送 file-start / file-progress / file-complete / file-error
         → SSE 推送 completed（带 results / succeeded / failed）
 ```

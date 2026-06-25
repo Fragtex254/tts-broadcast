@@ -53,6 +53,7 @@ export interface TodayItem {
 
 /** 应用设置 */
 export type LlmApiFormat = 'openai' | 'anthropic';
+export type AsrProvider = 'mimo' | 'qwen_mlx';
 
 export interface LlmModelOption {
   id: string;
@@ -69,6 +70,10 @@ export interface Settings {
   llm_split_system_prompt: string;
   llm_rewrite_thinking_enabled: boolean;
   llm_split_thinking_enabled: boolean;
+  asr_provider: AsrProvider;
+  qwen_asr_base_url: string;
+  qwen_asr_model: string;
+  qwen_asr_api_key: string;
   default_voice: string;
   opening_script: string;
   closing_script: string;
@@ -243,10 +248,10 @@ export interface AppState {
   suggestTags: (broadcastId: number) => Promise<Segment[]>;
   clearSegments: () => void;
 
-  transcribeMedia: (file: File, language: AsrLanguage) => Promise<TranscriptionResult>;
+  transcribeMedia: (file: File, language: AsrLanguage, provider?: AsrProvider) => Promise<TranscriptionResult>;
   setTranscriptionText: (text: string) => void;
   clearTranscription: () => void;
-  batchTranscribeMedia: (files: File[], language: AsrLanguage) => Promise<BatchTranscriptionItem[]>;
+  batchTranscribeMedia: (files: File[], language: AsrLanguage, provider?: AsrProvider) => Promise<BatchTranscriptionItem[]>;
   clearBatchTranscription: () => void;
 
   fetchSettings: () => Promise<void>;
