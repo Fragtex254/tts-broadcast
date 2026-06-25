@@ -4,7 +4,7 @@
 
 ## 背景
 
-项目已经有 MiMo TTS、MiMo LLM、音频上传和分段 TTS 工作流。`docs/asr.md` 记录了 MiMo-V2.5-ASR 的调用方式，但仓库中尚未实现 ASR 能力。此前的 `2026-06-10-asr-litellm-design.md` 同时包含 LiteLLM Proxy、API Key 重命名和 ASR，范围较大，本次先实现独立的上传转录能力，不引入 LLM 网关迁移。
+项目已经有 MiMo TTS、MiMo LLM、音频上传和分段 TTS 工作流。`docs/asr.md` 记录了 MiMo-V2.5-ASR 的调用方式，但仓库中尚未实现 ASR 能力。此前曾有一版同时包含 LiteLLM Proxy、API Key 重命名和 ASR 的更大范围方案；本次先实现独立的上传转录能力，不引入 LLM 网关迁移。
 
 目标是支持用户上传音频或视频，使用 MiMo ASR 转写成文本，并可将转写结果导入现有口播稿编辑器，继续使用现有切分和 TTS 流程。
 
