@@ -1,7 +1,14 @@
 import { transcribeApi } from '../services/api';
 import { createScopedLogger, toLogError } from '../services/logger';
 import { createSSEClient, type SSECompleteEvent, type SSEErrorEvent, type SSEProgressEvent } from '../services/sseClient';
-import type { AppState, AsrLanguage, TranscriptionProgress, TranscriptionResult } from './types';
+import type {
+  AppState,
+  AsrLanguage,
+  BatchTranscriptionItem,
+  BatchTranscriptionProgress,
+  TranscriptionProgress,
+  TranscriptionResult,
+} from './types';
 import type { StoreSet } from './storeTypes';
 
 const logger = createScopedLogger('transcribe-slice');
@@ -13,6 +20,48 @@ const IDLE_PROGRESS: TranscriptionProgress = {
   total: 0,
   message: '等待上传',
 };
+
+const IDLE_BATCH_PROGRESS: BatchTranscriptionProgress = {
+  phase: 'idle',
+  percent: 0,
+  currentIndex: 0,
+  total: 0,
+  currentFileName: '',
+  message: '等待上传',
+};
+
+interface BatchSSEProgress {
+  phase?: string;
+  index?: number;
+  fileName?: string;
+  total?: number;
+  current?: number;
+  filePercent?: number;
+  percent?: number;
+  text?: string;
+  chunkText?: string;
+  usage?: Record<string, unknown> | null;
+  error?: string;
+  timestamp?: number;
+}
+
+interface BatchSSECompleteResult {
+  fileName: string;
+  relativePath: string;
+  text: string;
+  usage?: Record<string, unknown> | null;
+  error?: string;
+}
+
+interface BatchSSEComplete {
+  phase?: 'completed';
+  percent?: number;
+  results?: BatchSSECompleteResult[];
+  total?: number;
+  succeeded?: number;
+  failed?: number;
+  timestamp: number;
+}
 
 function createTaskId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -29,6 +78,11 @@ function progressMessage(progress: SSEProgressEvent): string {
   return '正在转录';
 }
 
+function getRelativePath(file: File): string {
+  const withPath = file as File & { webkitRelativePath?: string };
+  return withPath.webkitRelativePath || file.name;
+}
+
 export function createTranscribeSlice(set: StoreSet): Pick<
   AppState,
   | 'transcriptionText'
@@ -37,6 +91,11 @@ export function createTranscribeSlice(set: StoreSet): Pick<
   | 'transcribeMedia'
   | 'setTranscriptionText'
   | 'clearTranscription'
+  | 'batchTranscriptionItems'
+  | 'isBatchTranscribing'
+  | 'batchTranscribeProgress'
+  | 'batchTranscribeMedia'
+  | 'clearBatchTranscription'
 > {
   return {
     transcriptionText: '',
@@ -157,6 +216,212 @@ export function createTranscribeSlice(set: StoreSet): Pick<
 
     clearTranscription: () => {
       set({ transcriptionText: '', transcribeProgress: IDLE_PROGRESS });
+    },
+
+    batchTranscriptionItems: [],
+    isBatchTranscribing: false,
+    batchTranscribeProgress: IDLE_BATCH_PROGRESS,
+
+    batchTranscribeMedia: async (files: File[], language: AsrLanguage) => {
+      const taskId = createTaskId();
+      const sseClient = createSSEClient(taskId);
+      const total = files.length;
+
+      const initialItems: BatchTranscriptionItem[] = files.map((file) => ({
+        fileName: file.name,
+        relativePath: getRelativePath(file),
+        text: '',
+        usage: null,
+        status: 'pending',
+      }));
+
+      sseClient.on<BatchSSEProgress>('progress', (progress) => {
+        const phase = progress.phase;
+        const idx = progress.index ?? 0;
+        const totalCount = progress.total ?? total;
+
+        if (phase === 'batch-preparing') {
+          set({
+            batchTranscribeProgress: {
+              phase: 'batch-preparing',
+              percent: 0,
+              currentIndex: 0,
+              total: totalCount,
+              currentFileName: '',
+              message: '准备批量转录',
+            },
+          });
+          return;
+        }
+
+        if (phase === 'file-start') {
+          set((state) => ({
+            batchTranscriptionItems: state.batchTranscriptionItems.map((item, i) =>
+              i === idx ? { ...item, status: 'transcribing' as const } : item
+            ),
+            batchTranscribeProgress: {
+              phase: 'file-start',
+              percent: progress.percent ?? 0,
+              currentIndex: idx,
+              total: totalCount,
+              currentFileName: progress.fileName ?? '',
+              message: `正在转录 ${idx + 1}/${totalCount}`,
+            },
+          }));
+          return;
+        }
+
+        if (phase === 'file-progress') {
+          set({
+            batchTranscribeProgress: {
+              phase: 'file-progress',
+              percent: progress.percent ?? 0,
+              currentIndex: idx,
+              total: totalCount,
+              currentFileName: progress.fileName ?? '',
+              message: `正在转录 ${idx + 1}/${totalCount}`,
+            },
+          });
+          return;
+        }
+
+        if (phase === 'file-complete') {
+          set((state) => ({
+            batchTranscriptionItems: state.batchTranscriptionItems.map((item, i) =>
+              i === idx
+                ? {
+                    ...item,
+                    status: 'completed' as const,
+                    text: progress.text ?? '',
+                    usage: progress.usage ?? null,
+                  }
+                : item
+            ),
+          }));
+          return;
+        }
+
+        if (phase === 'file-error') {
+          set((state) => ({
+            batchTranscriptionItems: state.batchTranscriptionItems.map((item, i) =>
+              i === idx
+                ? { ...item, status: 'failed' as const, error: progress.error ?? '转录失败' }
+                : item
+            ),
+          }));
+          return;
+        }
+      });
+
+      sseClient.on<BatchSSEComplete>('complete', (result) => {
+        const items: BatchTranscriptionItem[] = (result.results ?? []).map((r) => ({
+          fileName: r.fileName,
+          relativePath: r.relativePath ?? r.fileName,
+          text: r.text ?? '',
+          usage: r.usage ?? null,
+          status: r.error ? 'failed' : 'completed',
+          error: r.error,
+        }));
+        set({
+          batchTranscriptionItems: items,
+          isBatchTranscribing: false,
+          batchTranscribeProgress: {
+            phase: 'completed',
+            percent: 100,
+            currentIndex: result.total ?? total,
+            total: result.total ?? total,
+            currentFileName: '',
+            message: `批量转录完成（成功 ${result.succeeded ?? 0}，失败 ${result.failed ?? 0}）`,
+          },
+        });
+        sseClient.close();
+      });
+
+      sseClient.on<SSEErrorEvent>('error', (event) => {
+        // EventSource 连接层错误会自动重连，不在此置失败态
+        if (event.error === 'SSE 连接错误') return;
+        set({
+          isBatchTranscribing: false,
+          batchTranscribeProgress: {
+            phase: 'failed',
+            percent: 0,
+            currentIndex: 0,
+            total,
+            currentFileName: '',
+            message: event.error || '批量转录失败',
+          },
+        });
+        sseClient.close();
+      });
+
+      set({
+        isBatchTranscribing: true,
+        batchTranscriptionItems: initialItems,
+        batchTranscribeProgress: {
+          phase: 'uploading',
+          percent: 0,
+          currentIndex: 0,
+          total,
+          currentFileName: '',
+          message: '正在上传文件',
+        },
+      });
+      sseClient.connect();
+
+      try {
+        const formData = new FormData();
+        const relativePaths: string[] = [];
+        files.forEach((file) => {
+          formData.append('media', file);
+          relativePaths.push(getRelativePath(file));
+        });
+        formData.append('language', language);
+        formData.append('taskId', taskId);
+        formData.append('relativePaths', JSON.stringify(relativePaths));
+
+        const response = await transcribeApi.batchTranscribe(formData, {
+          onUploadProgress: (event) => {
+            const uploadPercent = event.total ? Math.round((event.loaded / event.total) * 100) : 50;
+            set({
+              batchTranscribeProgress: {
+                phase: 'uploading',
+                percent: Math.min(uploadPercent, 100),
+                currentIndex: 0,
+                total,
+                currentFileName: '',
+                message: '正在上传文件',
+              },
+            });
+          },
+        });
+
+        // 后端立即返回 202（任务已受理），实际转录在后台进行，
+        // 进度与最终结果全部通过 SSE 推送。此处不关闭 SSE，由 complete/error 回调关闭。
+        if (response.status !== 202) {
+          throw new Error('批量任务提交失败，请稍后重试');
+        }
+        return initialItems;
+      } catch (error) {
+        // 仅 HTTP 提交失败才到这里；转录过程中的失败走 SSE error 通道
+        set({
+          isBatchTranscribing: false,
+          batchTranscribeProgress: {
+            phase: 'failed',
+            percent: 0,
+            currentIndex: 0,
+            total,
+            currentFileName: '',
+            message: '批量转录提交失败',
+          },
+        });
+        sseClient.close();
+        logger.error({ err: toLogError(error), fileCount: files.length, language, taskIdLength: taskId.length }, '批量转录提交失败');
+        throw error;
+      }
+    },
+
+    clearBatchTranscription: () => {
+      set({ batchTranscriptionItems: [], batchTranscribeProgress: IDLE_BATCH_PROGRESS });
     },
   };
 }

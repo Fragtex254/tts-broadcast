@@ -190,6 +190,11 @@ export const transcribeApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: options?.onUploadProgress,
     }),
+  batchTranscribe: (formData: FormData, options?: { onUploadProgress?: (event: AxiosProgressEvent) => void }) =>
+    api.post('/transcribe/batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: options?.onUploadProgress,
+    }),
 };
 
 export type { NewsItem, Settings };
