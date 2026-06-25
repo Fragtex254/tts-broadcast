@@ -248,6 +248,34 @@ for chunk in completion:
 | --- | --- |
 | 语音输入稿件 | 用户通过语音口述播报稿件，ASR 转写为文本后送入 LLM 改写 |
 | 音频内容校验 | 对已生成的 TTS 音频进行 ASR 回转，校验合成质量 |
+| 批量转录 | 选择文件夹自动遍历子目录，勾选需要的文件批量转录，每篇单独保存，支持打包下载 ZIP。后端串行处理遵守 RPM 限流，单文件失败隔离 |
+
+### 批量转录集成说明
+
+批量转录通过 `POST /api/transcribe/batch` 端点实现，与单文件转录共享 `services/media.js`（音频转码切片）和 `services/asr.js`（ASR 调用）链路：
+
+```
+前端（webkitdirectory 选文件夹 + 勾选）
+  → transcribeApi.batchTranscribe (FormData: media[] + language + taskId + relativePaths)
+    → routes/transcribe.js: POST /batch
+      → multer upload.array 接收多文件，立即返回 202（任务已受理）
+      → 后台 runBatchTranscription 串行处理：
+        for each file:
+          → services/media.js: fileToAsrDataUrls()
+          → services/asr.js: transcribeMedia()
+            → POST https://api.xiaomimimo.com/v1/chat/completions (mimo-v2.5-asr)
+          → SSE 推送 file-start / file-progress / file-complete / file-error
+        → SSE 推送 completed（带 results / succeeded / failed）
+```
+
+**关键设计**：
+
+- **异步模型**：上传校验通过后立即返回 202，实际转录在后台串行进行，避免长任务触发前端 HTTP 超时
+- **SSE 进度**：所有进度和最终结果通过 `/api/sse/:taskId` 推送，`phase` 字段区分阶段（`batch-preparing` / `file-start` / `file-progress` / `file-complete` / `file-error` / `completed`）
+- **文件隔离**：单文件转录失败不影响其他文件，失败文件在结果中标记 `error` 字段
+- **中文文件名**：multer/busboy 默认 latin1 解码 multipart filename，`decodeFileName` 重编码为 utf8 修复中文乱码
+- **目录结构**：前端通过 `relativePaths`（JSON 字符串数组）传递 `webkitRelativePath`，保留子目录信息
+- **文件数上限**：默认 50，环境变量 `TRANSCRIBE_BATCH_MAX_FILES` 可调
 
 ## 计费说明
 
