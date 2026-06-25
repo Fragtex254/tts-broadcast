@@ -6,7 +6,7 @@ const logger = createScopedLogger('api-client');
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 300000, // 5 分钟超时 — TTS 生成可能耗时较长
+  timeout: 30 * 60 * 1000, // 30 分钟超时 — 本地 ASR 长音频可能耗时较长
 });
 
 // === 全局响应拦截器 ===

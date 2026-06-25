@@ -3,6 +3,7 @@ import { createScopedLogger, toLogError } from '../services/logger';
 import { createSSEClient, type SSECompleteEvent, type SSEErrorEvent, type SSEProgressEvent } from '../services/sseClient';
 import type {
   AppState,
+  AsrProvider,
   AsrLanguage,
   BatchTranscriptionItem,
   BatchTranscriptionProgress,
@@ -102,7 +103,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
     isTranscribing: false,
     transcribeProgress: IDLE_PROGRESS,
 
-    transcribeMedia: async (file: File, language: AsrLanguage) => {
+    transcribeMedia: async (file: File, language: AsrLanguage, provider?: AsrProvider) => {
       const taskId = createTaskId();
       const sseClient = createSSEClient(taskId);
 
@@ -164,6 +165,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         formData.append('media', file);
         formData.append('language', language);
         formData.append('taskId', taskId);
+        if (provider) formData.append('provider', provider);
 
         const response = await transcribeApi.transcribe(formData, {
           onUploadProgress: (event) => {
@@ -203,7 +205,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             message: '转录失败',
           },
         });
-        logger.error({ err: toLogError(error), fileSize: file.size, language, taskIdLength: taskId.length }, '转录失败');
+        logger.error({ err: toLogError(error), fileSize: file.size, language, provider, taskIdLength: taskId.length }, '转录失败');
         throw error;
       } finally {
         sseClient.close();
@@ -222,7 +224,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
     isBatchTranscribing: false,
     batchTranscribeProgress: IDLE_BATCH_PROGRESS,
 
-    batchTranscribeMedia: async (files: File[], language: AsrLanguage) => {
+    batchTranscribeMedia: async (files: File[], language: AsrLanguage, provider?: AsrProvider) => {
       const taskId = createTaskId();
       const sseClient = createSSEClient(taskId);
       const total = files.length;
@@ -378,6 +380,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         formData.append('language', language);
         formData.append('taskId', taskId);
         formData.append('relativePaths', JSON.stringify(relativePaths));
+        if (provider) formData.append('provider', provider);
 
         const response = await transcribeApi.batchTranscribe(formData, {
           onUploadProgress: (event) => {
@@ -415,7 +418,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
           },
         });
         sseClient.close();
-        logger.error({ err: toLogError(error), fileCount: files.length, language, taskIdLength: taskId.length }, '批量转录提交失败');
+        logger.error({ err: toLogError(error), fileCount: files.length, language, provider, taskIdLength: taskId.length }, '批量转录提交失败');
         throw error;
       }
     },

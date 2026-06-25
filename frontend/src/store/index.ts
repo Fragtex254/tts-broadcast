@@ -10,6 +10,7 @@ import type { AppState } from './types';
 
 export type {
   AppState,
+  AsrProvider,
   AsrLanguage,
   BatchGenerateResult,
   BatchTranscriptionItem,

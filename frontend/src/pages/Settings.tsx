@@ -15,6 +15,11 @@ const voiceOptions = [
   { value: '楠楠', label: '楠楠' },
 ];
 
+const asrProviderOptions: { value: AppSettings['asr_provider']; label: string; description: string }[] = [
+  { value: 'mimo', label: 'MiMo 云端', description: '复用 TTS API Key，适合无需本地部署的场景' },
+  { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）', description: '连接 Mac 上的 mlx-qwen3-asr serve 服务' },
+];
+
 const cronExamples = [
   { label: '每天早上 8:00', value: '0 8 * * *' },
   { label: '每天中午 12:00', value: '0 12 * * *' },
@@ -395,7 +400,7 @@ export const Settings: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">TTS API Key</label>
-                    <span className="font-body text-[10px] text-ink-soft/40">用于语音合成和转录</span>
+                    <span className="font-body text-[10px] text-ink-soft/40">用于语音合成和 MiMo 云端转录</span>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <PasswordField
@@ -421,6 +426,69 @@ export const Settings: React.FC = () => {
                   {testResults.tts && (
                     <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.tts.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
                       {testResults.tts.valid ? '✓ TTS API Key 验证成功！' : `✕ 验证失败${testResults.tts.error ? `: ${testResults.tts.error}` : '，请检查 API Key 是否正确'}`}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-dashed border-card-border" />
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">ASR 转录引擎</label>
+                    <p className="font-body text-[10px] text-ink-soft/40 mt-0.5">选择默认转录服务；转录页也可以临时切换</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {asrProviderOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleChange('asr_provider', option.value)}
+                        onBlur={() => handleAutoSave('asr_provider')}
+                        className={`text-left p-3.5 rounded-2xl border transition-all ${formData.asr_provider === option.value ? 'bg-lemon/70 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
+                      >
+                        <span className="block font-body text-[12px] font-medium text-ink">{option.label}</span>
+                        <span className="block mt-1 font-body text-[10px] text-ink-soft/45 leading-relaxed">{option.description}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {formData.asr_provider === 'qwen_mlx' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
+                      <div>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">Qwen ASR Base URL</label>
+                        <input
+                          type="text"
+                          value={formData.qwen_asr_base_url}
+                          onChange={(e) => handleChange('qwen_asr_base_url', e.target.value)}
+                          onBlur={() => handleAutoSave('qwen_asr_base_url')}
+                          placeholder="http://localhost:8765/v1"
+                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">Qwen ASR 模型</label>
+                        <input
+                          type="text"
+                          value={formData.qwen_asr_model}
+                          onChange={(e) => handleChange('qwen_asr_model', e.target.value)}
+                          onBlur={() => handleAutoSave('qwen_asr_model')}
+                          placeholder="Qwen/Qwen3-ASR-1.7B"
+                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">Qwen ASR API Key（可选）</label>
+                        <PasswordField
+                          value={formData.qwen_asr_api_key}
+                          onChange={(v) => handleChange('qwen_asr_api_key', v)}
+                          onBlur={() => handleAutoSave('qwen_asr_api_key')}
+                          placeholder="如果 serve 设置了 --api-key，在这里填写"
+                        />
+                      </div>
+                      <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                        Mac 上可用：mlx-qwen3-asr serve --api-key your-local-key
+                      </p>
                     </div>
                   )}
                 </div>

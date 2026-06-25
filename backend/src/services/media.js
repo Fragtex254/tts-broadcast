@@ -7,6 +7,12 @@ const ffmpegPath = require('ffmpeg-static');
 const ASR_TARGET_SECONDS = 15;
 const ASR_MIN_SECONDS = 10;
 const ASR_MAX_SECONDS = 30;
+const DEFAULT_CHUNK_OPTIONS = {
+  targetSeconds: ASR_TARGET_SECONDS,
+  minSeconds: ASR_MIN_SECONDS,
+  maxSeconds: ASR_MAX_SECONDS,
+  tooLargeMessage: '音频内容过大，转换后超过 ASR 10MB 限制'
+};
 const SILENCE_NOISE = '-35dB';
 const SILENCE_DURATION = 0.5;
 const MP3_BITRATE = '48k';
@@ -220,7 +226,15 @@ async function fileToAsrDataUrl({ file }) {
   throw new Error('暂不支持该文件类型，请上传 wav、mp3、m4a、mp4、mov 或 webm');
 }
 
-async function appendMp3SliceDataUrls({ inputPath, tmpDir, range, maxDataUrlSize, dataUrls, chunkIndex }) {
+async function appendMp3SliceDataUrls({
+  inputPath,
+  tmpDir,
+  range,
+  maxDataUrlSize,
+  dataUrls,
+  chunkIndex,
+  tooLargeMessage = DEFAULT_CHUNK_OPTIONS.tooLargeMessage
+}) {
   const outputPath = path.join(tmpDir, `chunk_${chunkIndex}_${Date.now()}.mp3`);
   await writeMp3Slice({
     inputPath,
@@ -236,7 +250,7 @@ async function appendMp3SliceDataUrls({ inputPath, tmpDir, range, maxDataUrlSize
   }
 
   if (range.duration <= 5) {
-    throw new Error('音频内容过大，转换后超过 ASR 10MB 限制');
+    throw new Error(tooLargeMessage);
   }
 
   const half = roundSeconds(range.duration / 2);
@@ -246,7 +260,8 @@ async function appendMp3SliceDataUrls({ inputPath, tmpDir, range, maxDataUrlSize
     range: { start: range.start, duration: half },
     maxDataUrlSize,
     dataUrls,
-    chunkIndex: `${chunkIndex}_a`
+    chunkIndex: `${chunkIndex}_a`,
+    tooLargeMessage
   });
   await appendMp3SliceDataUrls({
     inputPath,
@@ -254,7 +269,8 @@ async function appendMp3SliceDataUrls({ inputPath, tmpDir, range, maxDataUrlSize
     range: { start: roundSeconds(range.start + half), duration: roundSeconds(range.duration - half) },
     maxDataUrlSize,
     dataUrls,
-    chunkIndex: `${chunkIndex}_b`
+    chunkIndex: `${chunkIndex}_b`,
+    tooLargeMessage
   });
 }
 
@@ -277,14 +293,21 @@ async function convertToMp3DataUrl(file, ext) {
   }
 }
 
-async function convertToChunkedDataUrls({ file, ext, maxDataUrlSize }) {
+async function convertToChunkedDataUrls({ file, ext, maxDataUrlSize, chunkOptions = {} }) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-asr-'));
   const inputPath = path.join(tmpDir, `input.${ext}`);
+  const options = { ...DEFAULT_CHUNK_OPTIONS, ...chunkOptions };
 
   try {
     writeUploadToPath(file, inputPath);
     const { duration, silencePoints } = await analyzeMedia(inputPath);
-    const ranges = buildChunkRanges({ duration, silencePoints });
+    const ranges = buildChunkRanges({
+      duration,
+      silencePoints,
+      targetSeconds: options.targetSeconds,
+      minSeconds: options.minSeconds,
+      maxSeconds: options.maxSeconds
+    });
     if (ranges.length === 0) {
       throw new Error('无法识别媒体时长，请检查文件是否有效');
     }
@@ -297,7 +320,8 @@ async function convertToChunkedDataUrls({ file, ext, maxDataUrlSize }) {
         range: ranges[i],
         maxDataUrlSize,
         dataUrls,
-        chunkIndex: i
+        chunkIndex: i,
+        tooLargeMessage: options.tooLargeMessage
       });
     }
     return dataUrls;
@@ -311,9 +335,10 @@ async function convertToChunkedDataUrls({ file, ext, maxDataUrlSize }) {
  * @param {Object} params
  * @param {Object} params.file - multer 文件对象
  * @param {number} params.maxDataUrlSize - 单片 data URL 最大长度
+ * @param {Object} [params.chunkOptions] - 静音切片参数
  * @returns {Promise<string[]>} data URL 列表
  */
-async function fileToAsrDataUrls({ file, maxDataUrlSize }) {
+async function fileToAsrDataUrls({ file, maxDataUrlSize, chunkOptions }) {
   if (!hasFileData(file)) {
     throw new Error('请上传需要转录的音频或视频文件');
   }
@@ -322,14 +347,14 @@ async function fileToAsrDataUrls({ file, maxDataUrlSize }) {
   if (DIRECT_AUDIO_TYPES.has(ext)) {
     const mimeType = DIRECT_AUDIO_TYPES.get(ext);
     if (maxDataUrlSize && estimateDataUrlSize(file, mimeType) > maxDataUrlSize) {
-      return convertToChunkedDataUrls({ file, ext, maxDataUrlSize });
+      return convertToChunkedDataUrls({ file, ext, maxDataUrlSize, chunkOptions });
     }
 
     const dataUrl = bufferToDataUrl(readUploadBuffer(file), mimeType);
     if (!maxDataUrlSize || dataUrl.length <= maxDataUrlSize) {
       return [dataUrl];
     }
-    return convertToChunkedDataUrls({ file, ext, maxDataUrlSize });
+    return convertToChunkedDataUrls({ file, ext, maxDataUrlSize, chunkOptions });
   }
 
   if (CONVERTIBLE_TYPES.has(ext)) {
@@ -337,7 +362,7 @@ async function fileToAsrDataUrls({ file, maxDataUrlSize }) {
     if (!maxDataUrlSize || dataUrl.length <= maxDataUrlSize) {
       return [dataUrl];
     }
-    return convertToChunkedDataUrls({ file, ext, maxDataUrlSize });
+    return convertToChunkedDataUrls({ file, ext, maxDataUrlSize, chunkOptions });
   }
 
   throw new Error('暂不支持该文件类型，请上传 wav、mp3、m4a、mp4、mov 或 webm');

@@ -1,10 +1,47 @@
 const { getApiKey } = require('./mimo');
 const { fileToAsrDataUrls } = require('./media');
 const { postChatCompletions } = require('./mimoApiClient');
+const qwenAsr = require('./qwenAsr');
+const db = require('../db');
 
 const ASR_MODEL = 'mimo-v2.5-asr';
-const MAX_DATA_URL_SIZE = 10 * 1024 * 1024;
+const MIMO_MAX_DATA_URL_SIZE = 10 * 1024 * 1024;
+const QWEN_MAX_DATA_URL_SIZE = 256 * 1024 * 1024;
+const QWEN_CHUNK_OPTIONS = {
+  targetSeconds: 10 * 60,
+  minSeconds: 60,
+  maxSeconds: 20 * 60,
+  tooLargeMessage: '音频内容过大，转换后超过 Qwen 本地 ASR 单片限制'
+};
 const SUPPORTED_LANGUAGES = new Set(['auto', 'zh', 'en']);
+const SUPPORTED_ASR_PROVIDERS = new Set(['mimo', 'qwen_mlx']);
+const DEFAULT_ASR_SETTINGS = {
+  asr_provider: 'mimo',
+  qwen_asr_base_url: 'http://localhost:8765/v1',
+  qwen_asr_model: 'Qwen/Qwen3-ASR-1.7B',
+  qwen_asr_api_key: ''
+};
+
+function getSettingValue(key, fallback) {
+  const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  if (!setting) return fallback;
+  try {
+    const value = JSON.parse(setting.value);
+    return value === undefined || value === null || value === '' ? fallback : value;
+  } catch {
+    return fallback;
+  }
+}
+
+function getAsrConfig(providerOverride) {
+  const provider = providerOverride || getSettingValue('asr_provider', DEFAULT_ASR_SETTINGS.asr_provider);
+  return {
+    provider: SUPPORTED_ASR_PROVIDERS.has(provider) ? provider : DEFAULT_ASR_SETTINGS.asr_provider,
+    qwenBaseUrl: getSettingValue('qwen_asr_base_url', DEFAULT_ASR_SETTINGS.qwen_asr_base_url),
+    qwenModel: getSettingValue('qwen_asr_model', DEFAULT_ASR_SETTINGS.qwen_asr_model),
+    qwenApiKey: getSettingValue('qwen_asr_api_key', DEFAULT_ASR_SETTINGS.qwen_asr_api_key)
+  };
+}
 
 function buildAsrPayload({ dataUrl, language }) {
   return {
@@ -41,20 +78,27 @@ function mergeUsage(usages) {
  * @param {Object} params
  * @param {Object} params.file - multer 文件对象
  * @param {string} [params.language='auto'] - auto/zh/en
+ * @param {string} [params.provider] - mimo/qwen_mlx
  * @param {Function} [params.onProgress] - 转录进度回调
  * @returns {Promise<{text: string, usage: Object|null}>}
  */
-async function transcribeMedia({ file, language = 'auto', onProgress }) {
+async function transcribeMedia({ file, language = 'auto', provider, onProgress }) {
   if (!SUPPORTED_LANGUAGES.has(language)) {
     throw new Error('语言参数无效，请选择自动、中文或英文');
   }
 
-  const apiKey = getApiKey('tts');
+  const config = getAsrConfig(provider);
+  const apiKey = config.provider === 'mimo' ? getApiKey('tts') : '';
   if (typeof onProgress === 'function') {
     onProgress({ phase: 'preparing', percent: 10, text: '' });
   }
 
-  const dataUrls = await fileToAsrDataUrls({ file, maxDataUrlSize: MAX_DATA_URL_SIZE });
+  const maxDataUrlSize = config.provider === 'qwen_mlx' ? QWEN_MAX_DATA_URL_SIZE : MIMO_MAX_DATA_URL_SIZE;
+  const dataUrls = await fileToAsrDataUrls({
+    file,
+    maxDataUrlSize,
+    chunkOptions: config.provider === 'qwen_mlx' ? QWEN_CHUNK_OPTIONS : undefined
+  });
   const texts = [];
   const usages = [];
   const total = dataUrls.length;
@@ -65,19 +109,29 @@ async function transcribeMedia({ file, language = 'auto', onProgress }) {
 
   for (let index = 0; index < dataUrls.length; index++) {
     const dataUrl = dataUrls[index];
-    if (dataUrl.length > MAX_DATA_URL_SIZE) {
-      throw new Error('音频内容过大，转换后超过 ASR 10MB 限制');
+    if (dataUrl.length > maxDataUrlSize) {
+      throw new Error(config.provider === 'qwen_mlx'
+        ? '音频内容过大，转换后超过 Qwen 本地 ASR 单片限制'
+        : '音频内容过大，转换后超过 ASR 10MB 限制');
     }
 
-    const data = await postChatCompletions({
-      apiKey,
-      serviceName: 'ASR',
-      payload: buildAsrPayload({ dataUrl, language })
-    });
+    const data = config.provider === 'qwen_mlx'
+      ? await qwenAsr.transcribeDataUrl({
+          dataUrl,
+          language,
+          baseUrl: config.qwenBaseUrl,
+          model: config.qwenModel,
+          apiKey: config.qwenApiKey
+        })
+      : await postChatCompletions({
+          apiKey,
+          serviceName: 'ASR',
+          payload: buildAsrPayload({ dataUrl, language })
+        });
 
-    const text = data?.choices?.[0]?.message?.content;
+    const text = config.provider === 'qwen_mlx' ? data.text : data?.choices?.[0]?.message?.content;
     if (!text || typeof text !== 'string') {
-      throw new Error('MiMo ASR API 未返回转录结果');
+      throw new Error(config.provider === 'qwen_mlx' ? 'Qwen 本地 ASR 未返回转录结果' : 'MiMo ASR API 未返回转录结果');
     }
 
     texts.push(text.trim());
@@ -99,4 +153,4 @@ async function transcribeMedia({ file, language = 'auto', onProgress }) {
   return { text: texts.filter(Boolean).join('\n'), usage: mergeUsage(usages) };
 }
 
-module.exports = { transcribeMedia };
+module.exports = { DEFAULT_ASR_SETTINGS, getAsrConfig, transcribeMedia };
