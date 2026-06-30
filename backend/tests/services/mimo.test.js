@@ -173,12 +173,23 @@ describe('MiMo 服务', () => {
     })).rejects.toThrow('LLM API 返回内容为空');
   });
 
+  test('LLM 401 错误映射为 API Key 提示', async () => {
+    mockMessagesCreate.mockRejectedValue(new Error('401 {"error":{"message":"Invalid API Key","code":"401","type":"invalid_key"}}'));
+
+    await expect(mimo.formatTranscriptionText('需要排版的文本'))
+      .rejects.toThrow('LLM API Key 无效或已过期，请在设置中重新配置');
+  });
+
   test('generateSpeech 函数存在', () => {
     expect(typeof mimo.generateSpeech).toBe('function');
   });
 
   test('splitScript 存在且为函数', () => {
     expect(typeof mimo.splitScript).toBe('function');
+  });
+
+  test('formatTranscriptionText 存在且为函数', () => {
+    expect(typeof mimo.formatTranscriptionText).toBe('function');
   });
 
   test('splitScript 切分口播稿', async () => {
@@ -218,6 +229,41 @@ describe('MiMo 服务', () => {
     test('非字符串抛出错误', async () => {
       await expect(mimo.splitScript(null))
         .rejects.toThrow('请提供有效的口播稿文本');
+    });
+  });
+
+  describe('formatTranscriptionText', () => {
+    test('将转录文本排版为自然段', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '大家好，今天聊 AI。\n\n首先是新模型发布。' }],
+      });
+
+      const result = await mimo.formatTranscriptionText('大家好今天聊 AI 首先是新模型发布');
+
+      expect(result).toBe('大家好，今天聊 AI。\n\n首先是新模型发布。');
+      expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
+        system: '你是一个转录稿排版助手，只输出排版后的正文。',
+        max_tokens: 4000,
+      }));
+    });
+
+    test('剥离模型输出中的 think 内容', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: '<think>这里是模型推理过程，不应展示。</think>\n\n大家好，今天聊 AI。\n\n首先是新模型发布。'
+        }],
+      });
+
+      const result = await mimo.formatTranscriptionText('大家好今天聊 AI 首先是新模型发布');
+
+      expect(result).toBe('大家好，今天聊 AI。\n\n首先是新模型发布。');
+      expect(result).not.toContain('<think>');
+      expect(result).not.toContain('模型推理过程');
+    });
+
+    test('空文本抛出错误', async () => {
+      await expect(mimo.formatTranscriptionText('')).rejects.toThrow('请提供需要排版的转录文本');
     });
   });
 

@@ -4,8 +4,11 @@ const os = require('os');
 const path = require('path');
 const multer = require('multer');
 const asr = require('../services/asr');
+const mimo = require('../services/mimo');
 const sseManager = require('../services/sseManager');
+const transcriptionResultStore = require('../services/transcriptionResultStore');
 const { createScopedLogger } = require('../services/logger');
+const { validateId } = require('../utils/validation');
 
 const router = express.Router();
 const logger = createScopedLogger('transcribe-route');
@@ -75,6 +78,45 @@ function buildAsrProvider(req) {
   return typeof provider === 'string' && provider.trim() ? provider.trim() : undefined;
 }
 
+function buildTranscribeOptions(req) {
+  const wslModel = req.body.wslModel;
+  const context = req.body.context;
+  return {
+    wslModel: typeof wslModel === 'string' && wslModel.trim() ? wslModel.trim() : undefined,
+    context: typeof context === 'string' && context.trim() ? context.trim() : undefined
+  };
+}
+
+function resolveTranscribeMetadata({ provider, language, options }) {
+  const config = asr.getAsrConfig(provider);
+  let model = 'mimo-v2.5-asr';
+  if (config.provider === 'qwen_mlx') {
+    model = config.qwenModel;
+  }
+  if (config.provider === 'wsl_asr') {
+    model = typeof options.wslModel === 'string' && options.wslModel.trim()
+      ? options.wslModel.trim()
+      : config.wslModel;
+  }
+  return {
+    language: language || 'auto',
+    provider: config.provider,
+    model,
+    context: options.context || ''
+  };
+}
+
+function saveTranscriptionResult({ fileName, relativePath, text, usage, taskId, metadata }) {
+  return transcriptionResultStore.create({
+    fileName,
+    relativePath,
+    text,
+    usage,
+    taskId,
+    ...metadata
+  });
+}
+
 /**
  * POST /api/transcribe
  * 上传音频或视频并转录为文本
@@ -94,6 +136,10 @@ router.post('/', (req, res) => {
 
       const taskId = buildTaskId(req);
       const fileName = decodeFileName(req.file.originalname);
+      const language = req.body.language || 'auto';
+      const provider = buildAsrProvider(req);
+      const options = buildTranscribeOptions(req);
+      const metadata = resolveTranscribeMetadata({ provider, language, options });
 
       if (taskId) {
         sseManager.send(taskId, 'transcribe-start', {
@@ -107,11 +153,20 @@ router.post('/', (req, res) => {
 
       const result = await asr.transcribeMedia({
         file: req.file,
-        language: req.body.language || 'auto',
-        provider: buildAsrProvider(req),
+        language,
+        provider,
+        ...options,
         onProgress: taskId
           ? (progress) => sseManager.sendProgress(taskId, { ...progress, timestamp: Date.now() })
           : undefined
+      });
+      const transcriptionResult = saveTranscriptionResult({
+        fileName,
+        relativePath: fileName,
+        text: result.text,
+        usage: result.usage,
+        taskId,
+        metadata
       });
 
       if (taskId) {
@@ -120,11 +175,12 @@ router.post('/', (req, res) => {
           percent: 100,
           text: result.text,
           usage: result.usage,
+          transcriptionResult,
           timestamp: Date.now()
         });
       }
 
-      res.json(result);
+      res.json({ ...result, transcriptionResult });
     } catch (error) {
       const taskId = buildTaskId(req);
       logger.error({ err: error, hasTaskId: Boolean(taskId) }, '转录失败');
@@ -167,9 +223,10 @@ async function waitForSseConnection(taskId, timeoutMs = 3000) {
  * 后台串行转录批量文件，所有进度与最终结果通过 SSE 推送。
  * 单文件失败隔离，不影响其他文件。
  */
-async function runBatchTranscription({ files, taskId, language, provider, relativePaths }) {
+async function runBatchTranscription({ files, taskId, language, provider, relativePaths, options }) {
   const total = files.length;
   const results = [];
+  const metadata = resolveTranscribeMetadata({ provider, language, options });
 
   if (taskId) {
     await waitForSseConnection(taskId);
@@ -203,6 +260,7 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
         file,
         language,
         provider,
+        ...options,
         onProgress: taskId
           ? (progress) => {
               const filePercent = progress.percent ?? 0;
@@ -217,13 +275,30 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
                 current: progress.current,
                 chunkText: progress.chunkText,
                 text: progress.text,
+                message: progress.message,
                 timestamp: Date.now()
               });
             }
           : undefined
       });
 
-      results.push({ fileName, relativePath, text: result.text, usage: result.usage });
+      const transcriptionResult = saveTranscriptionResult({
+        fileName,
+        relativePath,
+        text: result.text,
+        usage: result.usage,
+        taskId,
+        metadata
+      });
+
+      results.push({
+        fileName,
+        relativePath,
+        text: result.text,
+        usage: result.usage,
+        resultId: transcriptionResult.id,
+        transcriptionResult
+      });
 
       if (taskId) {
         sseManager.sendProgress(taskId, {
@@ -233,6 +308,8 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
           total,
           text: result.text,
           usage: result.usage,
+          resultId: transcriptionResult.id,
+          transcriptionResult,
           percent: Math.round(((index + 1) / total) * 100),
           timestamp: Date.now()
         });
@@ -295,13 +372,14 @@ router.post('/batch', (req, res) => {
     const taskId = buildTaskId(req);
     const language = req.body.language || 'auto';
     const provider = buildAsrProvider(req);
+    const options = buildTranscribeOptions(req);
     const relativePaths = parseRelativePaths(req.body.relativePaths);
     const total = files.length;
 
     // 立即返回任务受理，转录在后台异步进行，结果通过 SSE 推送
     res.status(202).json({ taskId, total, accepted: true });
 
-    runBatchTranscription({ files, taskId, language, provider, relativePaths }).catch((error) => {
+    runBatchTranscription({ files, taskId, language, provider, relativePaths, options }).catch((error) => {
       logger.error({ err: error, hasTaskId: Boolean(taskId) }, '批量转录后台任务异常');
       cleanUploadedFiles(files);
       if (taskId) {
@@ -309,6 +387,50 @@ router.post('/batch', (req, res) => {
       }
     });
   });
+});
+
+/**
+ * GET /api/transcribe/results
+ * 获取最近保存的转录结果
+ */
+router.get('/results', (req, res) => {
+  try {
+    const rawLimit = Number(req.query.limit || 50);
+    const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
+    const results = transcriptionResultStore.getRecent({ limit });
+    res.json({ results });
+  } catch (error) {
+    logger.error({ err: error }, '获取转录结果失败');
+    res.status(500).json({ error: error.message || '获取转录结果失败' });
+  }
+});
+
+/**
+ * POST /api/transcribe/results/:id/format
+ * AI 排版并分段转录结果
+ */
+router.post('/results/:id/format', async (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '转录结果 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const record = transcriptionResultStore.getById(idCheck.id);
+    if (!record) return res.status(404).json({ error: '转录结果不存在' });
+
+    const text = typeof req.body.text === 'string' && req.body.text.trim()
+      ? req.body.text.trim()
+      : record.text;
+    const formattedText = await mimo.formatTranscriptionText(text);
+    const result = transcriptionResultStore.updateTextAndFormatted(idCheck.id, { text, formattedText });
+    res.json({ result });
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasResultId: Boolean(req.params.id),
+      resultIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '转录结果 AI 排版失败');
+    res.status(500).json({ error: error.message || '转录结果 AI 排版失败' });
+  }
 });
 
 module.exports = router;

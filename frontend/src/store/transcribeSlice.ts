@@ -1,5 +1,7 @@
 import { transcribeApi } from '../services/api';
+import { getApiErrorMessage } from '../services/apiError';
 import { createScopedLogger, toLogError } from '../services/logger';
+import { safeParseStrict, TranscriptionRecordSchema, TranscriptionResultSchema } from '../services/schemas';
 import { createSSEClient, type SSECompleteEvent, type SSEErrorEvent, type SSEProgressEvent } from '../services/sseClient';
 import type {
   AppState,
@@ -7,6 +9,8 @@ import type {
   AsrLanguage,
   BatchTranscriptionItem,
   BatchTranscriptionProgress,
+  TranscribeOptions,
+  TranscriptionRecord,
   TranscriptionProgress,
   TranscriptionResult,
 } from './types';
@@ -42,7 +46,10 @@ interface BatchSSEProgress {
   text?: string;
   chunkText?: string;
   usage?: Record<string, unknown> | null;
+  resultId?: number;
+  transcriptionResult?: TranscriptionRecord;
   error?: string;
+  message?: string;
   timestamp?: number;
 }
 
@@ -51,6 +58,8 @@ interface BatchSSECompleteResult {
   relativePath: string;
   text: string;
   usage?: Record<string, unknown> | null;
+  resultId?: number;
+  transcriptionResult?: TranscriptionRecord;
   error?: string;
 }
 
@@ -72,6 +81,7 @@ function createTaskId(): string {
 }
 
 function progressMessage(progress: SSEProgressEvent): string {
+  if (progress.message) return progress.message;
   if (progress.phase === 'preparing') return '正在分析音频并切片';
   if (progress.total && progress.current !== undefined) {
     return `正在转录 ${progress.current}/${progress.total}`;
@@ -84,12 +94,36 @@ function getRelativePath(file: File): string {
   return withPath.webkitRelativePath || file.name;
 }
 
+function appendTranscribeOptions(formData: FormData, options?: TranscribeOptions) {
+  if (options?.wslModel?.trim()) {
+    formData.append('wslModel', options.wslModel.trim());
+  }
+  if (options?.context?.trim()) {
+    formData.append('context', options.context.trim());
+  }
+}
+
+function updateBatchItemRecord(item: BatchTranscriptionItem, record: TranscriptionRecord): BatchTranscriptionItem {
+  if (item.resultId !== record.id && item.transcriptionResult?.id !== record.id) {
+    return item;
+  }
+  return {
+    ...item,
+    text: record.text,
+    formattedText: record.formatted_text,
+    transcriptionResult: record,
+    resultId: record.id,
+  };
+}
+
 export function createTranscribeSlice(set: StoreSet): Pick<
   AppState,
   | 'transcriptionText'
+  | 'transcriptionRecord'
   | 'isTranscribing'
   | 'transcribeProgress'
   | 'transcribeMedia'
+  | 'formatTranscriptionResult'
   | 'setTranscriptionText'
   | 'clearTranscription'
   | 'batchTranscriptionItems'
@@ -100,10 +134,11 @@ export function createTranscribeSlice(set: StoreSet): Pick<
 > {
   return {
     transcriptionText: '',
+    transcriptionRecord: null,
     isTranscribing: false,
     transcribeProgress: IDLE_PROGRESS,
 
-    transcribeMedia: async (file: File, language: AsrLanguage, provider?: AsrProvider) => {
+    transcribeMedia: async (file: File, language: AsrLanguage, provider?: AsrProvider, options?: TranscribeOptions) => {
       const taskId = createTaskId();
       const sseClient = createSSEClient(taskId);
 
@@ -123,6 +158,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
       sseClient.on<SSECompleteEvent>('complete', (result) => {
         set({
           transcriptionText: result.text ?? '',
+          transcriptionRecord: result.transcriptionResult ?? null,
           transcribeProgress: {
             phase: 'completed',
             percent: 100,
@@ -166,6 +202,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         formData.append('language', language);
         formData.append('taskId', taskId);
         if (provider) formData.append('provider', provider);
+        appendTranscribeOptions(formData, options);
 
         const response = await transcribeApi.transcribe(formData, {
           onUploadProgress: (event) => {
@@ -181,9 +218,10 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             });
           },
         });
-        const result = response.data as TranscriptionResult;
+        const result = safeParseStrict(TranscriptionResultSchema, response.data) as TranscriptionResult;
         set({
           transcriptionText: result.text,
+          transcriptionRecord: result.transcriptionResult ?? null,
           isTranscribing: false,
           transcribeProgress: {
             phase: 'completed',
@@ -205,7 +243,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             message: '转录失败',
           },
         });
-        logger.error({ err: toLogError(error), fileSize: file.size, language, provider, taskIdLength: taskId.length }, '转录失败');
+        logger.error({ err: toLogError(error), fileSize: file.size, language, provider, hasContext: Boolean(options?.context), taskIdLength: taskId.length }, '转录失败');
         throw error;
       } finally {
         sseClient.close();
@@ -217,14 +255,30 @@ export function createTranscribeSlice(set: StoreSet): Pick<
     },
 
     clearTranscription: () => {
-      set({ transcriptionText: '', transcribeProgress: IDLE_PROGRESS });
+      set({ transcriptionText: '', transcriptionRecord: null, transcribeProgress: IDLE_PROGRESS });
+    },
+
+    formatTranscriptionResult: async (id, text) => {
+      try {
+        const response = await transcribeApi.formatResult(id, { text });
+        const record = safeParseStrict(TranscriptionRecordSchema, response.data.result);
+        set((state) => ({
+          transcriptionText: state.transcriptionRecord?.id === id ? record.text : state.transcriptionText,
+          transcriptionRecord: state.transcriptionRecord?.id === id ? record : state.transcriptionRecord,
+          batchTranscriptionItems: state.batchTranscriptionItems.map((item) => updateBatchItemRecord(item, record)),
+        }));
+        return record;
+      } catch (error) {
+        logger.error({ err: toLogError(error), resultId: id, textLength: text.length }, '转录结果 AI 排版失败');
+        throw new Error(getApiErrorMessage(error, '转录结果 AI 排版失败'), { cause: error });
+      }
     },
 
     batchTranscriptionItems: [],
     isBatchTranscribing: false,
     batchTranscribeProgress: IDLE_BATCH_PROGRESS,
 
-    batchTranscribeMedia: async (files: File[], language: AsrLanguage, provider?: AsrProvider) => {
+    batchTranscribeMedia: async (files: File[], language: AsrLanguage, provider?: AsrProvider, options?: TranscribeOptions) => {
       const taskId = createTaskId();
       const sseClient = createSSEClient(taskId);
       const total = files.length;
@@ -233,6 +287,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         fileName: file.name,
         relativePath: getRelativePath(file),
         text: '',
+        formattedText: '',
         usage: null,
         status: 'pending',
       }));
@@ -281,7 +336,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
               currentIndex: idx,
               total: totalCount,
               currentFileName: progress.fileName ?? '',
-              message: `正在转录 ${idx + 1}/${totalCount}`,
+              message: progress.message ?? `正在转录 ${idx + 1}/${totalCount}`,
             },
           });
           return;
@@ -295,6 +350,9 @@ export function createTranscribeSlice(set: StoreSet): Pick<
                     ...item,
                     status: 'completed' as const,
                     text: progress.text ?? '',
+                    formattedText: progress.transcriptionResult?.formatted_text ?? '',
+                    resultId: progress.resultId ?? progress.transcriptionResult?.id,
+                    transcriptionResult: progress.transcriptionResult,
                     usage: progress.usage ?? null,
                   }
                 : item
@@ -320,6 +378,9 @@ export function createTranscribeSlice(set: StoreSet): Pick<
           fileName: r.fileName,
           relativePath: r.relativePath ?? r.fileName,
           text: r.text ?? '',
+          formattedText: r.transcriptionResult?.formatted_text ?? '',
+          resultId: r.resultId ?? r.transcriptionResult?.id,
+          transcriptionResult: r.transcriptionResult,
           usage: r.usage ?? null,
           status: r.error ? 'failed' : 'completed',
           error: r.error,
@@ -381,6 +442,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         formData.append('taskId', taskId);
         formData.append('relativePaths', JSON.stringify(relativePaths));
         if (provider) formData.append('provider', provider);
+        appendTranscribeOptions(formData, options);
 
         const response = await transcribeApi.batchTranscribe(formData, {
           onUploadProgress: (event) => {
@@ -418,7 +480,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
           },
         });
         sseClient.close();
-        logger.error({ err: toLogError(error), fileCount: files.length, language, provider, taskIdLength: taskId.length }, '批量转录提交失败');
+        logger.error({ err: toLogError(error), fileCount: files.length, language, provider, hasContext: Boolean(options?.context), taskIdLength: taskId.length }, '批量转录提交失败');
         throw error;
       }
     },

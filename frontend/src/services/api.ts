@@ -195,6 +195,8 @@ export const transcribeApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: options?.onUploadProgress,
     }),
+  formatResult: (id: number, data: { text?: string }) =>
+    api.post(`/transcribe/results/${id}/format`, data),
 };
 
 export type { NewsItem, Settings };

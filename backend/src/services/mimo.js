@@ -149,6 +149,38 @@ function extractOpenAiText(response) {
   return text;
 }
 
+function getErrorStatus(error) {
+  return error?.status || error?.response?.status || error?.response?.data?.error?.code;
+}
+
+function mapLlmError(error) {
+  const status = getErrorStatus(error);
+  const message = String(error?.message || '');
+  if (status === 401 || status === '401' || message.includes('401') || message.includes('invalid_key')) {
+    return new Error('LLM API Key 无效或已过期，请在设置中重新配置');
+  }
+  if (status === 403 || status === '403') {
+    return new Error('LLM API 无权访问当前模型或服务，请检查 Key 权限与模型配置');
+  }
+  if (status === 429 || status === '429') {
+    return new Error('LLM API 请求过于频繁，请稍后重试');
+  }
+  if (error?.code === 'ECONNABORTED') {
+    return new Error('LLM API 请求超时，请稍后重试');
+  }
+  if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND' || error?.code === 'EHOSTUNREACH') {
+    return new Error('无法连接 LLM API，请检查 Base URL 或网络');
+  }
+  return error;
+}
+
+function stripThinkingContent(text) {
+  return String(text || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^\s*<\/think>/i, '')
+    .trim();
+}
+
 /**
  * 调用 Anthropic 兼容 LLM
  * @param {Object} params
@@ -220,11 +252,15 @@ async function createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, ap
  * @returns {Promise<string>} 文本结果
  */
 async function createLlmMessage({ prompt, systemPrompt, maxTokens, thinkingEnabled, apiKeyOverride, configOverride }) {
-  const config = getLlmConfig(configOverride);
-  if (config.apiFormat === 'openai') {
-    return createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, apiKeyOverride });
+  try {
+    const config = getLlmConfig(configOverride);
+    if (config.apiFormat === 'openai') {
+      return await createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, apiKeyOverride });
+    }
+    return await createAnthropicMessage({ prompt, systemPrompt, maxTokens, thinkingEnabled, config, apiKeyOverride });
+  } catch (error) {
+    throw mapLlmError(error);
   }
-  return createAnthropicMessage({ prompt, systemPrompt, maxTokens, thinkingEnabled, config, apiKeyOverride });
 }
 
 /**
@@ -337,6 +373,44 @@ ${text}`;
 }
 
 /**
+ * 将转录文本整理为可阅读的自然段
+ * @param {string} text - 转录原文
+ * @returns {Promise<string>} 排版后的文本
+ */
+async function formatTranscriptionText(text) {
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    throw new Error('请提供需要排版的转录文本');
+  }
+
+  const config = getLlmConfig();
+  const prompt = `你是一个严谨的中文转录稿编辑。请把下面的 ASR 转录文本整理成适合阅读和后续编辑的自然段。
+
+要求：
+1. 只做标点、换行和自然段排版，可修正明显的口语断句错误
+2. 不要改写事实、不要增删信息、不要总结
+3. 保留专有名词、数字、英文和原始顺序
+4. 每段围绕一个完整语义，段落之间用一个空行分隔
+5. 不要使用 Markdown 标题、列表、加粗或引用符号
+6. 只输出排版后的正文，不要解释
+
+转录文本：
+${text}`;
+
+  const formatted = await createLlmMessage({
+    prompt,
+    systemPrompt: '你是一个转录稿排版助手，只输出排版后的正文。',
+    maxTokens: 4000,
+    thinkingEnabled: config.splitThinkingEnabled
+  });
+
+  const result = stripThinkingContent(formatted);
+  if (!result) {
+    throw new Error('AI 排版结果为空');
+  }
+  return result;
+}
+
+/**
  * 为各段建议整体风格标签
  * @param {string[]} texts - 各段文本（按 index）
  * @param {string[]} allowedTags - 候选风格标签集
@@ -443,6 +517,7 @@ module.exports = {
   fetchModelsForConfig: llmModels.fetchModelsForConfig,
   getApiKey,
   getLlmConfig,
+  formatTranscriptionText,
   rewriteToScript,
   splitScript,
   suggestStyleTags,

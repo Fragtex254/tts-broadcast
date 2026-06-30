@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { Header } from '../components/Layout/Header';
+import { TranscriptionResultModal } from '../components/Transcribe/TranscriptionResultModal';
 import useStore, { type AsrProvider, type AsrLanguage, type BatchTranscriptionItem } from '../store';
 
 const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
@@ -11,8 +12,14 @@ const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
 ];
 
 const ASR_PROVIDER_OPTIONS: { value: AsrProvider; label: string }[] = [
+  { value: 'wsl_asr', label: 'WSL 局域网' },
   { value: 'mimo', label: 'MiMo 云端' },
   { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）' },
+];
+
+const WSL_MODEL_OPTIONS = [
+  { value: 'qwen3-asr-1.7b', label: 'Qwen3-ASR 1.7B' },
+  { value: 'qwen3-asr-0.6b', label: 'Qwen3-ASR 0.6B' },
 ];
 
 const PHASE_LABELS: Record<string, string> = {
@@ -47,6 +54,7 @@ const FOLDER_INPUT_PROPS = {
 } as unknown as React.InputHTMLAttributes<HTMLInputElement>;
 
 type TranscribeMode = 'single' | 'batch';
+type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number };
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -129,9 +137,11 @@ export const Transcribe: React.FC = () => {
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const transcriptionText = useStore((s) => s.transcriptionText);
+  const transcriptionRecord = useStore((s) => s.transcriptionRecord);
   const isTranscribing = useStore((s) => s.isTranscribing);
   const transcribeProgress = useStore((s) => s.transcribeProgress);
   const transcribeMedia = useStore((s) => s.transcribeMedia);
+  const formatTranscriptionResult = useStore((s) => s.formatTranscriptionResult);
   const setTranscriptionText = useStore((s) => s.setTranscriptionText);
   const updateScript = useStore((s) => s.updateScript);
 
@@ -148,11 +158,18 @@ export const Transcribe: React.FC = () => {
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [language, setLanguage] = useState<AsrLanguage>('auto');
   const [selectedAsrProvider, setSelectedAsrProvider] = useState<AsrProvider | null>(null);
+  const [selectedWslModel, setSelectedWslModel] = useState<string | null>(null);
+  const [wslContext, setWslContext] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [batchCopiedIndex, setBatchCopiedIndex] = useState<number | null>(null);
+  const [resultModalTarget, setResultModalTarget] = useState<ResultModalTarget | null>(null);
 
-  const asrProvider = selectedAsrProvider ?? settings.asr_provider;
+  const asrProvider = selectedAsrProvider ?? settings.asr_provider ?? 'wsl_asr';
+  const wslModel = selectedWslModel ?? settings.wsl_asr_model ?? 'qwen3-asr-1.7b';
+  const transcribeOptions = asrProvider === 'wsl_asr'
+    ? { wslModel: wslModel || settings.wsl_asr_model || 'qwen3-asr-1.7b', context: wslContext }
+    : undefined;
 
   const handleFile = useCallback((nextFile: File | null) => {
     setError(null);
@@ -209,7 +226,7 @@ export const Transcribe: React.FC = () => {
     }
     setError(null);
     try {
-      await transcribeMedia(file, language, asrProvider);
+      await transcribeMedia(file, language, asrProvider, transcribeOptions);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -223,7 +240,7 @@ export const Transcribe: React.FC = () => {
     }
     setError(null);
     try {
-      await batchTranscribeMedia(selectedFiles, language, asrProvider);
+      await batchTranscribeMedia(selectedFiles, language, asrProvider, transcribeOptions);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -313,6 +330,37 @@ export const Transcribe: React.FC = () => {
 
   const showBatchItems = isBatchTranscribing || batchTranscriptionItems.length > 0;
   const completedCount = batchTranscriptionItems.filter((i) => i.status === 'completed' && i.text.trim()).length;
+  const modalItem = resultModalTarget?.type === 'batch'
+    ? batchTranscriptionItems[resultModalTarget.index]
+    : null;
+  const modalTitle = resultModalTarget?.type === 'single'
+    ? (file?.name || transcriptionRecord?.file_name || '转录结果')
+    : (modalItem?.relativePath || '转录结果');
+  const modalText = resultModalTarget?.type === 'single'
+    ? (transcriptionRecord?.text || transcriptionText)
+    : (modalItem?.transcriptionResult?.text || modalItem?.text || '');
+  const modalFormattedText = resultModalTarget?.type === 'single'
+    ? (transcriptionRecord?.formatted_text || '')
+    : (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '');
+  const modalResultId = resultModalTarget?.type === 'single'
+    ? transcriptionRecord?.id
+    : (modalItem?.resultId || modalItem?.transcriptionResult?.id);
+
+  const handleFormatModalResult = async (text: string) => {
+    if (!modalResultId) {
+      throw new Error('转录结果尚未保存，无法排版');
+    }
+    const record = await formatTranscriptionResult(modalResultId, text);
+    return record.formatted_text;
+  };
+
+  const handleDownloadModalResult = (text: string) => {
+    if (!text.trim()) return;
+    const baseName = resultModalTarget?.type === 'single'
+      ? (file ? stripExtension(file.name) : stripExtension(transcriptionRecord?.file_name || '转录结果'))
+      : stripExtension(modalItem?.relativePath || '转录结果');
+    downloadTextFile(`${sanitizeFileName(baseName)}_排版.txt`, text);
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -406,6 +454,31 @@ export const Transcribe: React.FC = () => {
                     将连接 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，请先在 Mac 上启动 mlx-qwen3-asr serve。
                   </p>
                 )}
+                {asrProvider === 'wsl_asr' && (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
+                    <select
+                      value={wslModel}
+                      onChange={(e) => setSelectedWslModel(e.target.value)}
+                      disabled={isTranscribing}
+                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
+                    >
+                      {WSL_MODEL_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={wslContext}
+                      onChange={(e) => setWslContext(e.target.value)}
+                      disabled={isTranscribing}
+                      placeholder="上下文：人名、术语、产品名"
+                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
+                    />
+                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                      将提交到 {settings.wsl_asr_base_url || 'http://192.168.31.137:18080/v1'} 的 WSL job 队列。
+                    </p>
+                  </div>
+                )}
 
                 {error && (
                   <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
@@ -480,6 +553,13 @@ export const Transcribe: React.FC = () => {
                     className="px-4 py-2 font-body text-[12px] text-ink-soft hover:text-ink disabled:opacity-40 transition-colors"
                   >
                     下载 TXT
+                  </button>
+                  <button
+                    onClick={() => setResultModalTarget({ type: 'single' })}
+                    disabled={!transcriptionText.trim() || !transcriptionRecord?.id}
+                    className="px-4 py-2 font-body text-[12px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150"
+                  >
+                    查看 / 排版
                   </button>
                   <button
                     onClick={handleImport}
@@ -565,6 +645,31 @@ export const Transcribe: React.FC = () => {
                   <p className="mt-2 font-body text-[11px] text-ink-soft/45 animate-fade-in">
                     批量文件会串行发送到 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，建议 Mac 先用 1 个任务验证负载。
                   </p>
+                )}
+                {asrProvider === 'wsl_asr' && (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
+                    <select
+                      value={wslModel}
+                      onChange={(e) => setSelectedWslModel(e.target.value)}
+                      disabled={isBatchTranscribing}
+                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
+                    >
+                      {WSL_MODEL_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={wslContext}
+                      onChange={(e) => setWslContext(e.target.value)}
+                      disabled={isBatchTranscribing}
+                      placeholder="上下文：人名、术语、产品名"
+                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
+                    />
+                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                      批量文件会逐个提交到 {settings.wsl_asr_base_url || 'http://192.168.31.137:18080/v1'} 的 WSL job 队列。
+                    </p>
+                  </div>
                 )}
 
                 {error && (
@@ -677,6 +782,13 @@ export const Transcribe: React.FC = () => {
                                 下载
                               </button>
                               <button
+                                onClick={() => setResultModalTarget({ type: 'batch', index })}
+                                disabled={!item.resultId && !item.transcriptionResult?.id}
+                                className="px-3 py-1 font-body text-[11px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-all duration-150"
+                              >
+                                查看 / 排版
+                              </button>
+                              <button
                                 onClick={() => handleImportItem(item.text)}
                                 className="px-3 py-1 font-body text-[11px] bg-sage hover:brightness-105 text-ink rounded-lg transition-all duration-150"
                               >
@@ -779,6 +891,26 @@ export const Transcribe: React.FC = () => {
           )}
         </div>
       </main>
+      {resultModalTarget && (
+        <TranscriptionResultModal
+          key={`${resultModalTarget.type}-${modalResultId ?? 'unsaved'}-${resultModalTarget.type === 'batch' ? resultModalTarget.index : 0}`}
+          isOpen
+          title={modalTitle}
+          text={modalText}
+          formattedText={modalFormattedText}
+          canFormat={Boolean(modalResultId)}
+          onClose={() => setResultModalTarget(null)}
+          onCopy={(text) => navigator.clipboard.writeText(text)}
+          onDownload={handleDownloadModalResult}
+          onImport={(text) => {
+            if (!text.trim()) return;
+            updateScript(text.trim());
+            setResultModalTarget(null);
+            navigate('/editor');
+          }}
+          onFormat={handleFormatModalResult}
+        />
+      )}
     </div>
   );
 };

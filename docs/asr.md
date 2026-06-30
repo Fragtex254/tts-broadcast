@@ -204,7 +204,7 @@ for chunk in completion:
 
 ### 调用方式
 
-项目使用独立 ASR provider 调用转录服务，不经过 Anthropic SDK。默认 provider 是 MiMo 云端，也可以切换到 Mac 本地 Qwen/MLX 服务：
+项目使用独立 ASR provider 调用转录服务，不经过 Anthropic SDK。默认 provider 是 MiMo 云端，也可以切换到 Mac 本地 Qwen/MLX 服务或 Windows/WSL 局域网 ASR 网关：
 
 ```
 前端页面
@@ -218,7 +218,48 @@ for chunk in completion:
         → provider=qwen_mlx:
           POST {qwen_asr_base_url}/audio/transcriptions
           (model: qwen_asr_model)
+        → provider=wsl_asr:
+          POST {wsl_asr_base_url}/audio/transcription-jobs
+          GET {wsl_asr_base_url}/jobs/{job_id}
+          (model: wsl_asr_model)
+      → services/transcriptionResultStore.js: 保存成功转录结果
 ```
+
+### Windows/WSL ASR provider
+
+设置页的「ASR 转录引擎」可选择 `WSL 局域网`。该 provider 调用 Windows PC 的 WSL ASR 网关 job API：后端把上传文件直接转发到 `/v1/audio/transcription-jobs`，再轮询 `/v1/jobs/{job_id}`，并把 WSL 的 queued / preprocessing / splitting / loading_model / transcribing / merging 进度映射为项目现有 SSE 事件。
+
+与 `mimo` 和 `qwen_mlx` 不同，`wsl_asr` 不经过 `services/media.js` 的 data URL 转换，也不在本项目内做 ffmpeg 静音切片；切片、模型加载、GPU 队列和 chunk 级进度都由 WSL ASR 服务负责。批量转录仍由本项目按文件串行提交，避免单 GPU 并发推理。
+
+转录页在选择 `WSL 局域网` 后会显示本次任务的模型和上下文参数；单文件与批量转录都会通过 FormData 传给后端：
+
+| **前端字段** | **后端字段** | **说明** |
+| --- | --- | --- |
+| 模型 | `wslModel` | `qwen3-asr-1.7b` 或 `qwen3-asr-0.6b`；未传时使用 `wsl_asr_model` 设置默认值 |
+| 上下文 | `context` | 作为弱热词/背景提示，原样透传给 WSL ASR job API 的 `context` 字段，对应 Qwen3-ASR 的 context 入参 |
+
+对应设置：
+
+| **设置项** | **默认值** | **说明** |
+| --- | --- | --- |
+| `asr_provider` | `wsl_asr` | `wsl_asr`、`mimo` 或 `qwen_mlx` |
+| `wsl_asr_base_url` | `http://192.168.31.137:18080/v1` | Windows/WSL ASR 网关 Base URL；请求会禁用 Node 代理 |
+| `wsl_asr_model` | `qwen3-asr-1.7b` | WSL ASR 模型 ID，可切到 `qwen3-asr-0.6b` |
+| `wsl_asr_api_key` | 空 | 若 WSL 网关启用 Bearer Token，在这里填写 |
+
+后端到 WSL 的总超时默认 60 分钟，可用 `WSL_ASR_TIMEOUT_MS` 调整；job 轮询间隔默认 2 秒，可用 `WSL_ASR_POLL_INTERVAL_MS` 调整。
+
+### 转录结果保存与 AI 排版
+
+单文件转录成功后，`POST /api/transcribe` 会返回 `text`、`usage` 和 `transcriptionResult`，并将结果保存到 SQLite `transcription_results` 表。批量转录中，每个成功文件都会独立保存一条记录，SSE 的 `file-complete` 和最终 `complete` 事件都会带上 `resultId` / `transcriptionResult`；失败文件只返回错误，不写入结果表。
+
+`transcription_results` 保存原始转录文本、AI 排版文本、文件名、批量相对路径、语言、provider、模型、context、usage 和 task_id。转录页的单文件结果与批量结果共用同一个结果弹窗，AI 排版调用：
+
+```
+POST /api/transcribe/results/:id/format
+```
+
+该端点使用当前 LLM 配置调用 `mimo.formatTranscriptionText()`，只做标点、换行和自然段排版，不总结、不改写事实；返回并写回 `formatted_text`。弹窗里的复制、下载和导入稿件会优先使用排版文本，没有排版文本时使用原始转录文本。
 
 ### Mac 本地 Qwen/MLX provider
 
@@ -242,7 +283,7 @@ mlx-qwen3-asr serve --api-key your-local-key --model Qwen/Qwen3-ASR-1.7B
 
 | **设置项** | **默认值** | **说明** |
 | --- | --- | --- |
-| `asr_provider` | `mimo` | `mimo` 或 `qwen_mlx` |
+| `asr_provider` | `wsl_asr` | `wsl_asr`、`mimo` 或 `qwen_mlx` |
 | `qwen_asr_base_url` | `http://localhost:8765/v1` | 本地 OpenAI-compatible Base URL；本机代理环境建议用 `http://127.0.0.1:8765/v1` |
 | `qwen_asr_model` | `Qwen/Qwen3-ASR-1.7B` | 本地模型 ID，可按服务实际加载模型调整 |
 | `qwen_asr_api_key` | 空 | 若 serve 使用 `--api-key`，这里填写同一个 Bearer Token |
@@ -281,7 +322,7 @@ mlx-qwen3-asr serve --api-key your-local-key --model Qwen/Qwen3-ASR-1.7B
 | --- | --- |
 | 语音输入稿件 | 用户通过语音口述播报稿件，ASR 转写为文本后送入 LLM 改写 |
 | 音频内容校验 | 对已生成的 TTS 音频进行 ASR 回转，校验合成质量 |
-| 批量转录 | 选择文件夹自动遍历子目录，勾选需要的文件批量转录，每篇单独保存，支持打包下载 ZIP。后端串行处理遵守 RPM 限流，单文件失败隔离 |
+| 批量转录 | 选择文件夹自动遍历子目录，勾选需要的文件批量转录，每个成功文件都会保存到后端，支持打包下载 ZIP。后端串行处理遵守 RPM 限流，单文件失败隔离 |
 
 ### 批量转录集成说明
 
@@ -294,10 +335,11 @@ mlx-qwen3-asr serve --api-key your-local-key --model Qwen/Qwen3-ASR-1.7B
       → multer upload.array 接收多文件，立即返回 202（任务已受理）
       → 后台 runBatchTranscription 串行处理：
         for each file:
-          → services/media.js: fileToAsrDataUrls()
           → services/asr.js: transcribeMedia()
             → provider=mimo 调 MiMo ASR
             → provider=qwen_mlx 调 Mac 本地 Qwen/MLX ASR
+            → provider=wsl_asr 调 WSL ASR job API
+          → services/transcriptionResultStore.js 保存成功结果
           → SSE 推送 file-start / file-progress / file-complete / file-error
         → SSE 推送 completed（带 results / succeeded / failed）
 ```

@@ -16,7 +16,7 @@ export const NewsItemSchema = z.object({
 }).catchall(z.unknown());
 
 export const LlmApiFormatSchema = z.enum(['openai', 'anthropic']);
-export const AsrProviderSchema = z.enum(['mimo', 'qwen_mlx']);
+export const AsrProviderSchema = z.enum(['mimo', 'qwen_mlx', 'wsl_asr']);
 
 export const SettingsSchema = z.object({
   mimo_api_key: z.string(),
@@ -32,6 +32,9 @@ export const SettingsSchema = z.object({
   qwen_asr_base_url: z.string(),
   qwen_asr_model: z.string(),
   qwen_asr_api_key: z.string(),
+  wsl_asr_base_url: z.string(),
+  wsl_asr_model: z.string(),
+  wsl_asr_api_key: z.string(),
   default_voice: z.string(),
   opening_script: z.string(),
   closing_script: z.string(),
@@ -98,9 +101,26 @@ export const VoicePresetSchema = z.object({
   updated_at: z.string(),
 });
 
+export const TranscriptionRecordSchema = z.object({
+  id: z.number(),
+  file_name: z.string(),
+  relative_path: z.string(),
+  text: z.string(),
+  formatted_text: z.string(),
+  language: z.enum(['auto', 'zh', 'en']),
+  provider: z.union([AsrProviderSchema, z.literal('')]),
+  model: z.string(),
+  context: z.string(),
+  usage: z.record(z.string(), z.unknown()).nullable().optional(),
+  task_id: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
 export const TranscriptionResultSchema = z.object({
   text: z.string(),
   usage: z.record(z.string(), z.unknown()).nullable().optional(),
+  transcriptionResult: TranscriptionRecordSchema.optional(),
 });
 
 // === API 响应包装 ===

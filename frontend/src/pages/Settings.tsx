@@ -17,6 +17,7 @@ const voiceOptions = [
 
 const asrProviderOptions: { value: AppSettings['asr_provider']; label: string; description: string }[] = [
   { value: 'mimo', label: 'MiMo 云端', description: '复用 TTS API Key，适合无需本地部署的场景' },
+  { value: 'wsl_asr', label: 'WSL 局域网', description: '连接 Windows/WSL 上的常驻 ASR 网关' },
   { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）', description: '连接 Mac 上的 mlx-qwen3-asr serve 服务' },
 ];
 
@@ -438,7 +439,7 @@ export const Settings: React.FC = () => {
                     <p className="font-body text-[10px] text-ink-soft/40 mt-0.5">选择默认转录服务；转录页也可以临时切换</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {asrProviderOptions.map((option) => (
                       <button
                         key={option.value}
@@ -488,6 +489,45 @@ export const Settings: React.FC = () => {
                       </div>
                       <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
                         Mac 上可用：mlx-qwen3-asr serve --api-key your-local-key
+                      </p>
+                    </div>
+                  )}
+
+                  {formData.asr_provider === 'wsl_asr' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
+                      <div>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">WSL ASR Base URL</label>
+                        <input
+                          type="text"
+                          value={formData.wsl_asr_base_url}
+                          onChange={(e) => handleChange('wsl_asr_base_url', e.target.value)}
+                          onBlur={() => handleAutoSave('wsl_asr_base_url')}
+                          placeholder="http://192.168.31.137:18080/v1"
+                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">WSL ASR 模型</label>
+                        <input
+                          type="text"
+                          value={formData.wsl_asr_model}
+                          onChange={(e) => handleChange('wsl_asr_model', e.target.value)}
+                          onBlur={() => handleAutoSave('wsl_asr_model')}
+                          placeholder="qwen3-asr-1.7b"
+                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">WSL ASR API Key（可选）</label>
+                        <PasswordField
+                          value={formData.wsl_asr_api_key}
+                          onChange={(v) => handleChange('wsl_asr_api_key', v)}
+                          onBlur={() => handleAutoSave('wsl_asr_api_key')}
+                          placeholder="如果 WSL 网关启用了 Bearer Token，在这里填写"
+                        />
+                      </div>
+                      <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                        默认使用 WSL job API，由服务端负责切片、排队和模型加载进度。
                       </p>
                     </div>
                   )}

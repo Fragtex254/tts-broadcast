@@ -1,6 +1,7 @@
 // SSE 客户端封装
 // 提供类型安全的 SSE 连接管理
 import { createScopedLogger, toLogError } from './logger';
+import type { TranscriptionRecord } from '../store/types';
 
 const logger = createScopedLogger('sse-client');
 
@@ -15,6 +16,7 @@ export interface SSEProgressEvent {
   chunkText?: string;
   phase?: 'preparing' | 'transcribing';
   percent?: number;
+  message?: string;
   timestamp?: number;
 }
 
@@ -43,6 +45,7 @@ export interface SSECompleteEvent {
   percent?: number;
   text?: string;
   usage?: Record<string, unknown> | null;
+  transcriptionResult?: TranscriptionRecord;
   timestamp: number;
 }
 
