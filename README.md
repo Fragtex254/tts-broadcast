@@ -104,6 +104,120 @@ npm run dev
 - 前端：http://localhost:5173
 - 后端：http://localhost:3001
 
+## 启动与停止服务
+
+### 启动前后端
+
+推荐方式是使用根目录脚本同时启动后端和前端：
+
+```bash
+./start.sh
+```
+
+脚本会启动：
+
+- 后端：`http://localhost:3001`
+- 前端：`http://localhost:5173`
+
+手动启动时，分别开两个终端：
+
+```bash
+cd backend
+npm run dev
+```
+
+```bash
+cd frontend
+npm run dev
+```
+
+### 启动 Mac 本地 Qwen ASR
+
+如果设置页选择了 `Qwen 本地（Mac MLX）`，还需要单独启动本地 ASR 服务。默认配置为：
+
+- Base URL：`http://127.0.0.1:8765/v1`
+- 模型：`Qwen/Qwen3-ASR-1.7B`
+- API Key：按本地服务启动参数填写
+
+首次准备环境示例：
+
+```bash
+brew install ffmpeg
+python3 -m venv ~/Library/Caches/tts-broadcast/qwen-asr-venv
+~/Library/Caches/tts-broadcast/qwen-asr-venv/bin/python -m pip install -U pip
+~/Library/Caches/tts-broadcast/qwen-asr-venv/bin/python -m pip install "mlx-qwen3-asr[serve]" socksio
+```
+
+官方服务启动方式：
+
+```bash
+~/Library/Caches/tts-broadcast/qwen-asr-venv/bin/mlx-qwen3-asr serve \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --api-key local-qwen-asr \
+  --model Qwen/Qwen3-ASR-1.7B
+```
+
+实测注意：`mlx-qwen3-asr 0.3.5` 官方 `serve` 在某些 Mac/MLX 环境下可能触发 `There is no Stream(gpu, 1) in current thread.`。当前可用的规避方案是启动一个同步兼容服务，仍暴露 `/v1/audio/transcriptions`，但在主线程调用 `Session.transcribe()`。详细背景见 [docs/asr.md](docs/asr.md)。
+
+### 正常停止服务
+
+如果用 `./start.sh` 启动，回到启动脚本所在终端按：
+
+```bash
+Ctrl+C
+```
+
+脚本会同时停止后端和前端。
+
+如果手动启动，分别在后端、前端、Qwen ASR 服务所在终端按：
+
+```bash
+Ctrl+C
+```
+
+### 强制关闭所有项目相关服务
+
+如果终端被关掉、服务残留，先查看常用端口：
+
+```bash
+lsof -nP -iTCP:3001 -sTCP:LISTEN
+lsof -nP -iTCP:5173 -sTCP:LISTEN
+lsof -nP -iTCP:8765 -sTCP:LISTEN
+```
+
+对应关系：
+
+- `3001`：后端 Express / nodemon
+- `5173`：前端 Vite
+- `8765`：Mac 本地 Qwen ASR
+
+按 PID 结束：
+
+```bash
+kill <PID>
+```
+
+如果普通 `kill` 后仍残留，再确认是本项目进程后强制结束：
+
+```bash
+kill -9 <PID>
+```
+
+也可以一次性查找本项目相关进程：
+
+```bash
+ps -axo pid,ppid,command | rg 'tts-broadcast|qwen_asr_sync_server|mlx-qwen3-asr|qwen-asr-venv'
+```
+
+确认无服务残留：
+
+```bash
+lsof -nP -iTCP:3001 -sTCP:LISTEN || true
+lsof -nP -iTCP:5173 -sTCP:LISTEN || true
+lsof -nP -iTCP:8765 -sTCP:LISTEN || true
+```
+
 ## 常用命令
 
 后端：
