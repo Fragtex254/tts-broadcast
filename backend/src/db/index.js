@@ -68,6 +68,31 @@ try {
   `);
 }
 
+// 迁移：确保 transcription_results 表存在
+try {
+  db.prepare('SELECT id FROM transcription_results LIMIT 1').get();
+} catch {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS transcription_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_name TEXT NOT NULL,
+      relative_path TEXT DEFAULT '',
+      text TEXT NOT NULL,
+      formatted_text TEXT DEFAULT '',
+      language TEXT DEFAULT 'auto',
+      provider TEXT DEFAULT '',
+      model TEXT DEFAULT '',
+      context TEXT DEFAULT '',
+      usage TEXT,
+      task_id TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_transcription_results_created_at ON transcription_results(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_transcription_results_task_id ON transcription_results(task_id);
+  `);
+}
+
 // 默认设置
 const defaultSettings = {
   mimo_api_key: '',
@@ -79,10 +104,13 @@ const defaultSettings = {
   llm_split_system_prompt: '你是一个文本切分助手，只输出 JSON 数组格式。',
   llm_rewrite_thinking_enabled: true,
   llm_split_thinking_enabled: false,
-  asr_provider: 'mimo',
+  asr_provider: 'wsl_asr',
   qwen_asr_base_url: 'http://localhost:8765/v1',
   qwen_asr_model: 'Qwen/Qwen3-ASR-1.7B',
   qwen_asr_api_key: '',
+  wsl_asr_base_url: 'http://192.168.31.137:18080/v1',
+  wsl_asr_model: 'qwen3-asr-1.7b',
+  wsl_asr_api_key: '',
   default_voice: '冰糖',
   opening_script: '大家好，欢迎收听今日 AI 简讯。',
   closing_script: '以上就是今天的 AI 简讯，感谢收听，我们明天再见。',
@@ -97,5 +125,9 @@ const insertSetting = db.prepare(`
 for (const [key, value] of Object.entries(defaultSettings)) {
   insertSetting.run(key, JSON.stringify(value));
 }
+
+// 迁移：WSL ASR 接入后，将旧默认 MiMo 转录引擎切到 WSL ASR。
+db.prepare("UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'asr_provider' AND value = ?")
+  .run(JSON.stringify('wsl_asr'), JSON.stringify('mimo'));
 
 module.exports = db;

@@ -53,7 +53,7 @@ export interface TodayItem {
 
 /** 应用设置 */
 export type LlmApiFormat = 'openai' | 'anthropic';
-export type AsrProvider = 'mimo' | 'qwen_mlx';
+export type AsrProvider = 'mimo' | 'qwen_mlx' | 'wsl_asr';
 
 export interface LlmModelOption {
   id: string;
@@ -74,6 +74,9 @@ export interface Settings {
   qwen_asr_base_url: string;
   qwen_asr_model: string;
   qwen_asr_api_key: string;
+  wsl_asr_base_url: string;
+  wsl_asr_model: string;
+  wsl_asr_api_key: string;
   default_voice: string;
   opening_script: string;
   closing_script: string;
@@ -124,9 +127,31 @@ export interface BatchGenerateResult {
 
 export type AsrLanguage = 'auto' | 'zh' | 'en';
 
+export interface TranscribeOptions {
+  wslModel?: string;
+  context?: string;
+}
+
+export interface TranscriptionRecord {
+  id: number;
+  file_name: string;
+  relative_path: string;
+  text: string;
+  formatted_text: string;
+  language: AsrLanguage;
+  provider: AsrProvider | '';
+  model: string;
+  context: string;
+  usage?: Record<string, unknown> | null;
+  task_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TranscriptionResult {
   text: string;
   usage?: Record<string, unknown> | null;
+  transcriptionResult?: TranscriptionRecord;
 }
 
 export type TranscriptionPhase = 'idle' | 'uploading' | 'preparing' | 'transcribing' | 'completed' | 'failed';
@@ -145,6 +170,9 @@ export interface BatchTranscriptionItem {
   fileName: string;
   relativePath: string;
   text: string;
+  formattedText?: string;
+  resultId?: number;
+  transcriptionResult?: TranscriptionRecord;
   usage?: Record<string, unknown> | null;
   status: BatchTranscriptionItemStatus;
   error?: string;
@@ -197,6 +225,7 @@ export interface AppState {
   isMerging: boolean;
 
   transcriptionText: string;
+  transcriptionRecord: TranscriptionRecord | null;
   isTranscribing: boolean;
   transcribeProgress: TranscriptionProgress;
 
@@ -248,10 +277,21 @@ export interface AppState {
   suggestTags: (broadcastId: number) => Promise<Segment[]>;
   clearSegments: () => void;
 
-  transcribeMedia: (file: File, language: AsrLanguage, provider?: AsrProvider) => Promise<TranscriptionResult>;
+  transcribeMedia: (
+    file: File,
+    language: AsrLanguage,
+    provider?: AsrProvider,
+    options?: TranscribeOptions
+  ) => Promise<TranscriptionResult>;
+  formatTranscriptionResult: (id: number, text: string) => Promise<TranscriptionRecord>;
   setTranscriptionText: (text: string) => void;
   clearTranscription: () => void;
-  batchTranscribeMedia: (files: File[], language: AsrLanguage, provider?: AsrProvider) => Promise<BatchTranscriptionItem[]>;
+  batchTranscribeMedia: (
+    files: File[],
+    language: AsrLanguage,
+    provider?: AsrProvider,
+    options?: TranscribeOptions
+  ) => Promise<BatchTranscriptionItem[]>;
   clearBatchTranscription: () => void;
 
   fetchSettings: () => Promise<void>;

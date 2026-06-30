@@ -2,6 +2,11 @@ const request = require('supertest');
 const fs = require('fs');
 
 jest.mock('../../src/services/asr', () => ({
+  getAsrConfig: jest.fn().mockReturnValue({
+    provider: 'mimo',
+    qwenModel: 'Qwen/Qwen3-ASR-1.7B',
+    wslModel: 'qwen3-asr-1.7b'
+  }),
   transcribeMedia: jest.fn().mockResolvedValue({
     text: '转录文本',
     usage: { total_tokens: 12 }
@@ -29,12 +34,20 @@ jest.mock('../../src/services/logger', () => ({
 }));
 
 const app = require('../../src/app');
+const db = require('../../src/db');
 const asr = require('../../src/services/asr');
+const mimo = require('../../src/services/mimo');
 const sseManager = require('../../src/services/sseManager');
 
 describe('转录 API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    db.prepare('DELETE FROM transcription_results').run();
+    asr.getAsrConfig.mockReturnValue({
+      provider: 'mimo',
+      qwenModel: 'Qwen/Qwen3-ASR-1.7B',
+      wslModel: 'qwen3-asr-1.7b'
+    });
     asr.transcribeMedia.mockResolvedValue({
       text: '转录文本',
       usage: { total_tokens: 12 }
@@ -48,10 +61,21 @@ describe('转录 API', () => {
       .attach('media', Buffer.from('fake-wav'), 'sample.wav');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
+    expect(res.body).toMatchObject({
       text: '转录文本',
-      usage: { total_tokens: 12 }
+      usage: { total_tokens: 12 },
+      transcriptionResult: {
+        file_name: 'sample.wav',
+        relative_path: 'sample.wav',
+        text: '转录文本',
+        language: 'zh',
+        provider: 'mimo',
+        model: 'mimo-v2.5-asr',
+        usage: { total_tokens: 12 }
+      }
     });
+    expect(res.body.transcriptionResult.id).toEqual(expect.any(Number));
+    expect(db.prepare('SELECT COUNT(*) as count FROM transcription_results').get().count).toBe(1);
     expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       file: expect.objectContaining({ originalname: 'sample.wav' }),
       language: 'zh',
@@ -70,6 +94,24 @@ describe('转录 API', () => {
     expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       language: 'zh',
       provider: 'qwen_mlx'
+    }));
+  });
+
+  test('POST /api/transcribe 透传 WSL 模型与 context', async () => {
+    const res = await request(app)
+      .post('/api/transcribe')
+      .field('language', 'zh')
+      .field('provider', 'wsl_asr')
+      .field('wslModel', 'qwen3-asr-0.6b')
+      .field('context', '包青天, 福尔摩斯')
+      .attach('media', Buffer.from('fake-wav'), 'sample.wav');
+
+    expect(res.status).toBe(200);
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'zh',
+      provider: 'wsl_asr',
+      wslModel: 'qwen3-asr-0.6b',
+      context: '包青天, 福尔摩斯'
     }));
   });
 
@@ -124,8 +166,29 @@ describe('转录 API', () => {
     expect(sseManager.sendComplete).toHaveBeenCalledWith('transcribe-test', expect.objectContaining({
       phase: 'completed',
       percent: 100,
-      text: '第一段。\n第二段。'
+      text: '第一段。\n第二段。',
+      transcriptionResult: expect.objectContaining({ text: '第一段。\n第二段。' })
     }));
+  });
+
+  test('POST /api/transcribe/results/:id/format 使用 AI 排版并写回结果', async () => {
+    const record = db.prepare(`
+      INSERT INTO transcription_results (file_name, relative_path, text, language, provider, model)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run('sample.wav', 'sample.wav', '大家好今天聊 AI 首先是新模型发布', 'zh', 'mimo', 'mimo-v2.5-asr');
+    jest.spyOn(mimo, 'formatTranscriptionText').mockResolvedValue('大家好，今天聊 AI。\n\n首先是新模型发布。');
+
+    const res = await request(app)
+      .post(`/api/transcribe/results/${record.lastInsertRowid}/format`)
+      .send({ text: '大家好今天聊 AI 首先是新模型发布' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.result).toMatchObject({
+      id: record.lastInsertRowid,
+      text: '大家好今天聊 AI 首先是新模型发布',
+      formatted_text: '大家好，今天聊 AI。\n\n首先是新模型发布。'
+    });
+    expect(mimo.formatTranscriptionText).toHaveBeenCalledWith('大家好今天聊 AI 首先是新模型发布');
   });
 
   test('未上传文件返回 400', async () => {
@@ -161,6 +224,12 @@ describe('转录 API', () => {
 describe('批量转录 API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    db.prepare('DELETE FROM transcription_results').run();
+    asr.getAsrConfig.mockReturnValue({
+      provider: 'mimo',
+      qwenModel: 'Qwen/Qwen3-ASR-1.7B',
+      wslModel: 'qwen3-asr-1.7b'
+    });
     sseManager.getTaskConnectionCount.mockReturnValue(1);
   });
 
@@ -202,9 +271,33 @@ describe('批量转录 API', () => {
       succeeded: 2,
       failed: 0,
       results: [
-        { fileName: 'a.mp3', relativePath: 'a.mp3', text: '文本一', usage: { total_tokens: 5 } },
-        { fileName: 'b.mp4', relativePath: 'b.mp4', text: '文本二', usage: { total_tokens: 7 } }
+        expect.objectContaining({ fileName: 'a.mp3', relativePath: 'a.mp3', text: '文本一', usage: { total_tokens: 5 }, resultId: expect.any(Number) }),
+        expect.objectContaining({ fileName: 'b.mp4', relativePath: 'b.mp4', text: '文本二', usage: { total_tokens: 7 }, resultId: expect.any(Number) })
       ]
+    }));
+    expect(db.prepare('SELECT COUNT(*) as count FROM transcription_results').get().count).toBe(2);
+  });
+
+  test('POST /api/transcribe/batch 透传 WSL 模型与 context', async () => {
+    asr.transcribeMedia.mockResolvedValue({ text: '文本', usage: null });
+
+    const res = await request(app)
+      .post('/api/transcribe/batch')
+      .field('language', 'zh')
+      .field('provider', 'wsl_asr')
+      .field('wslModel', 'qwen3-asr-0.6b')
+      .field('context', '术语A, 术语B')
+      .field('taskId', 'batch-wsl-options')
+      .attach('media', Buffer.from('fake-mp3'), 'a.mp3');
+
+    expect(res.status).toBe(202);
+    await flushBackground();
+
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'zh',
+      provider: 'wsl_asr',
+      wslModel: 'qwen3-asr-0.6b',
+      context: '术语A, 术语B'
     }));
   });
 

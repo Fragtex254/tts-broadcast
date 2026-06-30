@@ -62,3 +62,22 @@ CREATE TABLE IF NOT EXISTS voice_presets (
 );
 
 CREATE INDEX IF NOT EXISTS idx_voice_presets_type ON voice_presets(type);
+
+CREATE TABLE IF NOT EXISTS transcription_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_name TEXT NOT NULL,
+  relative_path TEXT DEFAULT '',
+  text TEXT NOT NULL,
+  formatted_text TEXT DEFAULT '',
+  language TEXT DEFAULT 'auto',
+  provider TEXT DEFAULT '',
+  model TEXT DEFAULT '',
+  context TEXT DEFAULT '',
+  usage TEXT,
+  task_id TEXT DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_results_created_at ON transcription_results(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transcription_results_task_id ON transcription_results(task_id);

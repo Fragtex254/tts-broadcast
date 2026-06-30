@@ -2,6 +2,7 @@ const { getApiKey } = require('./mimo');
 const { fileToAsrDataUrls } = require('./media');
 const { postChatCompletions } = require('./mimoApiClient');
 const qwenAsr = require('./qwenAsr');
+const wslAsr = require('./wslAsr');
 const db = require('../db');
 
 const ASR_MODEL = 'mimo-v2.5-asr';
@@ -14,12 +15,15 @@ const QWEN_CHUNK_OPTIONS = {
   tooLargeMessage: '音频内容过大，转换后超过 Qwen 本地 ASR 单片限制'
 };
 const SUPPORTED_LANGUAGES = new Set(['auto', 'zh', 'en']);
-const SUPPORTED_ASR_PROVIDERS = new Set(['mimo', 'qwen_mlx']);
+const SUPPORTED_ASR_PROVIDERS = new Set(['mimo', 'qwen_mlx', 'wsl_asr']);
 const DEFAULT_ASR_SETTINGS = {
-  asr_provider: 'mimo',
+  asr_provider: 'wsl_asr',
   qwen_asr_base_url: 'http://localhost:8765/v1',
   qwen_asr_model: 'Qwen/Qwen3-ASR-1.7B',
-  qwen_asr_api_key: ''
+  qwen_asr_api_key: '',
+  wsl_asr_base_url: 'http://192.168.31.137:18080/v1',
+  wsl_asr_model: 'qwen3-asr-1.7b',
+  wsl_asr_api_key: ''
 };
 
 function getSettingValue(key, fallback) {
@@ -39,7 +43,10 @@ function getAsrConfig(providerOverride) {
     provider: SUPPORTED_ASR_PROVIDERS.has(provider) ? provider : DEFAULT_ASR_SETTINGS.asr_provider,
     qwenBaseUrl: getSettingValue('qwen_asr_base_url', DEFAULT_ASR_SETTINGS.qwen_asr_base_url),
     qwenModel: getSettingValue('qwen_asr_model', DEFAULT_ASR_SETTINGS.qwen_asr_model),
-    qwenApiKey: getSettingValue('qwen_asr_api_key', DEFAULT_ASR_SETTINGS.qwen_asr_api_key)
+    qwenApiKey: getSettingValue('qwen_asr_api_key', DEFAULT_ASR_SETTINGS.qwen_asr_api_key),
+    wslBaseUrl: getSettingValue('wsl_asr_base_url', DEFAULT_ASR_SETTINGS.wsl_asr_base_url),
+    wslModel: getSettingValue('wsl_asr_model', DEFAULT_ASR_SETTINGS.wsl_asr_model),
+    wslApiKey: getSettingValue('wsl_asr_api_key', DEFAULT_ASR_SETTINGS.wsl_asr_api_key)
   };
 }
 
@@ -78,16 +85,30 @@ function mergeUsage(usages) {
  * @param {Object} params
  * @param {Object} params.file - multer 文件对象
  * @param {string} [params.language='auto'] - auto/zh/en
- * @param {string} [params.provider] - mimo/qwen_mlx
+ * @param {string} [params.provider] - mimo/qwen_mlx/wsl_asr
+ * @param {string} [params.wslModel] - WSL ASR 模型 ID
+ * @param {string} [params.context] - WSL ASR 上下文提示词
  * @param {Function} [params.onProgress] - 转录进度回调
  * @returns {Promise<{text: string, usage: Object|null}>}
  */
-async function transcribeMedia({ file, language = 'auto', provider, onProgress }) {
+async function transcribeMedia({ file, language = 'auto', provider, wslModel, context, onProgress }) {
   if (!SUPPORTED_LANGUAGES.has(language)) {
     throw new Error('语言参数无效，请选择自动、中文或英文');
   }
 
   const config = getAsrConfig(provider);
+  if (config.provider === 'wsl_asr') {
+    return wslAsr.transcribeFile({
+      file,
+      language,
+      baseUrl: config.wslBaseUrl,
+      model: typeof wslModel === 'string' && wslModel.trim() ? wslModel.trim() : config.wslModel,
+      apiKey: config.wslApiKey,
+      context,
+      onProgress
+    });
+  }
+
   const apiKey = config.provider === 'mimo' ? getApiKey('tts') : '';
   if (typeof onProgress === 'function') {
     onProgress({ phase: 'preparing', percent: 10, text: '' });

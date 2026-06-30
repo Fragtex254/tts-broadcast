@@ -26,6 +26,7 @@ export type {
   Settings,
   TodayItem,
   TranscriptionResult,
+  TranscriptionRecord,
   VoiceConfig,
   VoicePreset,
 } from './types';
