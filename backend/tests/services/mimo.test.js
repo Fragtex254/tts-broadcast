@@ -247,6 +247,19 @@ describe('MiMo 服务', () => {
       }));
     });
 
+    test('排版始终禁用 thinking，不复用切分 thinking 设置', async () => {
+      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_split_thinking_enabled', 'true');
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '大家好，今天聊 AI。\n\n首先是新模型发布。' }],
+      });
+
+      await mimo.formatTranscriptionText('大家好今天聊 AI 首先是新模型发布');
+
+      expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
+        thinking: { type: 'disabled' },
+      }));
+    });
+
     test('剥离模型输出中的 think 内容', async () => {
       mockMessagesCreate.mockResolvedValue({
         content: [{
