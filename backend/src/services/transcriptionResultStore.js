@@ -96,9 +96,20 @@ function updateTextAndFormatted(id, { text, formattedText }) {
   return getById(id);
 }
 
+/**
+ * 删除转录结果
+ * @param {number} id - 转录结果 ID
+ * @returns {boolean} 是否删除成功
+ */
+function remove(id) {
+  const result = db.prepare('DELETE FROM transcription_results WHERE id = ?').run(id);
+  return result.changes > 0;
+}
+
 module.exports = {
   create,
   getById,
   getRecent,
-  updateTextAndFormatted
+  updateTextAndFormatted,
+  remove
 };

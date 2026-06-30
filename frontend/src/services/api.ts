@@ -197,6 +197,10 @@ export const transcribeApi = {
     }),
   formatResult: (id: number, data: { text?: string }) =>
     api.post(`/transcribe/results/${id}/format`, data),
+  getResults: (params?: { limit?: number }) =>
+    api.get('/transcribe/results', { params }),
+  deleteResult: (id: number) =>
+    api.delete(`/transcribe/results/${id}`),
 };
 
 export type { NewsItem, Settings };

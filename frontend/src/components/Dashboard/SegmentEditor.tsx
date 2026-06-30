@@ -156,7 +156,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
   if (!segments.length && !isSplitting) return null;
 
-  const hasPendingOrFailed = segments.some((s) => s.status === 'pending' || s.status === 'failed');
+  const hasPendingOrFailed = segments.some((s) => s.status === 'pending' || s.status === 'failed' || s.status === 'generating');
   const allGenerated = segments.length > 0 && segments.every((s) => s.status === 'generated');
 
   const handleStartEdit = (seg: Segment) => { setEditingId(seg.id); setEditText(seg.text); };

@@ -17,6 +17,7 @@ const DEFAULT_LLM_SETTINGS = {
 };
 
 const LLM_REQUEST_TIMEOUT_MS = 60000;
+const STYLE_TAG_SUGGEST_BATCH_SIZE = 10;
 
 /**
  * 读取设置值，缺失或格式错误时使用默认值
@@ -109,6 +110,10 @@ function createThinkingOption(enabled) {
   return enabled ? undefined : { type: 'disabled' };
 }
 
+function isMiniMaxOpenAiConfig(config) {
+  return /minimax/i.test(String(config.baseUrl || '')) || /minimax/i.test(String(config.model || ''));
+}
+
 /**
  * 拼接 OpenAI chat completions URL
  * @param {string} baseUrl - LLM baseURL
@@ -181,6 +186,43 @@ function stripThinkingContent(text) {
     .trim();
 }
 
+function extractJsonArrayText(text) {
+  let jsonStr = stripThinkingContent(text);
+  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  }
+
+  const arrayStart = jsonStr.indexOf('[');
+  const arrayEnd = jsonStr.lastIndexOf(']');
+  if (arrayStart >= 0 && arrayEnd > arrayStart) {
+    return jsonStr.slice(arrayStart, arrayEnd + 1).trim();
+  }
+  return jsonStr.trim();
+}
+
+function fallbackStyleTag(text, allowedTags) {
+  const allowed = new Set(allowedTags);
+  const value = String(text || '');
+  if (allowed.has('惊讶') && /没想到|竟然|突然|震惊|意外|惊人|出乎/.test(value)) return '惊讶';
+  if (allowed.has('兴奋') && /发布|突破|上线|提升|成功|灿烂|笃定|烈日|未来/.test(value)) return '兴奋';
+  if (allowed.has('严肃') && /战争|危机|饥荒|压力|管控|失败|风险|寒冷|死亡|困境/.test(value)) return '严肃';
+  if (allowed.has('温柔') && /细雨|温暖|湿润|春水|听雨|轻轻|柔和|西湖/.test(value)) return '温柔';
+  if (allowed.has('深沉') && /历史|文明|王朝|命运|悲歌|大雪|正统|文学|地理/.test(value)) return '深沉';
+  if (allowed.has('干练') && value.length < 28) return '干练';
+  if (allowed.has('平静')) return '平静';
+  return allowedTags[0] || '';
+}
+
+function isRecoverableStructuredOutputError(error) {
+  const status = getErrorStatus(error);
+  const message = String(error?.message || error?.response?.data?.error?.message || '');
+  return status === 422 || status === '422'
+    || message.includes('数量与句子数量不一致')
+    || message.includes('解析失败')
+    || message.includes('格式不正确');
+}
+
 /**
  * 调用 Anthropic 兼容 LLM
  * @param {Object} params
@@ -221,14 +263,19 @@ async function createAnthropicMessage({ prompt, systemPrompt, maxTokens, thinkin
  */
 async function createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, apiKeyOverride }) {
   const apiKey = apiKeyOverride || getApiKey('anthropic');
-  const response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), {
+  const payload = {
     model: config.model,
     max_tokens: maxTokens,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt }
     ]
-  }, {
+  };
+  if (isMiniMaxOpenAiConfig(config)) {
+    payload.thinking = createThinkingOption(false);
+  }
+
+  const response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), payload, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'api-key': apiKey,
@@ -342,14 +389,7 @@ ${text}`;
     thinkingEnabled: config.splitThinkingEnabled
   });
 
-  const trimmedText = rawText.trim();
-
-  // 尝试解析 JSON，处理可能的 markdown 代码块包裹
-  let jsonStr = trimmedText;
-  const codeBlockMatch = trimmedText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1].trim();
-  }
+  const jsonStr = extractJsonArrayText(rawText);
 
   let segments;
   try {
@@ -416,15 +456,7 @@ ${text}`;
  * @param {string[]} allowedTags - 候选风格标签集
  * @returns {Promise<string[]>} 与 texts 等长的标签数组（候选之一或空串）
  */
-async function suggestStyleTags(texts, allowedTags) {
-  if (!Array.isArray(texts) || texts.length === 0) {
-    throw new Error('请提供有效的句子列表');
-  }
-  if (!Array.isArray(allowedTags) || allowedTags.length === 0) {
-    throw new Error('请提供候选风格标签');
-  }
-
-  const config = getLlmConfig();
+async function suggestStyleTagsBatch(texts, allowedTags, config) {
   const numbered = texts.map((t, i) => `${i + 1}. ${t}`).join('\n');
   const prompt = `你是一个语音风格标注助手。下面是一篇新闻播报被切分后的若干句子。请为【每一句】从候选风格标签中选出最贴合的一个，用于控制该句的语音语气；如果都不贴合就返回空字符串。
 
@@ -441,16 +473,11 @@ ${numbered}`;
   const rawText = await createLlmMessage({
     prompt,
     systemPrompt: '你是一个语音风格标注助手，只输出 JSON 数组格式。',
-    maxTokens: Math.min(4000, 200 + texts.length * 20),
+    maxTokens: Math.min(1200, 200 + texts.length * 60),
     thinkingEnabled: config.splitThinkingEnabled,
   });
 
-  const trimmed = rawText.trim();
-  let jsonStr = trimmed;
-  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1].trim();
-  }
+  const jsonStr = extractJsonArrayText(rawText);
 
   let tags;
   try {
@@ -465,6 +492,34 @@ ${numbered}`;
 
   const allowed = new Set(allowedTags);
   return tags.map((t) => (typeof t === 'string' && allowed.has(t) ? t : ''));
+}
+
+async function suggestStyleTags(texts, allowedTags) {
+  if (!Array.isArray(texts) || texts.length === 0) {
+    throw new Error('请提供有效的句子列表');
+  }
+  if (!Array.isArray(allowedTags) || allowedTags.length === 0) {
+    throw new Error('请提供候选风格标签');
+  }
+
+  const config = getLlmConfig();
+  const allTags = [];
+  for (let start = 0; start < texts.length; start += STYLE_TAG_SUGGEST_BATCH_SIZE) {
+    const batch = texts.slice(start, start + STYLE_TAG_SUGGEST_BATCH_SIZE);
+    try {
+      const batchTags = await suggestStyleTagsBatch(batch, allowedTags, config);
+      allTags.push(...batchTags);
+    } catch (error) {
+      if (!isRecoverableStructuredOutputError(error)) throw error;
+      logger.warn({
+        err: error,
+        start,
+        batchSize: batch.length,
+      }, 'AI 风格建议批次失败，使用本地兜底标签');
+      allTags.push(...batch.map((text) => fallbackStyleTag(text, allowedTags)));
+    }
+  }
+  return allTags;
 }
 
 /**

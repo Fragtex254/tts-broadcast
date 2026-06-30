@@ -42,13 +42,14 @@ function getByIdAndBroadcastId(segId, broadcastId) {
 }
 
 /**
- * 获取播报下待处理（pending/failed）的 segments
+ * 获取播报下待处理（pending/failed/generating）的 segments。
+ * generating 也纳入可恢复队列，避免请求中断后段落永久卡在生成中。
  * @param {number} broadcastId - 播报 ID
  * @returns {Array} pending 和 failed 状态的 segments
  */
 function getPendingByBroadcastId(broadcastId) {
   return db.prepare(
-    'SELECT * FROM segments WHERE broadcast_id = ? AND status IN (\'pending\', \'failed\') ORDER BY "index"'
+    'SELECT * FROM segments WHERE broadcast_id = ? AND status IN (\'pending\', \'failed\', \'generating\') ORDER BY "index"'
   ).all(broadcastId);
 }
 

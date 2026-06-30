@@ -19,7 +19,7 @@
 | 框架 | React | 19 |
 | 语言 | TypeScript | 6 |
 | 构建 | Vite | 8 |
-| 样式 | Tailwind CSS | v4 |
+| 样式 | Tailwind CSS | v4（全局字体默认使用本机 MiSans，缺失时回退 Noto Sans SC / sans-serif） |
 | 状态 | Zustand | 5 |
 | 路由 | React Router | 7 |
 | HTTP | Axios | 1.x |
