@@ -54,6 +54,50 @@ describe('TTS 服务', () => {
       );
     });
 
+    test('design 模式将合成文本放入 assistant 消息', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '这段试听文本必须进入请求',
+        voiceType: 'design',
+        voiceDesign: '温柔女声'
+      });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body.messages).toEqual([
+        { role: 'user', content: '温柔女声' },
+        { role: 'assistant', content: '这段试听文本必须进入请求' }
+      ]);
+      expect(body.audio).toEqual({ format: 'wav' });
+    });
+
+    test('design 模式显式开启时才优化试听文本', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '短试听',
+        voiceType: 'design',
+        voiceDesign: '温柔女声',
+        optimizeTextPreview: true
+      });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio).toEqual({ format: 'wav', optimize_text_preview: true });
+    });
+
+    test('design 模式将风格提示合并进 user context', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '试听文本',
+        voiceType: 'design',
+        voiceDesign: '低柔磁性的成熟女性声线',
+        stylePrompt: '语速更慢，尾音轻轻下落'
+      });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body.messages[0].content).toContain('低柔磁性的成熟女性声线');
+      expect(body.messages[0].content).toContain('风格控制：语速更慢，尾音轻轻下落');
+      expect(body.messages[1].content).toBe('试听文本');
+    });
+
     test('clone 模式使用 voiceclone 模型', async () => {
       mockTtsResponse();
       await tts.generateSpeech({

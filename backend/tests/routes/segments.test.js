@@ -11,11 +11,17 @@ const audio = require('../../src/services/audio');
 const audioAsset = require('../../src/services/audioAsset');
 const mimo = require('../../src/services/mimo');
 const segmentStore = require('../../src/services/segmentStore');
+const ttsQueue = require('../../src/services/ttsQueue');
 
 describe('Segments API', () => {
   let broadcastId;
 
   beforeEach(() => {
+    ttsQueue.clear();
+    ttsQueue.minIntervalMs = 0;
+    ttsQueue.maxConcurrent = 10;
+    ttsQueue.lastStartAt = 0;
+
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
 
@@ -34,6 +40,7 @@ describe('Segments API', () => {
   });
 
   afterEach(() => {
+    ttsQueue.clear();
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
   });
@@ -445,5 +452,33 @@ describe('Segments API', () => {
       expect(tts.generateSpeech).not.toHaveBeenCalled();
       expect(res.body.segments.every((s) => s.status === 'failed')).toBe(true);
     }, 15000);
+  });
+
+  describe('POST /api/broadcast/:id/segments/:segId/regenerate', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+      tts.generateSpeech.mockReset();
+    });
+
+    test('重新生成单句也经过 TTS 全局队列', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '需要重生成的句子', 'failed');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+      const enqueueSpy = jest.spyOn(ttsQueue, 'enqueue');
+
+      tts.generateSpeech.mockResolvedValue(Buffer.from('fake-wav'));
+      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/segment_regenerated.wav');
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      expect(enqueueSpy).toHaveBeenCalledTimes(1);
+      expect(tts.generateSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({ text: '需要重生成的句子' })
+      );
+      expect(res.body.segment.status).toBe('generated');
+    });
   });
 });

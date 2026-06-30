@@ -10,13 +10,14 @@ const { getApiKey } = require('./mimo');
  * @param {string} [params.voiceDesign] - 音色设计描述
  * @param {string} [params.voiceClone] - 音色克隆音频 (base64)
  * @param {string} [params.stylePrompt] - 风格提示（与精细参数互斥）
+ * @param {boolean} [params.optimizeTextPreview=false] - 是否允许 voicedesign 优化/扩写试听文本
  * @param {Object} [params.speed] - 速度控制 { speed_ratio: 0.5-2.0, style: '固定'|'随机' }
  * @param {string|Array} [params.emotion] - 情感控制，字符串或 [{ emotion, weight }] 数组
  * @param {Object} [params.pitch] - 音调控制 { pitch_ratio: 0.5-2.0, style: '固定'|'随机' }
  * @param {string} [params.format='wav'] - 输出音频格式 (wav/pcm/mp3/ogg)
  * @returns {Promise<Buffer>} 音频 Buffer
  */
-async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch, format = 'wav' }) {
+async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', voiceDesign, voiceClone, stylePrompt, optimizeTextPreview = false, speed, emotion, pitch, format = 'wav' }) {
   // 输入校验
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     throw new Error('请提供合成文本');
@@ -43,10 +44,13 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
     case 'design':
       model = 'mimo-v2.5-tts-voicedesign';
       messages = [
-        { role: 'user', content: voiceDesign },
+        { role: 'user', content: stylePrompt ? `${voiceDesign}\n\n风格控制：${stylePrompt}` : voiceDesign },
         { role: 'assistant', content: text }
       ];
-      audioConfig = { format, optimize_text_preview: true };
+      audioConfig = { format };
+      if (optimizeTextPreview) {
+        audioConfig.optimize_text_preview = true;
+      }
       break;
 
     case 'clone':

@@ -6,9 +6,12 @@ jest.mock('../../src/services/tts', () => ({
 
 const app = require('../../src/app');
 const db = require('../../src/db');
+const tts = require('../../src/services/tts');
 
 describe('Voice Presets API', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
+    tts.generateSpeech.mockResolvedValue(Buffer.from('fake-audio-data'));
     db.prepare('DELETE FROM voice_presets').run();
   });
 
@@ -125,6 +128,11 @@ describe('Voice Presets API', () => {
       expect(res.status).toBe(200);
       expect(res.body.audioUrl).toBeDefined();
       expect(res.body.audioUrl).toMatch(/^\/audio\/preset_trial_design_/);
+      expect(tts.generateSpeech).toHaveBeenCalledWith(expect.objectContaining({
+        text: '你好世界',
+        voiceType: 'design',
+        voiceDesign: '温柔的女性声音',
+      }));
     });
 
     test('缺少 design_prompt 返回 400', async () => {
@@ -143,6 +151,24 @@ describe('Voice Presets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.audioUrl).toBeDefined();
+      expect(tts.generateSpeech).toHaveBeenCalledWith(expect.objectContaining({
+        text: '你好，我是你的专属语音助手。',
+      }));
+    });
+
+    test('显式开启 optimize_text_preview 时透传给 TTS 服务', async () => {
+      const res = await request(app)
+        .post('/api/voice-presets/trial/design')
+        .send({
+          design_prompt: '温柔的女性声音',
+          trial_text: '你好世界',
+          optimize_text_preview: true
+        });
+
+      expect(res.status).toBe(200);
+      expect(tts.generateSpeech).toHaveBeenCalledWith(expect.objectContaining({
+        optimizeTextPreview: true,
+      }));
     });
   });
 });

@@ -157,7 +157,7 @@ SQLite 数据库包含 6 张表：
 
 完整文档见 `docs/mimo-api-models-limits.md`、`docs/ttsSeries.md` 和 `docs/asr.md`。
 
-**限流规则**：RPM（每分钟请求数）上限 100，TPM（每分钟 Token 数）上限 10M。超出会返回 `429 Too Many Requests`。批量生成语音时必须注意并发控制，避免触发限流。
+**限流规则**：TTS 模型 RPM（每分钟请求数）上限 100，TPM（每分钟 Token 数）上限 10M。超出会返回 `429 Too Many Requests`。分段批量 TTS 通过 `services/ttsQueue.js` 做全局队列限速：默认 `MIMO_TTS_RPM_LIMIT=90`（留 10% 余量，硬上限 100）、`MIMO_TTS_MAX_CONCURRENT=6`，按请求启动速率限流并允许少量请求在途；单句重新生成也必须走同一队列。
 
 **TTS 模型**：
 
@@ -190,6 +190,7 @@ SQLite 数据库包含 6 张表：
 - 分段生成时由 `routes/segments.js` 经 `utils/segmentText.js` 的 `prependStyleTag` 将 `segment.style_tag` 前置到合成文本；`POST /api/broadcast/:id/segments/suggest-tags` 调 `mimo.suggestStyleTags` 为各段建议风格标签；批量语音生成查询待处理片段时包含 `pending`、`failed` 和可能因中断遗留的 `generating`，前端失败后会重新拉取真实片段状态，避免永久卡在生成中
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
+- voicedesign 模式默认严格使用 assistant 合成文本；只有前端显式开启 `optimizeTextPreview` 时，后端才向 MiMo 传 `optimize_text_preview: true`
 - 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`
 - ID 校验使用 `utils/validation.js` 中的 `validateId()`
 - 前端使用 Zustand store 模式管理全局状态；新增状态优先按领域放入 `store/*Slice.ts`，类型放入 `store/types.ts`
@@ -203,7 +204,7 @@ SQLite 数据库包含 6 张表：
 ### 不可协商的铁律
 
 1. **分层边界**：路由层只做 HTTP 翻译；服务层负责业务与外部 API；DAL（`*Store.js`）负责单表 SQL；前端 `api.ts` 只封装 HTTP，store 按领域拆 slice。（细则见 `backend-route` / `backend-service` / `backend-database` / `frontend-state-data`）
-2. **外部 API 隔离**：所有 MiMo / AI HOT 调用设 timeout 并把 401/429/超时/网络错误转中文；批量 TTS 串行或队列限速，禁 `Promise.all` 并发；**不允许全局关闭 TLS 校验**（禁 `NODE_TLS_REJECT_UNAUTHORIZED=0`，补 CA 只在特定 client 实例配）。（细则见 `backend-service`）
+2. **外部 API 隔离**：所有 MiMo / AI HOT 调用设 timeout 并把 401/429/超时/网络错误转中文；批量 TTS 必须经 `ttsQueue` 全局限速，禁止绕过队列直接并发调用 MiMo TTS；**不允许全局关闭 TLS 校验**（禁 `NODE_TLS_REJECT_UNAUTHORIZED=0`，补 CA 只在特定 client 实例配）。（细则见 `backend-service`）
 3. **长任务一致性**：超过 2 秒的任务必须有前端 loading/error 状态；已接入 SSE 的任务后端发开始/进度/完成/失败事件，前端收到失败落可重试态；重复生成保证幂等，失败不留永久 `generating`。（细则见 `backend-service` / `frontend-state-data`）
 4. **DB 与文件一致性**：DB 写与文件写跨资源无法事务化，必须设计补偿清理避免孤儿音频；所有 `/audio/...` 删除经 `cleanAudioFile()`，禁拼接用户输入路径后直接 `unlinkSync`。（细则见 `backend-service` / `backend-database`）
 5. **前后端契约**：`Broadcast` / `Segment` / `VoiceConfig` / `Settings` / SSE payload 不得使用裸 `any`；后端新增字段必须端到端同步，前端默认值/枚举/参数名不得与后端不一致。（完整流程见 `add-persisted-field`）

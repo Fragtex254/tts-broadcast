@@ -163,10 +163,20 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       timestamp: Date.now()
     });
 
-    const results = [];
-    for (let i = 0; i < pendingSegments.length; i++) {
-      const segment = pendingSegments[i];
+    const results = new Array(pendingSegments.length);
+    const markSegmentFailed = (segment, index, error) => {
+      segmentStore.updateStatus(segment.id, 'failed');
+      results[index] = { id: segment.id, status: 'failed', error: error.message };
+      sseManager.sendProgress(String(idCheck.id), {
+        segmentId: segment.id,
+        status: 'failed',
+        error: error.message,
+        current: index + 1,
+        total: pendingSegments.length
+      });
+    };
 
+    const generateSegment = async (segment, index) => {
       // 更新状态为生成中
       segmentStore.updateStatus(segment.id, 'generating');
 
@@ -174,52 +184,46 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       sseManager.sendProgress(String(idCheck.id), {
         segmentId: segment.id,
         status: 'generating',
-        current: i + 1,
+        current: index + 1,
         total: pendingSegments.length,
         text: segment.text
       });
 
       try {
-        // clone 音色解析失败则整批都无法生成，直接抛出统一错误
-        if (cloneResolveError) throw cloneResolveError;
-
-        // 使用队列管理 TTS 请求，避免触发限流
-        const audioBuffer = await ttsQueue.enqueue(async () => {
-          const speechParams = await voiceConfigService.toSpeechParams({
-            text: prependStyleTag(segment.text, segment.style_tag),
-            voiceType,
-            voiceConfig: resolvedVoiceConfig,
-            resolveClone: false // clone 音色已在批量开始时统一解析
-          });
-          return tts.generateSpeech(speechParams);
+        const speechParams = await voiceConfigService.toSpeechParams({
+          text: prependStyleTag(segment.text, segment.style_tag),
+          voiceType,
+          voiceConfig: resolvedVoiceConfig,
+          resolveClone: false // clone 音色已在批量开始时统一解析
         });
+        const audioBuffer = await tts.generateSpeech(speechParams);
 
         const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
 
         segmentStore.updateStatus(segment.id, 'generated', audioPath);
-        results.push({ id: segment.id, status: 'generated' });
+        results[index] = { id: segment.id, status: 'generated' };
 
         // 推送成功事件
         sseManager.sendProgress(String(idCheck.id), {
           segmentId: segment.id,
           status: 'generated',
           audioPath,
-          current: i + 1,
+          current: index + 1,
           total: pendingSegments.length
         });
       } catch (ttsError) {
-        segmentStore.updateStatus(segment.id, 'failed');
-        results.push({ id: segment.id, status: 'failed', error: ttsError.message });
-
-        // 推送失败事件
-        sseManager.sendProgress(String(idCheck.id), {
-          segmentId: segment.id,
-          status: 'failed',
-          error: ttsError.message,
-          current: i + 1,
-          total: pendingSegments.length
-        });
+        markSegmentFailed(segment, index, ttsError);
       }
+    };
+
+    if (cloneResolveError) {
+      pendingSegments.forEach((segment, index) => {
+        markSegmentFailed(segment, index, cloneResolveError);
+      });
+    } else {
+      await Promise.all(pendingSegments.map((segment, index) => (
+        ttsQueue.enqueue(() => generateSegment(segment, index))
+      )));
     }
 
     const segments = segmentStore.getByBroadcastId(idCheck.id);
@@ -394,7 +398,7 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
         voiceConfig,
         resolveClone: true
       });
-      const audioBuffer = await tts.generateSpeech(speechParams);
+      const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech(speechParams));
 
       const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
 
