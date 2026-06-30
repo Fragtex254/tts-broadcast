@@ -160,6 +160,28 @@ describe('MiMo 服务', () => {
     );
   });
 
+  test('MiniMax OpenAI 格式切分时显式关闭 thinking', async () => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_base_url', '"https://api.minimaxi.com/v1"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_model', '"MiniMax-M3"');
+    axios.post.mockResolvedValue({
+      data: { choices: [{ message: { content: '["第一句。","第二句。"]' } }] },
+    });
+
+    const segments = await mimo.splitScript('第一句。第二句。');
+
+    expect(segments).toEqual(['第一句。', '第二句。']);
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://api.minimaxi.com/v1/chat/completions',
+      expect.objectContaining({
+        model: 'MiniMax-M3',
+        max_tokens: 4000,
+        thinking: { type: 'disabled' },
+      }),
+      expect.any(Object)
+    );
+  });
+
   test('OpenAI 格式返回空内容时抛出中文错误', async () => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
     axios.post.mockResolvedValue({
@@ -206,6 +228,19 @@ describe('MiMo 服务', () => {
       expect(typeof seg).toBe('string');
       expect(seg.length).toBeGreaterThan(0);
     });
+  });
+
+  test('splitScript 剥离模型输出中的 think 内容后解析 JSON', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      content: [{
+        type: 'text',
+        text: '<think>这里是模型推理过程，不是 JSON。</think>\n\n["第一句。","第二句。"]'
+      }],
+    });
+
+    const segments = await mimo.splitScript('第一句。第二句。');
+
+    expect(segments).toEqual(['第一句。', '第二句。']);
   });
 
   describe('rewriteToScript 错误路径', () => {
@@ -284,11 +319,14 @@ describe('MiMo 服务', () => {
       expect(tags).toEqual(['平静', '']);
     });
 
-    test('数量不一致时抛错', async () => {
+    test('数量不一致时使用本地兜底标签', async () => {
       mockMessagesCreate.mockResolvedValue({
         content: [{ type: 'text', text: '["平静"]' }],
       });
-      await expect(mimo.suggestStyleTags(['A', 'B'], ['平静'])).rejects.toThrow('数量');
+
+      const tags = await mimo.suggestStyleTags(['历史命运', '战争风险'], ['平静', '严肃', '深沉']);
+
+      expect(tags).toEqual(['深沉', '严肃']);
     });
 
     test('剥离 markdown 代码块', async () => {
@@ -297,6 +335,24 @@ describe('MiMo 服务', () => {
       });
       const tags = await mimo.suggestStyleTags(['A', 'B'], ['平静', '严肃']);
       expect(tags).toEqual(['平静', '严肃']);
+    });
+
+    test('长句子列表分批请求并保持结果数量', async () => {
+      mockMessagesCreate
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: '["平静","平静","平静","平静","平静","平静","平静","平静","平静","平静"]' }],
+        })
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: '["严肃","深沉"]' }],
+        });
+      const texts = Array.from({ length: 12 }, (_, i) => `第 ${i + 1} 句`);
+
+      const tags = await mimo.suggestStyleTags(texts, ['平静', '严肃', '深沉']);
+
+      expect(tags).toHaveLength(12);
+      expect(tags.slice(0, 10)).toEqual(Array(10).fill('平静'));
+      expect(tags.slice(10)).toEqual(['严肃', '深沉']);
+      expect(mockMessagesCreate).toHaveBeenCalledTimes(2);
     });
   });
 });

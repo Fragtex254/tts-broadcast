@@ -226,7 +226,10 @@ export interface AppState {
 
   transcriptionText: string;
   transcriptionRecord: TranscriptionRecord | null;
+  transcriptionHistory: TranscriptionRecord[];
   isTranscribing: boolean;
+  isLoadingTranscriptionHistory: boolean;
+  isDeletingTranscriptionResult: boolean;
   transcribeProgress: TranscriptionProgress;
 
   batchTranscriptionItems: BatchTranscriptionItem[];
@@ -283,6 +286,8 @@ export interface AppState {
     provider?: AsrProvider,
     options?: TranscribeOptions
   ) => Promise<TranscriptionResult>;
+  fetchTranscriptionHistory: (params?: { limit?: number }) => Promise<TranscriptionRecord[]>;
+  deleteTranscriptionHistoryResult: (id: number) => Promise<void>;
   formatTranscriptionResult: (id: number, text: string) => Promise<TranscriptionRecord>;
   setTranscriptionText: (text: string) => void;
   clearTranscription: () => void;

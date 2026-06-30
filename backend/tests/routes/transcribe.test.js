@@ -191,6 +191,36 @@ describe('转录 API', () => {
     expect(mimo.formatTranscriptionText).toHaveBeenCalledWith('大家好今天聊 AI 首先是新模型发布');
   });
 
+  test('DELETE /api/transcribe/results/:id 删除已保存转录结果', async () => {
+    const record = db.prepare(`
+      INSERT INTO transcription_results (file_name, relative_path, text, language, provider, model)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run('sample.wav', 'sample.wav', '转录文本', 'zh', 'mimo', 'mimo-v2.5-asr');
+
+    const res = await request(app)
+      .delete(`/api/transcribe/results/${record.lastInsertRowid}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ message: '转录结果已删除' });
+    expect(db.prepare('SELECT COUNT(*) as count FROM transcription_results WHERE id = ?').get(record.lastInsertRowid).count).toBe(0);
+  });
+
+  test('DELETE /api/transcribe/results/:id 不存在时返回 404', async () => {
+    const res = await request(app)
+      .delete('/api/transcribe/results/9999');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('转录结果不存在');
+  });
+
+  test('DELETE /api/transcribe/results/:id 非法 ID 返回 400', async () => {
+    const res = await request(app)
+      .delete('/api/transcribe/results/abc');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('无效的转录结果 ID');
+  });
+
   test('未上传文件返回 400', async () => {
     const res = await request(app)
       .post('/api/transcribe')

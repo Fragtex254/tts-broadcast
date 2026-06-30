@@ -123,6 +123,10 @@ export const TranscriptionResultSchema = z.object({
   transcriptionResult: TranscriptionRecordSchema.optional(),
 });
 
+export const TranscriptionResultsResponseSchema = z.object({
+  results: z.array(TranscriptionRecordSchema),
+});
+
 // === API 响应包装 ===
 
 export const ApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>

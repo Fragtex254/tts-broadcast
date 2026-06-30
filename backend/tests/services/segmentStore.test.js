@@ -63,12 +63,14 @@ describe('segmentStore', () => {
   });
 
   describe('getPendingByBroadcastId', () => {
-    test('只返回 pending 和 failed 状态', () => {
-      segmentStore.createMany(broadcastId, ['A', 'B', 'C']);
+    test('返回 pending、failed 和遗留 generating 状态', () => {
+      segmentStore.createMany(broadcastId, ['A', 'B', 'C', 'D']);
       const all = segmentStore.getByBroadcastId(broadcastId);
       segmentStore.updateStatus(all[0].id, 'generated', '/audio/test.wav');
+      segmentStore.updateStatus(all[1].id, 'generating');
+      segmentStore.updateStatus(all[2].id, 'failed');
       const pending = segmentStore.getPendingByBroadcastId(broadcastId);
-      expect(pending.length).toBe(2);
+      expect(pending.map((s) => s.status)).toEqual(['generating', 'failed', 'pending']);
     });
   });
 

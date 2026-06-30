@@ -138,7 +138,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     batchGenerateSegments: async (broadcastId) => {
       set((state) => ({
         segments: state.segments.map((s) =>
-          s.status === 'pending' || s.status === 'failed'
+          s.status === 'pending' || s.status === 'failed' || s.status === 'generating'
             ? { ...s, status: 'generating' as const }
             : s
         ),
@@ -150,6 +150,16 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         set({ segments });
         return { segments, results };
       } catch (error) {
+        try {
+          const response = await broadcastApi.getSegments(broadcastId);
+          set({ segments: response.data.segments });
+        } catch {
+          set((state) => ({
+            segments: state.segments.map((s) =>
+              s.status === 'generating' ? { ...s, status: 'failed' as const } : s
+            ),
+          }));
+        }
         logger.error({ err: toLogError(error), broadcastId }, '批量生成失败');
         throw error;
       }

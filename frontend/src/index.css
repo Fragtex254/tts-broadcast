@@ -28,8 +28,8 @@
   --shadow-btn: 0 1px 3px rgba(42, 36, 27, 0.06);
 
   /* Font Families */
-  --font-display: 'Cormorant Garamond', 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
-  --font-body: 'Work Sans', 'Yozai', 'Noto Sans SC', sans-serif;
+  --font-display: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-body: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
 
   /* Animations */
   --animate-fade-in-up: fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -62,8 +62,8 @@
   --shadow-card: 0 1px 4px rgba(42, 36, 27, 0.04);
   --shadow-card-hover: 0 4px 12px rgba(42, 36, 27, 0.08);
   --shadow-btn: 0 1px 3px rgba(42, 36, 27, 0.06);
-  --font-display: 'Cormorant Garamond', 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
-  --font-body: 'Work Sans', 'Yozai', 'Noto Sans SC', sans-serif;
+  --font-display: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-body: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
@@ -76,6 +76,11 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display,
+.font-display.italic {
+  font-style: normal;
 }
 
 ::selection {

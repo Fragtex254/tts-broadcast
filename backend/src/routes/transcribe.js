@@ -433,4 +433,27 @@ router.post('/results/:id/format', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/transcribe/results/:id
+ * 删除已保存的转录结果
+ */
+router.delete('/results/:id', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '转录结果 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const deleted = transcriptionResultStore.remove(idCheck.id);
+    if (!deleted) return res.status(404).json({ error: '转录结果不存在' });
+
+    res.json({ message: '转录结果已删除' });
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasResultId: Boolean(req.params.id),
+      resultIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '删除转录结果失败');
+    res.status(500).json({ error: error.message || '删除转录结果失败' });
+  }
+});
+
 module.exports = router;

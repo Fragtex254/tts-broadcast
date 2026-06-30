@@ -1,9 +1,16 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Header } from '../components/Layout/Header';
+import { TranscriptionHistoryPanel } from '../components/Transcribe/TranscriptionHistoryPanel';
 import { TranscriptionResultModal } from '../components/Transcribe/TranscriptionResultModal';
-import useStore, { type AsrProvider, type AsrLanguage, type BatchTranscriptionItem } from '../store';
+import useStore, {
+  type AsrProvider,
+  type AsrLanguage,
+  type BatchTranscriptionItem,
+  type TranscriptionRecord,
+} from '../store';
 
 const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
   { value: 'auto', label: '自动检测' },
@@ -54,7 +61,7 @@ const FOLDER_INPUT_PROPS = {
 } as unknown as React.InputHTMLAttributes<HTMLInputElement>;
 
 type TranscribeMode = 'single' | 'batch';
-type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number };
+type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number } | { type: 'history'; id: number };
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -141,6 +148,11 @@ export const Transcribe: React.FC = () => {
   const isTranscribing = useStore((s) => s.isTranscribing);
   const transcribeProgress = useStore((s) => s.transcribeProgress);
   const transcribeMedia = useStore((s) => s.transcribeMedia);
+  const transcriptionHistory = useStore((s) => s.transcriptionHistory);
+  const isLoadingTranscriptionHistory = useStore((s) => s.isLoadingTranscriptionHistory);
+  const isDeletingTranscriptionResult = useStore((s) => s.isDeletingTranscriptionResult);
+  const fetchTranscriptionHistory = useStore((s) => s.fetchTranscriptionHistory);
+  const deleteTranscriptionHistoryResult = useStore((s) => s.deleteTranscriptionHistoryResult);
   const formatTranscriptionResult = useStore((s) => s.formatTranscriptionResult);
   const setTranscriptionText = useStore((s) => s.setTranscriptionText);
   const updateScript = useStore((s) => s.updateScript);
@@ -164,12 +176,30 @@ export const Transcribe: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [batchCopiedIndex, setBatchCopiedIndex] = useState<number | null>(null);
   const [resultModalTarget, setResultModalTarget] = useState<ResultModalTarget | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TranscriptionRecord | null>(null);
 
   const asrProvider = selectedAsrProvider ?? settings.asr_provider ?? 'wsl_asr';
   const wslModel = selectedWslModel ?? settings.wsl_asr_model ?? 'qwen3-asr-1.7b';
   const transcribeOptions = asrProvider === 'wsl_asr'
     ? { wslModel: wslModel || settings.wsl_asr_model || 'qwen3-asr-1.7b', context: wslContext }
     : undefined;
+
+  const loadTranscriptionHistory = useCallback(async () => {
+    setHistoryError(null);
+    try {
+      await fetchTranscriptionHistory({ limit: 30 });
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : '获取转录历史失败');
+    }
+  }, [fetchTranscriptionHistory]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadTranscriptionHistory();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadTranscriptionHistory]);
 
   const handleFile = useCallback((nextFile: File | null) => {
     setError(null);
@@ -291,6 +321,33 @@ export const Transcribe: React.FC = () => {
     downloadTextFile(relativePathToTxtName(item.relativePath), item.text);
   };
 
+  const handleDownloadHistoryRecord = (record: TranscriptionRecord) => {
+    const text = record.formatted_text.trim() || record.text.trim();
+    if (!text) return;
+    downloadTextFile(relativePathToTxtName(record.relative_path || record.file_name), text);
+  };
+
+  const handleImportHistoryRecord = (record: TranscriptionRecord) => {
+    const text = record.formatted_text.trim() || record.text.trim();
+    if (!text) return;
+    updateScript(text);
+    navigate('/editor');
+  };
+
+  const handleConfirmDeleteHistoryRecord = async () => {
+    if (!deleteTarget) return;
+    setHistoryError(null);
+    try {
+      await deleteTranscriptionHistoryResult(deleteTarget.id);
+      if (resultModalTarget?.type === 'history' && resultModalTarget.id === deleteTarget.id) {
+        setResultModalTarget(null);
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : '删除转录结果失败');
+    }
+  };
+
   const [isZipping, setIsZipping] = useState(false);
 
   const handleDownloadAll = async () => {
@@ -333,18 +390,29 @@ export const Transcribe: React.FC = () => {
   const modalItem = resultModalTarget?.type === 'batch'
     ? batchTranscriptionItems[resultModalTarget.index]
     : null;
+  const modalHistoryRecord = resultModalTarget?.type === 'history'
+    ? transcriptionHistory.find((record) => record.id === resultModalTarget.id) ?? null
+    : null;
   const modalTitle = resultModalTarget?.type === 'single'
     ? (file?.name || transcriptionRecord?.file_name || '转录结果')
-    : (modalItem?.relativePath || '转录结果');
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.relativePath || '转录结果')
+    : (modalHistoryRecord?.relative_path || modalHistoryRecord?.file_name || '转录结果');
   const modalText = resultModalTarget?.type === 'single'
     ? (transcriptionRecord?.text || transcriptionText)
-    : (modalItem?.transcriptionResult?.text || modalItem?.text || '');
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.transcriptionResult?.text || modalItem?.text || '')
+    : (modalHistoryRecord?.text || '');
   const modalFormattedText = resultModalTarget?.type === 'single'
     ? (transcriptionRecord?.formatted_text || '')
-    : (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '');
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '')
+    : (modalHistoryRecord?.formatted_text || '');
   const modalResultId = resultModalTarget?.type === 'single'
     ? transcriptionRecord?.id
-    : (modalItem?.resultId || modalItem?.transcriptionResult?.id);
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.resultId || modalItem?.transcriptionResult?.id)
+    : modalHistoryRecord?.id;
 
   const handleFormatModalResult = async (text: string) => {
     if (!modalResultId) {
@@ -358,6 +426,8 @@ export const Transcribe: React.FC = () => {
     if (!text.trim()) return;
     const baseName = resultModalTarget?.type === 'single'
       ? (file ? stripExtension(file.name) : stripExtension(transcriptionRecord?.file_name || '转录结果'))
+      : resultModalTarget?.type === 'history'
+      ? stripExtension(modalHistoryRecord?.relative_path || modalHistoryRecord?.file_name || '转录结果')
       : stripExtension(modalItem?.relativePath || '转录结果');
     downloadTextFile(`${sanitizeFileName(baseName)}_排版.txt`, text);
   };
@@ -367,7 +437,7 @@ export const Transcribe: React.FC = () => {
       <Header title="转录" subtitle="上传音频或视频并转换为口播稿文本" />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl mx-auto space-y-4">
+        <div className="max-w-4xl mx-auto space-y-4">
           {/* 模式切换 */}
           <div className="flex gap-2">
             {(['single', 'batch'] as const).map((m) => (
@@ -889,8 +959,32 @@ export const Transcribe: React.FC = () => {
               )}
             </>
           )}
+
+          <TranscriptionHistoryPanel
+            records={transcriptionHistory}
+            isLoading={isLoadingTranscriptionHistory}
+            error={historyError}
+            onRefresh={loadTranscriptionHistory}
+            onOpen={(record) => setResultModalTarget({ type: 'history', id: record.id })}
+            onDownload={handleDownloadHistoryRecord}
+            onImport={handleImportHistoryRecord}
+            onDelete={setDeleteTarget}
+          />
         </div>
       </main>
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="删除转录文稿"
+        message={`确定删除「${deleteTarget?.relative_path || deleteTarget?.file_name || '这条转录文稿'}」吗？`}
+        warningMessage="删除后无法从转录历史中恢复。"
+        confirmText="确认删除"
+        cancelText="取消"
+        isLoading={isDeletingTranscriptionResult}
+        onConfirm={handleConfirmDeleteHistoryRecord}
+        onCancel={() => {
+          if (!isDeletingTranscriptionResult) setDeleteTarget(null);
+        }}
+      />
       {resultModalTarget && (
         <TranscriptionResultModal
           key={`${resultModalTarget.type}-${modalResultId ?? 'unsaved'}-${resultModalTarget.type === 'batch' ? resultModalTarget.index : 0}`}
