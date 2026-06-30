@@ -50,12 +50,13 @@ backend/src/
 │   ├── audio.js            # WAV 文件操作 + resolveVoiceClone
 │   ├── asr.js              # MiMo ASR 转录服务
 │   ├── media.js            # 上传媒体转 ASR data URL
-│   ├── mimo.js             # LLM 服务（双协议调用、rewriteToScript、splitScript、testApiKey、模型发现）
+│   ├── mimo.js             # LLM 服务（双协议调用、rewriteToScript、splitScript、风格建议、testApiKey、模型发现）
 │   ├── llmModels.js        # OpenAI-compatible 模型列表候选 URL 生成与探测
 │   ├── mimoApiClient.js    # MiMo 标准 API HTTP client
 │   ├── tts.js              # MiMo TTS 服务（generateSpeech）
 │   ├── broadcastStore.js   # DAL：broadcasts 表的 CRUD
-│   ├── segmentStore.js     # DAL：segments 表的 CRUD
+│   ├── segmentStore.js     # DAL：segments 表的 CRUD，待生成查询包含 stale generating 恢复
+│   ├── transcriptionResultStore.js # DAL：transcription_results 表的 CRUD 与删除
 │   └── scheduler.js        # 定时任务调度
 └── utils/                  # 共享工具函数
     └── validation.js       # validateId, cleanAudioFile, audioDir

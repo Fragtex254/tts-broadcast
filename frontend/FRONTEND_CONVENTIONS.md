@@ -47,7 +47,8 @@ frontend/src/
 │   └── settingsDraft.ts            # Settings 页纯逻辑 helper（需配测试）
 ├── components/
 │   ├── Layout/                 # 布局组件（Sidebar, Header）
-│   └── Dashboard/              # Dashboard 子组件
+│   ├── Dashboard/              # Dashboard 子组件
+│   └── Transcribe/             # 转录页子组件（历史结果查看、导入、下载、删除）
 ├── hooks/                       # 可复用 hooks（useDebounce, useSSE）
 ├── services/
 │   ├── api.ts                  # Axios API 封装
