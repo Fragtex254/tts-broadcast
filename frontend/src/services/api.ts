@@ -64,6 +64,7 @@ export const broadcastApi = {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    optimizeTextPreview?: boolean;
     speed?: { speed_ratio: number; style?: string } | null;
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
@@ -113,6 +114,7 @@ export const broadcastApi = {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    optimizeTextPreview?: boolean;
     speed?: { speed_ratio: number; style?: string } | null;
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
@@ -179,7 +181,7 @@ export const voicePresetApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
-  trialDesign: (data: { design_prompt: string; trial_text: string; style_prompt?: string }) =>
+  trialDesign: (data: { design_prompt: string; trial_text: string; style_prompt?: string; optimize_text_preview?: boolean }) =>
     api.post('/voice-presets/trial/design', data),
 };
 

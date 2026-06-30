@@ -119,10 +119,11 @@ router.post('/trial/clone', upload.single('reference_audio'), async (req, res) =
  *   - design_prompt: 音色描述（必填）
  *   - trial_text: 试听文本（可选，默认 "你好，我是你的专属语音助手。"）
  *   - style_prompt: 风格提示（可选）
+ *   - optimize_text_preview: 是否允许 MiMo 优化/扩写试听文本（可选，默认 false）
  */
 router.post('/trial/design', async (req, res) => {
   try {
-    const { design_prompt, trial_text, style_prompt } = req.body;
+    const { design_prompt, trial_text, style_prompt, optimize_text_preview } = req.body;
 
     if (!design_prompt) {
       return res.status(400).json({ error: '请提供音色描述 (design_prompt)' });
@@ -134,7 +135,8 @@ router.post('/trial/design', async (req, res) => {
       text,
       voiceType: 'design',
       voiceDesign: design_prompt,
-      stylePrompt: style_prompt || ''
+      stylePrompt: style_prompt || '',
+      optimizeTextPreview: optimize_text_preview === true
     });
 
     const audioUrl = audioAsset.writeTrialAudio('design', audioBuffer);

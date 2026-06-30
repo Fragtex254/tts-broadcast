@@ -13,6 +13,7 @@ function buildVoicePayload(voiceConfig: AppState['voiceConfig']) {
     voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
     voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
     stylePrompt: voiceConfig.stylePrompt || undefined,
+    optimizeTextPreview: voiceConfig.voiceType === 'design' ? voiceConfig.optimizeTextPreview : undefined,
     speed: voiceConfig.speed,
     emotion: voiceConfig.emotion,
     pitch: voiceConfig.pitch,

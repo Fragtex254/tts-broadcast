@@ -114,6 +114,7 @@ export interface VoiceConfig {
   voiceDesign: string;
   voiceClone: string;
   stylePrompt: string;
+  optimizeTextPreview: boolean;
   speed: { speed_ratio: number; style?: string } | null;
   emotion: string | { emotion: string; weight: number }[] | null;
   pitch: { pitch_ratio: number; style?: string } | null;
@@ -254,6 +255,7 @@ export interface AppState {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    optimizeTextPreview?: boolean;
     speed?: { speed_ratio: number; style?: string } | null;
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
