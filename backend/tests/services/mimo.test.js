@@ -243,6 +243,18 @@ describe('MiMo 服务', () => {
     expect(segments).toEqual(['第一句。', '第二句。']);
   });
 
+  test('splitScript 对超过 1024 字的 AI 结果做本地兜底切分', async () => {
+    const longText = '一'.repeat(1100);
+    mockMessagesCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify([longText]) }],
+    });
+
+    const segments = await mimo.splitScript(longText);
+
+    expect(segments.length).toBe(2);
+    expect(segments.every((seg) => seg.length <= 1024)).toBe(true);
+  });
+
   describe('rewriteToScript 错误路径', () => {
     test('空 items 抛出错误', async () => {
       await expect(mimo.rewriteToScript({ items: [] }))

@@ -23,6 +23,7 @@ export type {
   LlmModelOption,
   Schedule,
   Segment,
+  SegmentDraftInput,
   Settings,
   TodayItem,
   TranscriptionResult,

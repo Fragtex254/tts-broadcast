@@ -34,6 +34,7 @@ describe('segmentStore', () => {
       segmentStore.createMany(broadcastId, ['一句']);
       const segs = segmentStore.getByBroadcastId(broadcastId);
       expect(segs[0].status).toBe('pending');
+      expect(segs[0].error_message).toBe('');
     });
   });
 
@@ -91,6 +92,18 @@ describe('segmentStore', () => {
       const updated = segmentStore.getByIdAndBroadcastId(seg.id, broadcastId);
       expect(updated.status).toBe('failed');
     });
+
+    test('失败状态保存错误原因，重新生成中会清空错误原因', () => {
+      segmentStore.createMany(broadcastId, ['测试']);
+      const seg = segmentStore.getByBroadcastId(broadcastId)[0];
+      segmentStore.updateStatus(seg.id, 'failed', null, 'MiMo API 请求过于频繁');
+      const failed = segmentStore.getByIdAndBroadcastId(seg.id, broadcastId);
+      expect(failed.error_message).toBe('MiMo API 请求过于频繁');
+
+      segmentStore.updateStatus(seg.id, 'generating');
+      const generating = segmentStore.getByIdAndBroadcastId(seg.id, broadcastId);
+      expect(generating.error_message).toBe('');
+    });
   });
 
   describe('updateText', () => {
@@ -103,6 +116,7 @@ describe('segmentStore', () => {
       expect(updated.text).toBe('新文本');
       expect(updated.status).toBe('pending');
       expect(updated.audio_path).toBeNull();
+      expect(updated.error_message).toBe('');
     });
   });
 

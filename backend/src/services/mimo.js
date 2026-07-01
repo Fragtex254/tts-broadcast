@@ -3,6 +3,7 @@ const axios = require('axios');
 const db = require('../db');
 const llmModels = require('./llmModels');
 const { createScopedLogger } = require('./logger');
+const { MAX_SEGMENT_TEXT_LENGTH, normalizeSegmentTexts } = require('../utils/segmentText');
 
 const logger = createScopedLogger('mimo-service');
 
@@ -356,9 +357,9 @@ ${itemsText}
 }
 
 /**
- * 将口播稿切分为适合 TTS 的短句
+ * 将口播稿切分为适合 TTS 的语义块
  * @param {string} text - 完整口播稿
- * @returns {Promise<string[]>} 切分后的短句数组
+ * @returns {Promise<string[]>} 切分后的语义块数组
  */
 async function splitScript(text) {
   if (!text || typeof text !== 'string') {
@@ -366,18 +367,19 @@ async function splitScript(text) {
   }
 
   const config = getLlmConfig();
-  const prompt = `你是一个专业的文本切分助手。请将以下口播稿切分为适合 TTS 语音合成的短句。
+  const prompt = `你是一个专业的口播稿语义切块助手。请将以下口播稿切分为适合 TTS 语音合成的语义块。
 
 切分原则：
-1. 按语义完整性和自然停顿切分，不要简单按标点符号拆分
-2. 每句长度控制在 15~80 个字符（太短影响 TTS 韵律，太长不便独立编辑）
-3. 开场白和结束语各自作为独立的一句
-4. 不要修改原文内容，只做切分
-5. 保持原文顺序
+1. 以播报语义、话题推进、情绪承接为边界切分，不要简单按标点符号或单句话拆分
+2. 尽量让连续铺垫、同一新闻点、同一转折保留在同一块中，减少 TTS 分段后情绪跳变
+3. 每个块最大文本长度不超过 ${MAX_SEGMENT_TEXT_LENGTH} 个中文字符；明显短于 120 字的块应尽量与相邻同主题内容合并
+4. 开场白和结束语可独立成块，但不要把普通自然句拆成零碎短句
+5. 不要修改、概括、增删原文内容，只做切分
+6. 保持原文顺序
 
-请以 JSON 数组格式输出，每个元素是一个短句。只输出 JSON 数组，不要有其他内容。
+请以 JSON 数组格式输出，每个元素是一个语义块字符串。只输出 JSON 数组，不要有其他内容。
 
-示例输出：["大家好，欢迎收听今日AI简讯。", "今天我们来聊聊几个重要的AI动态。", "..."]
+示例输出：["大家好，欢迎收听今日AI简讯。今天我们来聊聊几个重要的AI动态。", "首先是OpenAI发布了最新模型……这一部分值得关注的是……", "..."]
 
 口播稿内容：
 ${text}`;
@@ -402,14 +404,14 @@ ${text}`;
     throw new Error('AI 切分结果为空或格式不正确');
   }
 
-  // 验证每个 segment 是非空字符串
+  // 验证每个 segment 是非空字符串；超长结果由本地规则兜底再切，保证 TTS 入参上限。
   for (const seg of segments) {
     if (typeof seg !== 'string' || seg.trim().length === 0) {
-      throw new Error('切分结果包含空句子');
+      throw new Error('切分结果包含空段落');
     }
   }
 
-  return segments.map(s => s.trim());
+  return normalizeSegmentTexts(segments);
 }
 
 /**

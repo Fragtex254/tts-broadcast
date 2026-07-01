@@ -4,6 +4,8 @@
 const DEFAULT_RPM_LIMIT = 90;
 const MIMO_TTS_RPM_LIMIT = 100;
 const DEFAULT_MAX_CONCURRENT = 6;
+const DEFAULT_RATE_LIMIT_BACKOFF_MS = 15000;
+const DEFAULT_RATE_LIMIT_RETRIES = 2;
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -16,6 +18,7 @@ class TTSQueueManager {
     this.activeCount = 0; // 在途请求数
     this.timer = null; // 下一次调度定时器
     this.lastStartAt = 0; // 上一次启动请求的时间戳
+    this.backoffUntil = 0; // 429 后暂停启动新请求的时间戳
 
     const configuredRpm = options.rpmLimit
       || parsePositiveInt(process.env.MIMO_TTS_RPM_LIMIT, DEFAULT_RPM_LIMIT);
@@ -23,6 +26,12 @@ class TTSQueueManager {
     this.minIntervalMs = Math.ceil(60000 / this.rpmLimit);
     this.maxConcurrent = options.maxConcurrent
       || parsePositiveInt(process.env.MIMO_TTS_MAX_CONCURRENT, DEFAULT_MAX_CONCURRENT);
+    this.rateLimitBackoffMs = options.rateLimitBackoffMs
+      || parsePositiveInt(process.env.MIMO_TTS_RATE_LIMIT_BACKOFF_MS, DEFAULT_RATE_LIMIT_BACKOFF_MS);
+    this.rateLimitRetries = options.rateLimitRetries ?? parsePositiveInt(
+      process.env.MIMO_TTS_RATE_LIMIT_RETRIES,
+      DEFAULT_RATE_LIMIT_RETRIES
+    );
   }
 
   /**
@@ -32,7 +41,7 @@ class TTSQueueManager {
    */
   enqueue(requestFn) {
     return new Promise((resolve, reject) => {
-      this.queue.push({ requestFn, resolve, reject });
+      this.queue.push({ requestFn, resolve, reject, attempts: 0 });
       this.schedule();
     });
   }
@@ -47,7 +56,7 @@ class TTSQueueManager {
 
     const now = Date.now();
     const nextStartAt = this.lastStartAt + this.minIntervalMs;
-    const delay = Math.max(0, nextStartAt - now);
+    const delay = Math.max(0, nextStartAt - now, this.backoffUntil - now);
 
     this.timer = setTimeout(() => {
       this.timer = null;
@@ -64,13 +73,24 @@ class TTSQueueManager {
       return;
     }
 
-    const { requestFn, resolve, reject } = this.queue.shift();
+    const task = this.queue.shift();
     this.activeCount += 1;
     this.lastStartAt = Date.now();
 
     Promise.resolve()
-      .then(requestFn)
-      .then(resolve, reject)
+      .then(task.requestFn)
+      .then(task.resolve, (error) => {
+        if (error?.retryAfterMs && task.attempts < this.rateLimitRetries) {
+          task.attempts += 1;
+          this.queue.unshift(task);
+          this.backoff(error.retryAfterMs);
+          return;
+        }
+        if (error?.retryAfterMs) {
+          this.backoff(error.retryAfterMs);
+        }
+        task.reject(error);
+      })
       .finally(() => {
         this.activeCount -= 1;
         this.schedule();
@@ -95,8 +115,24 @@ class TTSQueueManager {
       active: this.activeCount,
       rpmLimit: this.rpmLimit,
       minIntervalMs: this.minIntervalMs,
-      maxConcurrent: this.maxConcurrent
+      maxConcurrent: this.maxConcurrent,
+      backoffUntil: this.backoffUntil,
+      rateLimitRetries: this.rateLimitRetries
     };
+  }
+
+  /**
+   * MiMo 返回 429 后，暂停启动后续任务一段时间。
+   * @param {number} [ms] - 退避毫秒数
+   */
+  backoff(ms = this.rateLimitBackoffMs) {
+    const nextBackoffUntil = Date.now() + Math.max(ms, 0);
+    this.backoffUntil = Math.max(this.backoffUntil, nextBackoffUntil);
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.schedule();
   }
 
   /**
@@ -111,6 +147,7 @@ class TTSQueueManager {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    this.backoffUntil = 0;
   }
 }
 

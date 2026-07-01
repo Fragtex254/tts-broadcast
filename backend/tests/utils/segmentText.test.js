@@ -1,4 +1,10 @@
-const { prependStyleTag, sanitizeStyleTag } = require('../../src/utils/segmentText');
+const {
+  MAX_SEGMENT_TEXT_LENGTH,
+  prependStyleTag,
+  sanitizeStyleTag,
+  splitLongTextByLimit,
+  normalizeSegmentTexts
+} = require('../../src/utils/segmentText');
 
 describe('segmentText', () => {
   describe('sanitizeStyleTag', () => {
@@ -15,8 +21,8 @@ describe('segmentText', () => {
       expect(sanitizeStyleTag(null)).toBe('');
       expect(sanitizeStyleTag(undefined)).toBe('');
     });
-    test('限长 20 字', () => {
-      expect(sanitizeStyleTag('一'.repeat(30)).length).toBe(20);
+    test('限长 80 字，允许写短情绪铺垫', () => {
+      expect(sanitizeStyleTag('一'.repeat(120)).length).toBe(80);
     });
   });
   describe('prependStyleTag', () => {
@@ -29,6 +35,23 @@ describe('segmentText', () => {
     });
     test('标签自带括号会被清洗后再包裹', () => {
       expect(prependStyleTag('你好', '(平静)')).toBe('(平静)你好');
+    });
+  });
+  describe('normalizeSegmentTexts', () => {
+    test('保留不超长的语义块', () => {
+      expect(normalizeSegmentTexts(['第一段。', '第二段。'])).toEqual(['第一段。', '第二段。']);
+    });
+
+    test('把超过上限的文本继续拆成合法长度', () => {
+      const long = '一'.repeat(MAX_SEGMENT_TEXT_LENGTH + 20);
+      const chunks = splitLongTextByLimit(long);
+      expect(chunks.length).toBe(2);
+      expect(chunks.every((chunk) => chunk.length <= MAX_SEGMENT_TEXT_LENGTH)).toBe(true);
+    });
+
+    test('优先按标点边界拆分', () => {
+      const text = '第一句。第二句。第三句。';
+      expect(splitLongTextByLimit(text, 6)).toEqual(['第一句。', '第二句。', '第三句。']);
     });
   });
 });

@@ -65,6 +65,7 @@ export const SegmentSchema = z.object({
   audio_path: z.string().nullable(),
   status: z.enum(['pending', 'generating', 'generated', 'failed']),
   style_tag: z.string(),
+  error_message: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
 });

@@ -12,14 +12,62 @@ const audioDir = path.join(__dirname, '../../audio');
  */
 function createMany(broadcastId, texts) {
   const insertStmt = db.prepare(
-    'INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)'
+    'INSERT INTO segments (broadcast_id, "index", text, status, error_message) VALUES (?, ?, ?, ?, ?)'
   );
   const insertMany = db.transaction((items) => {
     for (const item of items) {
-      insertStmt.run(item.broadcastId, item.index, item.text, 'pending');
+      insertStmt.run(item.broadcastId, item.index, item.text, 'pending', '');
     }
   });
   insertMany(texts.map((text, index) => ({ broadcastId, index, text })));
+}
+
+/**
+ * 用指定顺序整体替换播报 segments；未变化的已有段保留音频与状态。
+ * @param {number} broadcastId - 播报 ID
+ * @param {Array<{id?:number,text:string,styleTag:string}>} items - 新段落列表
+ */
+function replaceAll(broadcastId, items) {
+  const existing = getByBroadcastId(broadcastId);
+  const existingById = new Map(existing.map((segment) => [segment.id, segment]));
+  const keptIds = new Set();
+  const insertStmt = db.prepare(
+    'INSERT INTO segments (broadcast_id, "index", text, status, style_tag, error_message) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  const updateChangedStmt = db.prepare(
+    'UPDATE segments SET "index" = ?, text = ?, style_tag = ?, status = ?, audio_path = NULL, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
+  );
+  const updateIndexStmt = db.prepare(
+    'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
+  );
+  const deleteStmt = db.prepare('DELETE FROM segments WHERE id = ? AND broadcast_id = ?');
+
+  const run = db.transaction((list) => {
+    list.forEach((item, index) => {
+      const existingSegment = item.id ? existingById.get(item.id) : null;
+      const styleTag = item.styleTag || '';
+      if (!existingSegment) {
+        insertStmt.run(broadcastId, index, item.text, 'pending', styleTag, '');
+        return;
+      }
+
+      keptIds.add(item.id);
+      const hasChanged = existingSegment.text !== item.text || existingSegment.style_tag !== styleTag;
+      if (hasChanged) {
+        updateChangedStmt.run(index, item.text, styleTag, 'pending', '', item.id, broadcastId);
+      } else if (existingSegment.index !== index) {
+        updateIndexStmt.run(index, item.id, broadcastId);
+      }
+    });
+
+    for (const segment of existing) {
+      if (!keptIds.has(segment.id)) {
+        deleteStmt.run(segment.id, broadcastId);
+      }
+    }
+  });
+
+  run(items);
 }
 
 /**
@@ -58,14 +106,16 @@ function getPendingByBroadcastId(broadcastId) {
  * @param {number} segId - segment ID
  * @param {string} status - 新状态
  * @param {string} [audioPath] - 音频文件路径
+ * @param {string} [errorMessage] - 失败原因
  */
-function updateStatus(segId, status, audioPath) {
+function updateStatus(segId, status, audioPath, errorMessage = '') {
+  const normalizedError = status === 'failed' ? String(errorMessage || '').slice(0, 500) : '';
   if (audioPath) {
-    db.prepare('UPDATE segments SET status = ?, audio_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(status, audioPath, segId);
+    db.prepare('UPDATE segments SET status = ?, audio_path = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(status, audioPath, normalizedError, segId);
   } else {
-    db.prepare('UPDATE segments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(status, segId);
+    db.prepare('UPDATE segments SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(status, normalizedError, segId);
   }
 }
 
@@ -76,7 +126,7 @@ function updateStatus(segId, status, audioPath) {
  */
 function updateText(segId, text) {
   db.prepare(
-    "UPDATE segments SET text = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    "UPDATE segments SET text = ?, status = 'pending', audio_path = NULL, error_message = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
   ).run(text, segId);
 }
 
@@ -87,7 +137,7 @@ function updateText(segId, text) {
  */
 function updateStyleTag(segId, styleTag) {
   db.prepare(
-    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, error_message = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
   ).run(styleTag, segId);
 }
 
@@ -99,7 +149,7 @@ function updateStyleTag(segId, styleTag) {
 function bulkUpdateStyleTags(broadcastId, items) {
   const getStmt = db.prepare('SELECT style_tag FROM segments WHERE id = ? AND broadcast_id = ?');
   const updateStmt = db.prepare(
-    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?"
+    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, error_message = '', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?"
   );
   const run = db.transaction((list) => {
     for (const { id, styleTag } of list) {
@@ -203,6 +253,7 @@ function countByIds(broadcastId, ids) {
 
 module.exports = {
   createMany,
+  replaceAll,
   getByBroadcastId,
   getByIdAndBroadcastId,
   getPendingByBroadcastId,

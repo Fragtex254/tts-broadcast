@@ -73,4 +73,72 @@ describe('TTS 请求队列', () => {
     // 防止未使用的 promise 被 lint/测试误判为同步错误；第一个任务已启动，clear 不会取消在途请求。
     expect(first).toBeInstanceOf(Promise);
   });
+
+  test('请求返回 retryAfterMs 时重试当前任务', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(0);
+
+    const queue = new TTSQueueManager({ rpmLimit: 60, maxConcurrent: 1, rateLimitRetries: 1 });
+    queue.lastStartAt = -queue.minIntervalMs;
+    const starts = [];
+    let attempts = 0;
+
+    const job = queue.enqueue(() => {
+      attempts += 1;
+      starts.push({ label: 'job', at: Date.now() });
+      if (attempts === 1) {
+        const error = new Error('rate limited');
+        error.retryAfterMs = 5000;
+        throw error;
+      }
+      return 'done';
+    });
+
+    await jest.advanceTimersByTimeAsync(0);
+    expect(starts).toEqual([{ label: 'job', at: 0 }]);
+
+    await jest.advanceTimersByTimeAsync(4999);
+    expect(starts).toHaveLength(1);
+
+    await jest.advanceTimersByTimeAsync(1);
+    expect(starts).toEqual([
+      { label: 'job', at: 0 },
+      { label: 'job', at: 5000 }
+    ]);
+    await expect(job).resolves.toBe('done');
+  });
+
+  test('rate limit 重试耗尽后暂停后续任务启动并返回错误', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(0);
+
+    const queue = new TTSQueueManager({ rpmLimit: 60, maxConcurrent: 1, rateLimitRetries: 0 });
+    queue.lastStartAt = -queue.minIntervalMs;
+    const starts = [];
+
+    const first = queue.enqueue(() => {
+      starts.push({ label: 'first', at: Date.now() });
+      const error = new Error('rate limited');
+      error.retryAfterMs = 5000;
+      throw error;
+    });
+    const firstExpectation = expect(first).rejects.toThrow('rate limited');
+    const second = queue.enqueue(() => {
+      starts.push({ label: 'second', at: Date.now() });
+      return 'second-done';
+    });
+
+    await jest.advanceTimersByTimeAsync(0);
+    await firstExpectation;
+
+    await jest.advanceTimersByTimeAsync(4999);
+    expect(starts).toEqual([{ label: 'first', at: 0 }]);
+
+    await jest.advanceTimersByTimeAsync(1);
+    expect(starts).toEqual([
+      { label: 'first', at: 0 },
+      { label: 'second', at: 5000 }
+    ]);
+    await expect(second).resolves.toBe('second-done');
+  });
 });

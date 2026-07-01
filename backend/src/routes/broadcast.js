@@ -11,6 +11,7 @@ const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
 const voiceConfigService = require('../services/voiceConfig');
 const audioAsset = require('../services/audioAsset');
+const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
 const { validateId, cleanAudioFile } = require('../utils/validation');
 
@@ -120,7 +121,7 @@ router.post('/generate', async (req, res) => {
       voiceConfig: normalized.voiceConfig,
       resolveClone: true
     });
-    const audioBuffer = await tts.generateSpeech(speechParams);
+    const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech(speechParams));
 
     const audioPath = audioAsset.writeBroadcastAudio(audioBuffer);
 

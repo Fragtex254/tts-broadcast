@@ -13,7 +13,7 @@ const sseManager = require('../services/sseManager');
 const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
 const { validateId, cleanAudioFile } = require('../utils/validation');
-const { prependStyleTag, sanitizeStyleTag } = require('../utils/segmentText');
+const { prependStyleTag, sanitizeStyleTag, MAX_SEGMENT_TEXT_LENGTH } = require('../utils/segmentText');
 
 const logger = createScopedLogger('segments-route');
 
@@ -37,10 +37,10 @@ router.post('/:id/split', async (req, res) => {
     segmentStore.deleteByBroadcastId(idCheck.id);
 
     // 调用 AI 切分
-    const sentences = await mimo.splitScript(broadcast.content);
+    const segmentTexts = await mimo.splitScript(broadcast.content);
 
     // 创建 segment 记录
-    segmentStore.createMany(idCheck.id, sentences);
+    segmentStore.createMany(idCheck.id, segmentTexts);
 
     // 更新广播 mode，删除旧的整段音频文件
     cleanAudioFile(broadcast.audio_path);
@@ -55,6 +55,86 @@ router.post('/:id/split', async (req, res) => {
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '切分失败');
     res.status(500).json({ error: error.message || '切分失败' });
+  }
+});
+
+/**
+ * POST /api/broadcast/:id/segments/replace
+ * 批量替换 segments，用于前端合并、拆分、情绪提示整理
+ */
+router.post('/:id/segments/replace', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const { segments } = req.body;
+    if (!Array.isArray(segments) || segments.length === 0) {
+      return res.status(400).json({ error: '请提供 segments 数组' });
+    }
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    const oldSegments = segmentStore.getByBroadcastId(idCheck.id);
+    const oldById = new Map(oldSegments.map((segment) => [segment.id, segment]));
+    const usedIds = new Set();
+
+    const nextSegments = [];
+    for (const item of segments) {
+      if (!item || typeof item !== 'object') {
+        return res.status(400).json({ error: 'segments 中包含无效段落' });
+      }
+      if (typeof item.text !== 'string' || item.text.trim().length === 0) {
+        return res.status(400).json({ error: '每个段落都必须包含有效文本' });
+      }
+
+      const text = item.text.trim();
+      if (text.length > MAX_SEGMENT_TEXT_LENGTH) {
+        return res.status(400).json({ error: `单个段落不能超过 ${MAX_SEGMENT_TEXT_LENGTH} 个字` });
+      }
+
+      let id;
+      if (item.id !== undefined && item.id !== null) {
+        if (!Number.isInteger(item.id) || item.id <= 0) {
+          return res.status(400).json({ error: 'segments 中包含无效句子 ID' });
+        }
+        if (!oldById.has(item.id)) {
+          return res.status(400).json({ error: '部分句子不属于当前播报' });
+        }
+        if (usedIds.has(item.id)) {
+          return res.status(400).json({ error: 'segments 中包含重复句子 ID' });
+        }
+        usedIds.add(item.id);
+        id = item.id;
+      }
+
+      nextSegments.push({
+        id,
+        text,
+        styleTag: sanitizeStyleTag(item.styleTag),
+      });
+    }
+
+    const invalidatedAudioPaths = oldSegments
+      .filter((segment) => {
+        const next = nextSegments.find((item) => item.id === segment.id);
+        return !next || next.text !== segment.text || next.styleTag !== segment.style_tag;
+      })
+      .map((segment) => segment.audio_path);
+
+    segmentStore.replaceAll(idCheck.id, nextSegments);
+    cleanAudioFile(broadcast.audio_path);
+    broadcastStore.clearAudioAndSetMode(idCheck.id, 'segmented');
+    invalidatedAudioPaths.forEach((audioPath) => cleanAudioFile(audioPath));
+
+    res.json({ segments: segmentStore.getByBroadcastId(idCheck.id) });
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '批量整理句子失败');
+    res.status(500).json({ error: error.message || '批量整理句子失败' });
   }
 });
 
@@ -165,12 +245,20 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
 
     const results = new Array(pendingSegments.length);
     const markSegmentFailed = (segment, index, error) => {
-      segmentStore.updateStatus(segment.id, 'failed');
-      results[index] = { id: segment.id, status: 'failed', error: error.message };
+      const errorMessage = error.message || '语音生成失败';
+      logger.warn({
+        err: error,
+        broadcastId: idCheck.id,
+        segmentId: segment.id,
+        segmentIndex: segment.index,
+        textLength: segment.text.length,
+      }, '分段语音生成失败');
+      segmentStore.updateStatus(segment.id, 'failed', null, errorMessage);
+      results[index] = { id: segment.id, status: 'failed', error: errorMessage };
       sseManager.sendProgress(String(idCheck.id), {
         segmentId: segment.id,
         status: 'failed',
-        error: error.message,
+        error: errorMessage,
         current: index + 1,
         total: pendingSegments.length
       });
@@ -196,7 +284,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           voiceConfig: resolvedVoiceConfig,
           resolveClone: false // clone 音色已在批量开始时统一解析
         });
-        const audioBuffer = await tts.generateSpeech(speechParams);
+        const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech(speechParams));
 
         const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
 
@@ -221,9 +309,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
         markSegmentFailed(segment, index, cloneResolveError);
       });
     } else {
-      await Promise.all(pendingSegments.map((segment, index) => (
-        ttsQueue.enqueue(() => generateSegment(segment, index))
-      )));
+      await Promise.all(pendingSegments.map((segment, index) => generateSegment(segment, index)));
     }
 
     const segments = segmentStore.getByBroadcastId(idCheck.id);
@@ -404,7 +490,7 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
 
       segmentStore.updateStatus(segIdCheck.id, 'generated', audioPath);
     } catch (ttsError) {
-      segmentStore.updateStatus(segIdCheck.id, 'failed');
+      segmentStore.updateStatus(segIdCheck.id, 'failed', null, ttsError.message || '语音生成失败');
       return res.status(500).json({ error: '语音生成失败: ' + ttsError.message });
     }
 

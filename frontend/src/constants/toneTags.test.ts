@@ -10,7 +10,7 @@ describe('toneTags', () => {
     expect(sanitizeStyleTag(' (平静) ')).toBe('平静');
     expect(sanitizeStyleTag('（严肃）')).toBe('严肃');
     expect(sanitizeStyleTag('[活泼]')).toBe('[活泼]');
-    expect(sanitizeStyleTag('一'.repeat(30)).length).toBe(20);
+    expect(sanitizeStyleTag('一'.repeat(120)).length).toBe(80);
   });
   test('sanitizeAudioTag 剥方括号', () => {
     expect(sanitizeAudioTag('[停顿]')).toBe('停顿');

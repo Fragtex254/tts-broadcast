@@ -105,6 +105,9 @@ export const broadcastApi = {
   reorderSegments: (broadcastId: number, segmentIds: number[]) =>
     api.post(`/broadcast/${broadcastId}/segments/reorder`, { segmentIds }),
 
+  replaceSegments: (broadcastId: number, segments: { id?: number; text: string; styleTag?: string }[]) =>
+    api.post(`/broadcast/${broadcastId}/segments/replace`, { segments }),
+
   suggestSegmentTags: (broadcastId: number, allowedTags: string[]) =>
     api.post(`/broadcast/${broadcastId}/segments/suggest-tags`, { allowedTags }),
 

@@ -80,7 +80,7 @@ export function useSSE(options: UseSSEOptions): UseSEReturn {
 export function useBatchGenerateSSE(
   broadcastId: number | null,
   options: {
-    onSegmentProgress?: (segmentId: number, status: string, audioPath?: string) => void;
+    onSegmentProgress?: (segmentId: number, status: string, audioPath?: string, error?: string) => void;
     onSegmentComplete?: (segments: Segment[]) => void;
     onError?: (error: string) => void;
     enabled?: boolean;
@@ -91,7 +91,7 @@ export function useBatchGenerateSSE(
   const handleProgress = useCallback(
     (event: SSEProgressEvent) => {
       if (onSegmentProgress && event.segmentId && event.status) {
-        onSegmentProgress(event.segmentId, event.status, event.audioPath);
+        onSegmentProgress(event.segmentId, event.status, event.audioPath, event.error);
       }
     },
     [onSegmentProgress]
