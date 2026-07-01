@@ -424,7 +424,6 @@ async function formatTranscriptionText(text) {
     throw new Error('请提供需要排版的转录文本');
   }
 
-  const config = getLlmConfig();
   const prompt = `你是一个严谨的中文转录稿编辑。请把下面的 ASR 转录文本整理成适合阅读和后续编辑的自然段。
 
 要求：
@@ -433,7 +432,8 @@ async function formatTranscriptionText(text) {
 3. 保留专有名词、数字、英文和原始顺序
 4. 每段围绕一个完整语义，段落之间用一个空行分隔
 5. 不要使用 Markdown 标题、列表、加粗或引用符号
-6. 只输出排版后的正文，不要解释
+6. 不要输出思考过程、解释、分析或前后缀
+7. 只输出排版后的正文
 
 转录文本：
 ${text}`;
@@ -442,7 +442,7 @@ ${text}`;
     prompt,
     systemPrompt: '你是一个转录稿排版助手，只输出排版后的正文。',
     maxTokens: 4000,
-    thinkingEnabled: config.splitThinkingEnabled
+    thinkingEnabled: false
   });
 
   const result = stripThinkingContent(formatted);
