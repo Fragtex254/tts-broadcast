@@ -40,7 +40,7 @@ backend/src/
 │   └── schema.sql          # 完整建表 DDL（保持最新）
 ├── routes/                 # 路由层：HTTP 交互、参数校验、响应格式化
 │   ├── broadcast.js        # 播报主路由（CRUD、generate、rewrite）
-│   ├── segments.js         # Segment 子路由（split、batch-generate、merge、reorder）
+│   ├── segments.js         # Segment 子路由（split、replace、batch-generate、merge、reorder）
 │   ├── settings.js
 │   ├── schedule.js
 │   ├── transcribe.js       # ASR 上传转录（单文件 + 批量）

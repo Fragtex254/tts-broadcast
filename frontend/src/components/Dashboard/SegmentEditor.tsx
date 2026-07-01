@@ -5,6 +5,7 @@ import { getApiErrorMessage } from '../../services/apiError';
 import { useBatchGenerateSSE } from '../../hooks/useSSE';
 import { TagPicker } from './TagPicker';
 import { AudioTagInserter } from './AudioTagInserter';
+import { SegmentRefineModal } from './SegmentRefineModal';
 
 // ============ StatusBadge ============
 
@@ -41,16 +42,26 @@ interface SegmentAudioProps {
 const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const handleLoadedMetadata = () => setDuration(audio.duration);
-    const handleEnded = () => setIsPlaying(false);
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleLoadedMetadata = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
     return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
     };
@@ -59,29 +70,74 @@ const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (isPlaying) { audio.pause(); } else { audio.play(); }
-    setIsPlaying(!isPlaying);
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
   }, [isPlaying]);
+
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current;
+    const nextTime = Number(e.target.value);
+    setCurrentTime(nextTime);
+    if (audio) {
+      audio.currentTime = nextTime;
+    }
+  }, []);
 
   const formatTime = (s: number) => {
     if (isNaN(s)) return '0:00';
     return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   };
 
+  const progress = duration > 0 ? Math.min(currentTime / duration, 1) : 0;
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="w-44 sm:w-52 animate-fade-in">
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
-      <button
-        onClick={togglePlay}
-        className="w-7 h-7 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border"
-      >
-        {isPlaying ? (
-          <svg className="w-3 h-3 text-ink" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
-        ) : (
-          <svg className="w-3 h-3 text-ink ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-        )}
-      </button>
-      <span className="font-body text-[10px] text-ink-soft/50">{formatTime(duration)}</span>
+      <div className="bg-white/55 rounded-full px-2.5 py-1.5 border border-card-border">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="w-7 h-7 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border"
+            title={isPlaying ? '暂停段落音频' : '播放段落音频'}
+          >
+            {isPlaying ? (
+              <svg className="w-3 h-3 text-ink" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+            ) : (
+              <svg className="w-3 h-3 text-ink ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            )}
+          </button>
+
+          <div className="flex-1 min-w-0">
+            <div className="relative h-5 flex items-center">
+              <div className="absolute left-0 right-0 h-1.5 rounded-full bg-ink/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-pink transition-[width] duration-100"
+                  style={{ width: `${progress * 100}%` }}
+                />
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={duration || 0}
+                step="0.01"
+                value={currentTime}
+                onChange={handleSeek}
+                className="relative z-10 w-full h-5 opacity-0 cursor-pointer"
+                title="拖动调整播放进度"
+              />
+            </div>
+            <div className="flex justify-between font-body text-[9px] text-ink-soft/50 tabular-nums leading-none">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -111,11 +167,12 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const [editText, setEditText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [openTagPickerId, setOpenTagPickerId] = useState<number | null>(null);
+  const [isRefineOpen, setIsRefineOpen] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // SSE 监听批量生成进度（始终启用）
   useBatchGenerateSSE(broadcastId, {
-    onSegmentProgress: useCallback((segmentId: number, status: string, audioPath?: string) => {
+    onSegmentProgress: useCallback((segmentId: number, status: string, audioPath?: string, errorMessage?: string) => {
       // 实时更新单个 segment 状态
       useStore.setState((state) => ({
         segments: state.segments.map((s) => {
@@ -124,6 +181,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
               ...s,
               status: status as Segment['status'],
               audio_path: audioPath || s.audio_path,
+              error_message: status === 'failed' ? (errorMessage || s.error_message || '语音生成失败') : '',
             };
           }
           return s;
@@ -172,7 +230,11 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const handleBatchGenerate = async () => {
     setError(null);
     try {
-      await batchGenerateSegments(broadcastId);
+      const { results } = await batchGenerateSegments(broadcastId);
+      const failed = results.filter((result) => result.status === 'failed');
+      if (failed.length > 0) {
+        setError(`有 ${failed.length} 个段落生成失败，具体原因已显示在对应段落下方`);
+      }
     } catch (err) {
       // 优先展示后端返回的错误文案（如 429 限流、请求体过大、clone 解析失败等）
       setError(getApiErrorMessage(err, '批量生成失败'));
@@ -206,9 +268,19 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
   return (
     <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both' }}>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-2 h-2 rounded-full bg-lilac" />
-        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">段落编辑器</h3>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-lilac" />
+          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">段落编辑器</h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsRefineOpen(true)}
+          disabled={segments.some((s) => s.status === 'generating')}
+          className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
+        >
+          切分精修
+        </button>
       </div>
 
       {/* 生成进度指示器 */}
@@ -247,8 +319,8 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
             style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both` }}
           >
             {/* 第一行：序号 + 文本 + 状态 + 音频 + 操作 */}
-            <div className="flex items-center gap-3">
-              <span className="font-display italic text-[18px] font-medium text-lilac min-w-[22px]">
+            <div className="flex items-start gap-3">
+              <span className="font-display italic text-[18px] font-medium text-lilac min-w-[22px] pt-0.5">
                 {String(seg.index + 1).padStart(2, '0')}
               </span>
 
@@ -259,7 +331,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                       ref={editTextareaRef}
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
-                      className="w-full h-16 bg-white/60 text-ink rounded-xl px-3 py-2 border border-ink/15 focus:border-ink/25 focus:outline-none resize-none font-body text-[12px]"
+                      className="w-full min-h-28 bg-white/60 text-ink rounded-xl px-3 py-2 border border-ink/15 focus:border-ink/25 focus:outline-none resize-y font-body text-[12px] leading-relaxed"
                       autoFocus
                     />
                     <AudioTagInserter textareaRef={editTextareaRef} value={editText} onChange={setEditText} />
@@ -269,17 +341,20 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                     </div>
                   </div>
                 ) : (
-                  <p className="font-body text-[12px] text-ink leading-relaxed truncate">{seg.text}</p>
+                  <p className="font-body text-[12px] text-ink leading-relaxed whitespace-pre-wrap break-words">
+                    {seg.text}
+                  </p>
                 )}
               </div>
 
-              <StatusBadge status={seg.status} />
+              <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                <StatusBadge status={seg.status} />
+                {seg.status === 'generated' && seg.audio_path && (
+                  <SegmentAudio audioUrl={`${seg.audio_path}?t=${seg.updated_at}`} />
+                )}
+              </div>
 
-              {seg.status === 'generated' && seg.audio_path && (
-                <SegmentAudio audioUrl={`${seg.audio_path}?t=${seg.updated_at}`} />
-              )}
-
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-0.5 flex-shrink-0">
                 <button onClick={() => handleStartEdit(seg)} disabled={seg.status === 'generating' || editingId === seg.id} className="p-1.5 rounded-lg text-ink-soft/40 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title="编辑">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                 </button>
@@ -312,6 +387,12 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                     onClose={() => setOpenTagPickerId(null)}
                   />
                 )}
+              </div>
+            )}
+
+            {seg.status === 'failed' && seg.error_message && (
+              <div className="mt-2 ml-[34px] bg-pink/10 border border-pink/25 rounded-xl px-3 py-2 font-body text-[11px] text-ink leading-relaxed">
+                {seg.error_message}
               </div>
             )}
           </div>
@@ -350,6 +431,14 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
           ) : '合并音频'}
         </button>
       </div>
+
+      {isRefineOpen && (
+        <SegmentRefineModal
+          broadcastId={broadcastId}
+          segments={segments}
+          onClose={() => setIsRefineOpen(false)}
+        />
+      )}
     </div>
   );
 };

@@ -7,10 +7,15 @@ jest.mock('../../src/services/tts', () => ({
 const app = require('../../src/app');
 const db = require('../../src/db');
 const tts = require('../../src/services/tts');
+const ttsQueue = require('../../src/services/ttsQueue');
 
 describe('Voice Presets API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    ttsQueue.clear();
+    ttsQueue.minIntervalMs = 0;
+    ttsQueue.maxConcurrent = 10;
+    ttsQueue.lastStartAt = 0;
     tts.generateSpeech.mockResolvedValue(Buffer.from('fake-audio-data'));
     db.prepare('DELETE FROM voice_presets').run();
   });

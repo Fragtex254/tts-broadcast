@@ -36,8 +36,15 @@ export interface Segment {
   audio_path: string | null;
   status: 'pending' | 'generating' | 'generated' | 'failed';
   style_tag: string;
+  error_message: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SegmentDraftInput {
+  id?: number;
+  text: string;
+  styleTag?: string;
 }
 
 /** 今日资讯条目 */
@@ -276,6 +283,7 @@ export interface AppState {
   regenerateSegment: (broadcastId: number, segId: number) => Promise<Segment>;
   batchGenerateSegments: (broadcastId: number) => Promise<{ segments: Segment[]; results: BatchGenerateResult[] }>;
   deleteSegment: (broadcastId: number, segId: number) => Promise<Segment[]>;
+  replaceSegments: (broadcastId: number, segments: SegmentDraftInput[]) => Promise<Segment[]>;
   mergeSegments: (broadcastId: number) => Promise<Broadcast>;
   isSuggestingTags: boolean;
   updateSegmentStyleTag: (broadcastId: number, segId: number, styleTag: string) => Promise<Segment>;
