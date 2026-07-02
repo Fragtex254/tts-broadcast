@@ -110,7 +110,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
     <div className="flex flex-col gap-3 animate-fade-in">
       {/* 音色设计描述 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           音色设计描述
         </label>
         <textarea
@@ -123,7 +123,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
 
       {/* 风格提示词 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           风格提示词（可选）
         </label>
         <input
@@ -137,7 +137,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
 
       {/* 试听文本 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           试听文本
         </label>
         <textarea
@@ -197,7 +197,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
       {/* 保存对话框 */}
       {showSaveDialog && (
         <div className="bg-white/60 rounded-2xl p-4 border border-card-border animate-fade-in">
-          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
             预设名称
           </label>
           <input

@@ -82,6 +82,18 @@ function runFfmpeg(args) {
   });
 }
 
+function readMediaMetadata(inputPath) {
+  return new Promise((resolve, reject) => {
+    execFile(ffmpegPath, ['-hide_banner', '-i', inputPath], { maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (!stderr && error) {
+        reject(new Error(`媒体信息读取失败: ${error.message}`));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
 function parseDuration(output) {
   const match = output.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
   if (!match) return 0;
@@ -161,6 +173,26 @@ async function analyzeMedia(inputPath) {
     duration: parseDuration(stderr),
     silencePoints: parseSilencePoints(stderr)
   };
+}
+
+async function getMediaDuration(file) {
+  if (!hasFileData(file)) return 0;
+  if (file.path) {
+    const { stderr } = await readMediaMetadata(file.path);
+    return roundSeconds(parseDuration(stderr));
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-media-'));
+  const ext = getExtension(file) || 'bin';
+  const inputPath = path.join(tmpDir, `input.${ext}`);
+
+  try {
+    writeUploadToPath(file, inputPath);
+    const { stderr } = await readMediaMetadata(inputPath);
+    return roundSeconds(parseDuration(stderr));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 async function writeMp3Slice({ inputPath, outputPath, start, duration }) {
@@ -368,4 +400,10 @@ async function fileToAsrDataUrls({ file, maxDataUrlSize, chunkOptions }) {
   throw new Error('暂不支持该文件类型，请上传 wav、mp3、m4a、mp4、mov 或 webm');
 }
 
-module.exports = { buildChunkRanges, fileToAsrDataUrl, fileToAsrDataUrls };
+module.exports = {
+  buildChunkRanges,
+  fileToAsrDataUrl,
+  fileToAsrDataUrls,
+  getMediaDuration,
+  getUploadSize,
+};

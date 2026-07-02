@@ -13,6 +13,11 @@ jest.mock('../../src/services/asr', () => ({
   })
 }));
 
+jest.mock('../../src/services/media', () => ({
+  getUploadSize: jest.fn((file) => file?.size || file?.buffer?.length || 0),
+  getMediaDuration: jest.fn().mockResolvedValue(12.5),
+}));
+
 jest.mock('../../src/services/sseManager', () => ({
   send: jest.fn(),
   sendProgress: jest.fn(),
@@ -75,6 +80,11 @@ describe('转录 API', () => {
       }
     });
     expect(res.body.transcriptionResult.id).toEqual(expect.any(Number));
+    expect(res.body.transcriptionResult).toEqual(expect.objectContaining({
+      file_size_bytes: 8,
+      audio_duration_seconds: 12.5,
+      processing_seconds: expect.any(Number)
+    }));
     expect(db.prepare('SELECT COUNT(*) as count FROM transcription_results').get().count).toBe(1);
     expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       file: expect.objectContaining({ originalname: 'sample.wav' }),
@@ -189,6 +199,34 @@ describe('转录 API', () => {
       formatted_text: '大家好，今天聊 AI。\n\n首先是新模型发布。'
     });
     expect(mimo.formatTranscriptionText).toHaveBeenCalledWith('大家好今天聊 AI 首先是新模型发布');
+  });
+
+  test('GET /api/transcribe/stats 返回转录累计统计', async () => {
+    db.prepare(`
+      INSERT INTO transcription_results (
+        file_name, relative_path, text, formatted_text, language, provider, model,
+        file_size_bytes, audio_duration_seconds, processing_seconds
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('a.wav', 'a.wav', 'abc', '', 'zh', 'mimo', 'mimo-v2.5-asr', 100, 1.5, 0.5);
+    db.prepare(`
+      INSERT INTO transcription_results (
+        file_name, relative_path, text, formatted_text, language, provider, model,
+        file_size_bytes, audio_duration_seconds, processing_seconds
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('b.wav', 'b.wav', 'abc', 'abcdef', 'zh', 'mimo', 'mimo-v2.5-asr', 200, 3, 1);
+
+    const res = await request(app).get('/api/transcribe/stats');
+
+    expect(res.status).toBe(200);
+    expect(res.body.stats).toEqual({
+      total_count: 2,
+      total_file_size_bytes: 300,
+      total_audio_duration_seconds: 4.5,
+      total_text_chars: 9,
+      total_processing_seconds: 1.5
+    });
   });
 
   test('DELETE /api/transcribe/results/:id 删除已保存转录结果', async () => {

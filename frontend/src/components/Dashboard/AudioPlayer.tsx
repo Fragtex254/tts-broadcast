@@ -115,13 +115,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   if (!audioUrl) {
     return (
-      <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
+      <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
         <div className="flex items-center gap-2 mb-3">
           <span className="w-2 h-2 rounded-full bg-sage" />
           <h3 className="font-display italic text-[14px] font-medium text-ink-soft">播放器</h3>
         </div>
         <div className="bg-white/40 rounded-2xl p-8 flex items-center justify-center border border-card-border">
-          <p className="font-body text-[12px] text-ink-soft/40 animate-fade-in">
+          <p className="font-body text-[12px] text-ink-soft/70 animate-fade-in">
             {mode === 'segmented' ? '请先合并所有句子音频' : '生成语音后在此播放'}
           </p>
         </div>
@@ -130,7 +130,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   }
 
   return (
-    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
+    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-sage" />
@@ -141,7 +141,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className={`font-body text-[11px] transition-colors flex items-center gap-1 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ${saveError ? 'text-pink animate-shake' : isSaved ? 'text-lemon' : 'text-ink-soft/40 hover:text-lemon'}`}
+              className={`font-body text-[11px] transition-colors flex items-center gap-1 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ${saveError ? 'text-pink animate-shake' : isSaved ? 'text-lemon' : 'text-ink-soft/70 hover:text-lemon'}`}
               title={saveError ? '保存失败，请重试' : isSaved ? '取消保存' : '保存此播报'}
             >
               <svg className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
@@ -149,7 +149,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
               </svg>
             </button>
           )}
-          <button onClick={handleDownload} className="font-body text-[11px] text-ink-soft/40 hover:text-ink transition-colors flex items-center gap-1 uppercase tracking-wider">
+          <button onClick={handleDownload} className="font-body text-[11px] text-ink-soft/70 hover:text-ink transition-colors flex items-center gap-1 uppercase tracking-wider">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -190,7 +190,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           })}
         </div>
 
-        <span className="font-body text-[11px] text-ink-soft/50 min-w-[72px] text-right tabular-nums">
+        <span className="font-body text-[11px] text-ink-soft/70 min-w-[72px] text-right tabular-nums">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>

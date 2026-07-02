@@ -90,7 +90,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
 
   return (
     <div className="animate-fade-in">
-      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
         参考音频
       </label>
       <div
@@ -116,14 +116,14 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
             <button
               type="button"
               onClick={handleClear}
-              className="text-ink-soft/50 hover:text-pink text-[12px] transition-colors flex-shrink-0"
+              className="text-ink-soft/70 hover:text-pink text-[12px] transition-colors flex-shrink-0"
               title="清除文件"
             >
               ✕
             </button>
           </div>
         ) : (
-          <span className="text-ink-soft/50">
+          <span className="text-ink-soft/70">
             拖拽或点击上传音频（mp3/wav/ogg/m4a/webm/aac/flac，最大 10MB）
           </span>
         )}

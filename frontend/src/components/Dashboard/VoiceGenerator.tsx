@@ -166,7 +166,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
 
         {/* 音色类型选择 */}
         <div className="mb-3 flex-shrink-0">
-          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">音色类型</label>
+          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">音色类型</label>
           <div className="flex gap-1">
             {VOICE_TYPES.map((type) => (
               <button
@@ -187,7 +187,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
         {/* 预设音色列表（纵向） */}
         {voiceType === 'builtin' && (
           <div className="flex-1 overflow-y-auto mb-3 animate-fade-in min-h-0">
-            <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">选择音色</label>
+            <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">选择音色</label>
             <div className="flex flex-col gap-1">
               {VOICE_OPTIONS.map((voice) => (
                 <button
@@ -200,7 +200,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
                   }`}
                 >
                   <span className="font-body text-[12px] font-medium text-ink block">{voice.label}</span>
-                  <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40">{voice.description}</span>
+                  <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">{voice.description}</span>
                 </button>
               ))}
             </div>
@@ -214,8 +214,8 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
               onClick={() => setShowFineControls(!showFineControls)}
               className="flex items-center justify-between w-full mb-1.5 group"
             >
-              <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 cursor-pointer">精细控制</label>
-              <span className="font-body text-[10px] text-ink-soft/40 transition-transform duration-150"
+              <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 cursor-pointer">精细控制</label>
+              <span className="font-body text-[10px] text-ink-soft/70 transition-transform duration-150"
                 style={{ transform: showFineControls ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                 ▸
               </span>
@@ -267,7 +267,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
                 <div className="flex justify-end">
                   <button
                     onClick={handleResetFineControls}
-                    className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 hover:text-ink px-2 py-1 rounded-lg hover:bg-white/50 transition-all duration-150"
+                    className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 hover:text-ink px-2 py-1 rounded-lg hover:bg-white/50 transition-all duration-150"
                   >
                     重置
                   </button>
@@ -309,7 +309,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ layout = 'horizo
 
   // 水平布局（兼容，当前不在主流程中使用）
   return (
-    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card px-5 py-3.5 shadow-card border border-card-border">
+    <div className="bg-white/80 backdrop-blur-sm rounded-card px-5 py-3.5 shadow-card border border-card-border">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blush" />

@@ -32,6 +32,7 @@
 - 外部 API 测试必须 mock，不依赖真实网络或真实业务密钥。
 - 长任务必须有 loading/error 状态；已接入 SSE 的任务要发送开始、进度、完成、失败事件。
 - 前后端契约不得使用裸 `any`；新增持久化字段必须端到端同步。
+- 前端设计系统当前为 Warm Workbench / Soft Editorial：语义色仍使用 `paper/ink/pink/lemon/blush/sage/lilac`，底层参考色板见 `frontend/src/index.css` 与 `.claude/skills/frontend-styling/SKILL.md`，组件层优先使用语义色。
 - 开发引入新约定、新路由族、新组件类型或新持久化套路时，必须同步更新对应 skill 与本文件。
 
 ## Commands

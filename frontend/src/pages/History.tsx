@@ -201,7 +201,7 @@ export const History: React.FC = () => {
               <button
                 onClick={handleDeleteClick}
                 disabled={selectedIds.size === 0 || isBatchDeleting}
-                className="px-3 py-1.5 bg-pink text-white font-body text-[11px] font-medium rounded-lg shadow-btn hover:brightness-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-pink text-ink font-body text-[11px] font-medium rounded-lg shadow-btn hover:brightness-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 🗑️ 删除
               </button>
@@ -225,7 +225,7 @@ export const History: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-6xl mx-auto space-y-4">
-          <div className="bg-white/[0.55] backdrop-blur-sm rounded-card shadow-card border border-card-border overflow-hidden">
+          <div className="bg-white/80 backdrop-blur-sm rounded-card shadow-card border border-card-border overflow-hidden">
             {isLoading && (
               <div className="p-6 space-y-4">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -248,7 +248,7 @@ export const History: React.FC = () => {
 
             {!isLoading && !error && broadcasts.length === 0 && (
               <div className="p-12 text-center animate-fade-in">
-                <p className="font-display italic text-[16px] text-ink-soft/40 mb-1">暂无播报记录</p>
+                <p className="font-display italic text-[16px] text-ink-soft/70 mb-1">暂无播报记录</p>
                 <p className="font-body text-[12px] text-ink-soft/30">前往信源收集生成第一条播报</p>
               </div>
             )}
@@ -304,7 +304,7 @@ export const History: React.FC = () => {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
-              <p className="font-body text-[11px] text-ink-soft/50 uppercase tracking-wider">第 {page} / {totalPages} 页，共 {total} 条</p>
+              <p className="font-body text-[11px] text-ink-soft/70 uppercase tracking-wider">第 {page} / {totalPages} 页，共 {total} 条</p>
               <div className="flex items-center gap-2">
                 <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-4 py-1.5 font-body text-[12px] bg-white/50 text-ink-soft rounded-full border border-card-border hover:bg-white/70 disabled:opacity-40 transition-colors">上一页</button>
                 <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="px-4 py-1.5 font-body text-[12px] bg-white/50 text-ink-soft rounded-full border border-card-border hover:bg-white/70 disabled:opacity-40 transition-colors">下一页</button>
@@ -313,11 +313,11 @@ export const History: React.FC = () => {
           )}
 
           {currentBroadcast?.content && (
-            <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in">
+            <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in">
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 rounded-full bg-pink" />
                 <h3 className="font-display italic text-[14px] font-medium text-ink-soft">口播稿预览</h3>
-                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/40 ml-auto">
+                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 ml-auto">
                   {currentBroadcast.content.length} 字 · ≈ {Math.ceil(currentBroadcast.content.length / 4)} 秒
                 </span>
               </div>

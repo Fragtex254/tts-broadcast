@@ -19,11 +19,11 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'ai-models': 'bg-lemon/30',
-  'ai-products': 'bg-lilac/30',
-  'industry': 'bg-blush/40',
-  'paper': 'bg-sage/30',
-  'tip': 'bg-pink/20',
+  'ai-models': 'bg-lemon/25',
+  'ai-products': 'bg-lilac/35',
+  'industry': 'bg-blush/45',
+  'paper': 'bg-sage/35',
+  'tip': 'bg-pink/15',
 };
 
 export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onRewriteComplete }) => {
@@ -70,7 +70,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
   };
 
   return (
-    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
+    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
       {/* 标题 */}
       <div className="flex items-center gap-2 mb-4">
         <span className="w-2 h-2 rounded-full bg-lemon" />
@@ -78,11 +78,11 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
       </div>
 
       {/* 配置区 */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-col gap-2 mb-4 sm:flex-row">
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="flex-1 bg-white/70 text-ink rounded-full px-3.5 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] appearance-none cursor-pointer transition-colors"
+          className="flex-1 bg-white/80 text-ink rounded-full px-3.5 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] appearance-none cursor-pointer transition-colors"
         >
           {CATEGORIES.map((cat) => (
             <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -91,7 +91,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
         <select
           value={count}
           onChange={(e) => setCount(Number(e.target.value))}
-          className="w-20 bg-white/70 text-ink rounded-full px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] appearance-none cursor-pointer transition-colors"
+          className="w-full bg-white/80 text-ink rounded-full px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] appearance-none cursor-pointer transition-colors sm:w-24"
         >
           {[5, 10, 15, 20].map((n) => (
             <option key={n} value={n}>{n} 条</option>
@@ -116,7 +116,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
             <button
               onClick={handleRewrite}
               disabled={isRewriting}
-              className="bg-pink hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider"
+              className="bg-lilac hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider"
             >
               {isRewriting ? '改写中...' : '✦ 一键改写口播稿'}
             </button>
