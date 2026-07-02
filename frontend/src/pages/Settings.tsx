@@ -206,7 +206,7 @@ export const Settings: React.FC = () => {
     children: React.ReactNode;
   }> = ({ dotColor, title, index, children }) => (
     <section
-      className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
+      className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
       style={{ animation: `fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.1}s both` }}
     >
       <div className="flex items-center gap-2 mb-4">
@@ -222,11 +222,11 @@ export const Settings: React.FC = () => {
       <Header title="系统设置" subtitle="配置 TTS 播报系统参数" />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl mx-auto space-y-4">
+        <div className="max-w-5xl mx-auto space-y-4">
           {isLoadingSettings && (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-white/[0.55] rounded-card p-5 animate-pulse">
+                <div key={i} className="bg-white/80 rounded-card p-5 animate-pulse">
                   <div className="h-3 bg-ink/5 rounded w-24 mb-4" />
                   <div className="h-8 bg-ink/5 rounded w-full" />
                 </div>
@@ -241,7 +241,7 @@ export const Settings: React.FC = () => {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">LLM API</label>
-                      <p className="font-body text-[10px] text-ink-soft/40 mt-0.5">用于资讯改写、文本切分和模型发现</p>
+                      <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">用于资讯改写、文本切分和模型发现</p>
                     </div>
                     <div className="inline-flex rounded-full bg-white/50 border border-card-border p-1">
                       {([
@@ -262,7 +262,7 @@ export const Settings: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">LLM API Key</label>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM API Key</label>
                       <PasswordField
                         value={formData.mimo_api_key}
                         onChange={(v) => handleChange('mimo_api_key', v)}
@@ -271,7 +271,7 @@ export const Settings: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">LLM Base URL</label>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM Base URL</label>
                       <input
                         type="text"
                         value={formData.llm_base_url}
@@ -284,7 +284,7 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">LLM 模型</label>
+                    <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM 模型</label>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
@@ -317,7 +317,7 @@ export const Settings: React.FC = () => {
                       </button>
                     </div>
                     {modelFetchResult?.resolvedUrl && (
-                      <p className="mt-2 font-body text-[11px] text-ink-soft/50 animate-fade-in">已从 {modelFetchResult.resolvedUrl} 获取模型</p>
+                      <p className="mt-2 font-body text-[11px] text-ink-soft/70 animate-fade-in">已从 {modelFetchResult.resolvedUrl} 获取模型</p>
                     )}
                     {modelFetchResult?.error && (
                       <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-2.5 text-ink text-[12px] font-body animate-shake">
@@ -328,7 +328,7 @@ export const Settings: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">改写系统提示词</label>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">改写系统提示词</label>
                       <textarea
                         value={formData.llm_rewrite_system_prompt}
                         onChange={(e) => {
@@ -341,7 +341,7 @@ export const Settings: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">切分系统提示词</label>
+                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">切分系统提示词</label>
                       <textarea
                         value={formData.llm_split_system_prompt}
                         onChange={(e) => {
@@ -386,7 +386,7 @@ export const Settings: React.FC = () => {
                       ) : '测试 LLM'}
                     </button>
                     {dirtyFields.has('mimo_api_key') && (
-                      <span className="font-body text-[11px] text-ink-soft/40 flex items-center">未保存</span>
+                      <span className="font-body text-[11px] text-ink-soft/70 flex items-center">未保存</span>
                     )}
                   </div>
                   {testResults.llm && (
@@ -401,7 +401,7 @@ export const Settings: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">TTS API Key</label>
-                    <span className="font-body text-[10px] text-ink-soft/40">用于语音合成和 MiMo 云端转录</span>
+                    <span className="font-body text-[10px] text-ink-soft/70">用于语音合成和 MiMo 云端转录</span>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <PasswordField
@@ -421,7 +421,7 @@ export const Settings: React.FC = () => {
                       ) : '测试 TTS'}
                     </button>
                     {dirtyFields.has('mimo_tts_api_key') && (
-                      <span className="font-body text-[11px] text-ink-soft/40 flex items-center">未保存</span>
+                      <span className="font-body text-[11px] text-ink-soft/70 flex items-center">未保存</span>
                     )}
                   </div>
                   {testResults.tts && (
@@ -436,7 +436,7 @@ export const Settings: React.FC = () => {
                 <div className="space-y-3">
                   <div>
                     <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">ASR 转录引擎</label>
-                    <p className="font-body text-[10px] text-ink-soft/40 mt-0.5">选择默认转录服务；转录页也可以临时切换</p>
+                    <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">选择默认转录服务；转录页也可以临时切换</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -449,7 +449,7 @@ export const Settings: React.FC = () => {
                         className={`text-left p-3.5 rounded-2xl border transition-all ${formData.asr_provider === option.value ? 'bg-lemon/70 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
                       >
                         <span className="block font-body text-[12px] font-medium text-ink">{option.label}</span>
-                        <span className="block mt-1 font-body text-[10px] text-ink-soft/45 leading-relaxed">{option.description}</span>
+                        <span className="block mt-1 font-body text-[10px] text-ink-soft/70 leading-relaxed">{option.description}</span>
                       </button>
                     ))}
                   </div>
@@ -457,7 +457,7 @@ export const Settings: React.FC = () => {
                   {formData.asr_provider === 'qwen_mlx' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">Qwen ASR Base URL</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR Base URL</label>
                         <input
                           type="text"
                           value={formData.qwen_asr_base_url}
@@ -468,7 +468,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">Qwen ASR 模型</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR 模型</label>
                         <input
                           type="text"
                           value={formData.qwen_asr_model}
@@ -479,7 +479,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">Qwen ASR API Key（可选）</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR API Key（可选）</label>
                         <PasswordField
                           value={formData.qwen_asr_api_key}
                           onChange={(v) => handleChange('qwen_asr_api_key', v)}
@@ -487,7 +487,7 @@ export const Settings: React.FC = () => {
                           placeholder="如果 serve 设置了 --api-key，在这里填写"
                         />
                       </div>
-                      <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                      <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
                         Mac 上可用：mlx-qwen3-asr serve --api-key your-local-key
                       </p>
                     </div>
@@ -496,7 +496,7 @@ export const Settings: React.FC = () => {
                   {formData.asr_provider === 'wsl_asr' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">WSL ASR Base URL</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR Base URL</label>
                         <input
                           type="text"
                           value={formData.wsl_asr_base_url}
@@ -507,7 +507,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">WSL ASR 模型</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR 模型</label>
                         <input
                           type="text"
                           value={formData.wsl_asr_model}
@@ -518,7 +518,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">WSL ASR API Key（可选）</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR API Key（可选）</label>
                         <PasswordField
                           value={formData.wsl_asr_api_key}
                           onChange={(v) => handleChange('wsl_asr_api_key', v)}
@@ -526,7 +526,7 @@ export const Settings: React.FC = () => {
                           placeholder="如果 WSL 网关启用了 Bearer Token，在这里填写"
                         />
                       </div>
-                      <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                      <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
                         默认使用 WSL job API，由服务端负责切片、排队和模型加载进度。
                       </p>
                     </div>
@@ -548,7 +548,7 @@ export const Settings: React.FC = () => {
                 >
                   {voiceOptions.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
                 </select>
-                <p className="mt-2 font-body text-[11px] text-ink-soft/40">选择播报时使用的默认语音音色</p>
+                <p className="mt-2 font-body text-[11px] text-ink-soft/70">选择播报时使用的默认语音音色</p>
               </div>
             </SectionCard>
           )}
@@ -598,7 +598,7 @@ export const Settings: React.FC = () => {
                   </span>
                 )}
                 {dirtyFields.size > 0 && !saveSuccess && (
-                  <span className="font-body text-[12px] text-ink-soft/40">
+                  <span className="font-body text-[12px] text-ink-soft/70">
                     {dirtyFields.size} 项更改未保存
                   </span>
                 )}
@@ -620,18 +620,18 @@ export const Settings: React.FC = () => {
               <h4 className="font-body text-[12px] font-medium text-ink mb-3">添加新任务</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">任务名称</label>
+                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">任务名称</label>
                   <input type="text" value={scheduleForm.name} onChange={(e) => setScheduleForm((p) => ({ ...p, name: e.target.value }))} placeholder="例如：每日早报" className="w-full px-3 py-2 bg-white/70 border border-card-border rounded-xl text-ink text-[12px] font-body placeholder-ink-soft/30 focus:outline-none focus:border-ink/20" />
                 </div>
                 <div>
-                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">执行时间</label>
+                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">执行时间</label>
                   <select value={scheduleForm.cron_expression} onChange={(e) => setScheduleForm((p) => ({ ...p, cron_expression: e.target.value }))} className="w-full px-3 py-2 bg-white/70 border border-card-border rounded-xl text-ink text-[12px] font-body focus:outline-none focus:border-ink/20 appearance-none cursor-pointer">
                     <option value="">选择执行时间</option>
                     {cronExamples.map((ex) => <option key={ex.value} value={ex.value}>{ex.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1 block">内容类型（可选）</label>
+                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">内容类型（可选）</label>
                   <input type="text" value={scheduleForm.content_types} onChange={(e) => setScheduleForm((p) => ({ ...p, content_types: e.target.value }))} placeholder="留空则使用默认" className="w-full px-3 py-2 bg-white/70 border border-card-border rounded-xl text-ink text-[12px] font-body placeholder-ink-soft/30 focus:outline-none focus:border-ink/20" />
                 </div>
               </div>
@@ -665,7 +665,7 @@ export const Settings: React.FC = () => {
                       </button>
                       <div>
                         <p className="font-body text-[13px] font-medium text-ink">{schedule.name}</p>
-                        <p className="font-body text-[10px] text-ink-soft/50 mt-0.5">{formatCronExpression(schedule.cron_expression)}</p>
+                        <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">{formatCronExpression(schedule.cron_expression)}</p>
                         {schedule.last_run_at && (
                           <p className="font-body text-[10px] text-ink-soft/30 mt-0.5">上次运行: {new Date(schedule.last_run_at).toLocaleString('zh-CN')}</p>
                         )}

@@ -55,7 +55,7 @@ export const ScriptPreview: React.FC = () => {
   const estimatedDuration = Math.ceil(wordCount / 4);
 
   return (
-    <div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}>
+    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}>
       {/* 标题 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -65,7 +65,7 @@ export const ScriptPreview: React.FC = () => {
         <div className="flex items-center gap-2">
           {!isEditing && script && (
             <>
-              <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/40">
+              <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
                 {wordCount} 字 · ≈ {estimatedDuration} 秒
               </span>
               <button
@@ -116,7 +116,7 @@ export const ScriptPreview: React.FC = () => {
             </div>
           ) : (
             <div className="bg-white/40 rounded-2xl p-8 min-h-[16rem] flex items-center justify-center border border-card-border">
-              <p className="font-body text-[12px] text-ink-soft/50">
+              <p className="font-body text-[12px] text-ink-soft/70">
                 请先获取今日资讯并点击「一键改写口播稿」
               </p>
             </div>

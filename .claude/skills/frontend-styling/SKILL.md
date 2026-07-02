@@ -1,6 +1,6 @@
 ---
 name: frontend-styling
-description: 套用 Soft Editorial 设计系统、调整样式、改配色或动效时使用。涵盖设计哲学、色彩 token（paper/ink/pink/lemon/blush/sage/lilac）与语义色映射、字体（font-display/font-body）与字号、毛玻璃卡片模板、按钮/输入框/Pill 模板、动效 class 与缓动函数、prefers-reduced-motion、响应式断点。触发场景：调样式、改颜色、改按钮、卡片样式、字体、动画、动效、配色、Tailwind class、响应式布局、好看一点。
+description: 套用 Warm Workbench / Soft Editorial 设计系统、调整样式、改配色或动效时使用。涵盖基于 burnt-peach / sandy-clay / powder-blush / tea-green / sky-blue-light 的色彩 token（paper/ink/pink/lemon/blush/sage/lilac）与语义色映射、字体（font-display/font-body）与字号、卡片模板、按钮/输入框/Pill 模板、动效 class 与缓动函数、prefers-reduced-motion、响应式断点。触发场景：调样式、改颜色、改按钮、卡片样式、字体、动画、动效、配色、Tailwind class、响应式布局、好看一点。
 ---
 
 # 前端样式与设计系统
@@ -22,13 +22,13 @@ description: 套用 Soft Editorial 设计系统、调整样式、改配色或动
 
 ### 设计哲学
 
-**Soft Editorial** — 温暖杂志感、文学衬线标题、柔和粉彩色系、毛玻璃半透明卡片。
+**Warm Workbench / Soft Editorial** — 保留温暖纸感和柔和色彩，但优先服务生产型工作台的清晰度、密度和状态可读性。
 
 核心特征：
 - 暖纸色背景，不是纯白也不是灰色
 - MiSans 中文字体（标题和正文统一，清晰、现代）
-- 毛玻璃半透明卡片 + 极轻阴影
-- 粉彩色系作为功能色（不是装饰色）
+- 主工作区使用更实的浅色卡片，避免所有层级都发虚
+- 粉彩色系作为功能色（不是装饰色），颜色必须表达动作、状态或风险
 
 ### 色彩
 
@@ -36,23 +36,25 @@ description: 套用 Soft Editorial 设计系统、调整样式、改配色或动
 
 | Token | 值 | Tailwind Class | 用途 |
 |-------|-----|---------------|------|
-| 纸色 | `#F2EEDF` | `bg-paper` | 页面背景 |
-| 纸色-2 | `#ECE6D2` | `bg-paper-2` | Sidebar 背景 |
-| 墨色 | `#2A241B` | `text-ink` | 主要文字 |
-| 墨色-柔 | `#5C5345` | `text-ink-soft` | 次要文字 |
-| 玫瑰粉 | `#E1A4C2` | `bg-pink` | 错误、强调、波形 |
-| 柠檬绿 | `#D6DD63` | `bg-lemon` | 主操作、成功 |
-| 蜜桃腮红 | `#E8C9B6` | `bg-blush` | 温暖强调 |
-| 鼠尾草 | `#B7C7A8` | `bg-sage` | 成功、保存、确认 |
-| 丁香紫 | `#C9BEDC` | `bg-lilac` | 次操作、段落索引 |
+| 纸色 | `#fbf2ea` | `bg-paper` | 页面背景 |
+| 纸色-2 | `#f6e5d5` | `bg-paper-2` | Sidebar / app chrome 背景 |
+| 墨色 | `#0b1718` | `text-ink` | 主要文字 |
+| 墨色-柔 | `#204146` | `text-ink-soft` | 次要文字、说明文字 |
+| 粉红 | `#e65c4c` | `bg-pink` | 错误、危险、警告 |
+| 茶绿 | `#8ec837` | `bg-lemon` | 主操作 |
+| 沙陶 | `#e5b180` | `bg-blush` | 温暖强调、音色 |
+| 淡茶绿 | `#bbde87` | `bg-sage` | 成功、保存、确认 |
+| 浅天蓝 | `#96c8cf` | `bg-lilac` | 转换、编辑、排版、切分 |
+
+底层参考色板已在 `frontend/src/index.css` 注册为 `burnt-peach-*`、`sandy-clay-*`、`powder-blush-*`、`tea-green-*`、`sky-blue-light-*`。组件层优先使用上方语义 token，不直接散用底层色阶。
 
 **语义色使用约定：**
 
 | 场景 | 颜色 |
 |------|------|
-| 主操作按钮（获取、保存） | `lemon` / `sage` |
-| 次操作按钮（生成、合并） | `lilac` |
-| 危险/强调操作（改写、删除悬停） | `pink` |
+| 主操作按钮（获取、开始、保存、生成） | `lemon` / `sage` |
+| 转换/编辑操作（改写、切分、排版、重新编辑） | `lilac` |
+| 危险/错误操作（删除、失败、警告） | `pink`，文字使用 `text-ink`，不要用 `text-white` |
 | 成功状态标签 | `sage` |
 | 等待/加载状态标签 | `lemon` |
 | 生成中状态标签 | `lilac` |
@@ -94,16 +96,16 @@ description: 套用 Soft Editorial 设计系统、调整样式、改配色或动
 
 ### 卡片
 
-所有内容区域使用统一的毛玻璃卡片样式：
+所有主要内容区域使用更实的工作台卡片样式：
 
 ```
-className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
+className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
 ```
 
 **卡片内部结构：**
 
 ```tsx
-<div className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
+<div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
   {/* 标题区：色点 + 斜体衬线标题 */}
   <div className="flex items-center gap-2 mb-4">
     <span className="w-2 h-2 rounded-full bg-{color}" />
@@ -120,9 +122,9 @@ className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border 
 | 类型 | 样式模板 | 用途 |
 |------|---------|------|
 | 主操作 | `bg-lemon hover:brightness-105 text-ink rounded-full px-5 py-2 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider` | 获取、保存 |
-| 次操作 | `bg-lilac hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn` | 生成、合并 |
+| 转换/编辑操作 | `bg-lilac hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn` | 改写、切分、排版、重新编辑 |
 | 确认操作 | `bg-sage hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn` | 测试连接、全部生成 |
-| 危险操作 | `bg-pink hover:brightness-105 text-ink rounded-full px-5 py-2 shadow-btn` | 改写口播稿 |
+| 危险操作 | `bg-pink hover:brightness-105 text-ink rounded-full px-5 py-2 shadow-btn` | 删除、失败重试 |
 | 文字按钮 | `text-ink-soft hover:text-ink font-body text-[12px] transition-colors` | 编辑、取消 |
 | 禁用态 | `disabled:opacity-40` | 所有按钮通用 |
 

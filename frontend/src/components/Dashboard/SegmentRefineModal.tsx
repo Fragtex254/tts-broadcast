@@ -183,7 +183,7 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
               return (
                 <section
                   key={draft.key}
-                  className={`bg-white/[0.55] backdrop-blur-sm rounded-card border p-4 transition-colors ${
+                  className={`bg-white/80 backdrop-blur-sm rounded-card border p-4 transition-colors ${
                     isTooLong ? 'border-pink/40 bg-pink/5' : 'border-card-border'
                   }`}
                   style={{ animation: `fade-in-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.02}s both` }}
@@ -247,7 +247,7 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
                       >
                         拆分
                       </button>
-                      <span className={`block text-right font-body text-[10px] ${isTooLong ? 'text-pink' : 'text-ink-soft/45'}`}>
+                      <span className={`block text-right font-body text-[10px] ${isTooLong ? 'text-pink' : 'text-ink-soft/70'}`}>
                         {textLength}/{MAX_SEGMENT_TEXT_LENGTH}
                       </span>
                     </div>

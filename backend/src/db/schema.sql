@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS transcription_results (
   context TEXT DEFAULT '',
   usage TEXT,
   task_id TEXT DEFAULT '',
+  file_size_bytes INTEGER DEFAULT 0,
+  audio_duration_seconds REAL DEFAULT 0,
+  processing_seconds REAL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

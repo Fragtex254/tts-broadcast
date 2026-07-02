@@ -114,6 +114,9 @@ export const TranscriptionRecordSchema = z.object({
   context: z.string(),
   usage: z.record(z.string(), z.unknown()).nullable().optional(),
   task_id: z.string(),
+  file_size_bytes: z.number(),
+  audio_duration_seconds: z.number(),
+  processing_seconds: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -126,6 +129,18 @@ export const TranscriptionResultSchema = z.object({
 
 export const TranscriptionResultsResponseSchema = z.object({
   results: z.array(TranscriptionRecordSchema),
+});
+
+export const TranscriptionStatsSchema = z.object({
+  total_count: z.number(),
+  total_file_size_bytes: z.number(),
+  total_audio_duration_seconds: z.number(),
+  total_text_chars: z.number(),
+  total_processing_seconds: z.number(),
+});
+
+export const TranscriptionStatsResponseSchema = z.object({
+  stats: TranscriptionStatsSchema,
 });
 
 // === API 响应包装 ===

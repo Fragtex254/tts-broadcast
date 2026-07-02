@@ -6,6 +6,7 @@ import {
   TranscriptionRecordSchema,
   TranscriptionResultSchema,
   TranscriptionResultsResponseSchema,
+  TranscriptionStatsResponseSchema,
 } from '../services/schemas';
 import { createSSEClient, type SSECompleteEvent, type SSEErrorEvent, type SSEProgressEvent } from '../services/sseClient';
 import type {
@@ -18,6 +19,7 @@ import type {
   TranscriptionRecord,
   TranscriptionProgress,
   TranscriptionResult,
+  TranscriptionStats,
 } from './types';
 import type { StoreSet } from './storeTypes';
 
@@ -38,6 +40,14 @@ const IDLE_BATCH_PROGRESS: BatchTranscriptionProgress = {
   total: 0,
   currentFileName: '',
   message: '等待上传',
+};
+
+const EMPTY_TRANSCRIPTION_STATS: TranscriptionStats = {
+  total_count: 0,
+  total_file_size_bytes: 0,
+  total_audio_duration_seconds: 0,
+  total_text_chars: 0,
+  total_processing_seconds: 0,
 };
 
 interface BatchSSEProgress {
@@ -131,17 +141,30 @@ function collectBatchRecords(items: BatchTranscriptionItem[]): TranscriptionReco
     .filter((record): record is TranscriptionRecord => Boolean(record));
 }
 
+async function refreshTranscriptionStats(set: StoreSet): Promise<void> {
+  try {
+    const response = await transcribeApi.getStats();
+    const data = safeParseStrict(TranscriptionStatsResponseSchema, response.data);
+    set({ transcriptionStats: data.stats });
+  } catch (error) {
+    logger.error({ err: toLogError(error) }, '刷新转录统计失败');
+  }
+}
+
 export function createTranscribeSlice(set: StoreSet): Pick<
   AppState,
   | 'transcriptionText'
   | 'transcriptionRecord'
   | 'transcriptionHistory'
+  | 'transcriptionStats'
   | 'isTranscribing'
   | 'isLoadingTranscriptionHistory'
+  | 'isLoadingTranscriptionStats'
   | 'isDeletingTranscriptionResult'
   | 'transcribeProgress'
   | 'transcribeMedia'
   | 'fetchTranscriptionHistory'
+  | 'fetchTranscriptionStats'
   | 'deleteTranscriptionHistoryResult'
   | 'formatTranscriptionResult'
   | 'setTranscriptionText'
@@ -156,8 +179,10 @@ export function createTranscribeSlice(set: StoreSet): Pick<
     transcriptionText: '',
     transcriptionRecord: null,
     transcriptionHistory: [],
+    transcriptionStats: EMPTY_TRANSCRIPTION_STATS,
     isTranscribing: false,
     isLoadingTranscriptionHistory: false,
+    isLoadingTranscriptionStats: false,
     isDeletingTranscriptionResult: false,
     transcribeProgress: IDLE_PROGRESS,
 
@@ -257,6 +282,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             message: '转录完成',
           },
         }));
+        void refreshTranscriptionStats(set);
         return result;
       } catch (error) {
         set({
@@ -295,6 +321,20 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         set({ isLoadingTranscriptionHistory: false });
         logger.error({ err: toLogError(error), limit: params?.limit }, '获取转录历史失败');
         throw new Error(getApiErrorMessage(error, '获取转录历史失败'), { cause: error });
+      }
+    },
+
+    fetchTranscriptionStats: async () => {
+      set({ isLoadingTranscriptionStats: true });
+      try {
+        const response = await transcribeApi.getStats();
+        const data = safeParseStrict(TranscriptionStatsResponseSchema, response.data);
+        set({ transcriptionStats: data.stats, isLoadingTranscriptionStats: false });
+        return data.stats;
+      } catch (error) {
+        set({ isLoadingTranscriptionStats: false });
+        logger.error({ err: toLogError(error) }, '获取转录统计失败');
+        throw new Error(getApiErrorMessage(error, '获取转录统计失败'), { cause: error });
       }
     },
 
@@ -468,6 +508,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
           },
         };
         });
+        void refreshTranscriptionStats(set);
         sseClient.close();
       });
 

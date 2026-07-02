@@ -152,8 +152,19 @@ export interface TranscriptionRecord {
   context: string;
   usage?: Record<string, unknown> | null;
   task_id: string;
+  file_size_bytes: number;
+  audio_duration_seconds: number;
+  processing_seconds: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface TranscriptionStats {
+  total_count: number;
+  total_file_size_bytes: number;
+  total_audio_duration_seconds: number;
+  total_text_chars: number;
+  total_processing_seconds: number;
 }
 
 export interface TranscriptionResult {
@@ -235,8 +246,10 @@ export interface AppState {
   transcriptionText: string;
   transcriptionRecord: TranscriptionRecord | null;
   transcriptionHistory: TranscriptionRecord[];
+  transcriptionStats: TranscriptionStats;
   isTranscribing: boolean;
   isLoadingTranscriptionHistory: boolean;
+  isLoadingTranscriptionStats: boolean;
   isDeletingTranscriptionResult: boolean;
   transcribeProgress: TranscriptionProgress;
 
@@ -297,6 +310,7 @@ export interface AppState {
     options?: TranscribeOptions
   ) => Promise<TranscriptionResult>;
   fetchTranscriptionHistory: (params?: { limit?: number }) => Promise<TranscriptionRecord[]>;
+  fetchTranscriptionStats: () => Promise<TranscriptionStats>;
   deleteTranscriptionHistoryResult: (id: number) => Promise<void>;
   formatTranscriptionResult: (id: number, text: string) => Promise<TranscriptionRecord>;
   setTranscriptionText: (text: string) => void;

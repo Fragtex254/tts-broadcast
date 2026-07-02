@@ -204,6 +204,8 @@ export const transcribeApi = {
     api.post(`/transcribe/results/${id}/format`, data),
   getResults: (params?: { limit?: number }) =>
     api.get('/transcribe/results', { params }),
+  getStats: () =>
+    api.get('/transcribe/stats'),
   deleteResult: (id: number) =>
     api.delete(`/transcribe/results/${id}`),
 };

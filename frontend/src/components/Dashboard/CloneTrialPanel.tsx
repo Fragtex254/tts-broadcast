@@ -146,7 +146,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
 
       {/* 风格提示词 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           风格提示词（可选）
         </label>
         <input
@@ -160,7 +160,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
 
       {/* 试听文本 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           试听文本
         </label>
         <textarea
@@ -205,7 +205,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
       {/* 保存对话框 */}
       {showSaveDialog && (
         <div className="bg-white/60 rounded-2xl p-4 border border-card-border animate-fade-in">
-          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
             预设名称
           </label>
           <input

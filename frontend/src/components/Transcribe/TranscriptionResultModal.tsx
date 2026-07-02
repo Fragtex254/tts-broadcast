@@ -93,7 +93,7 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
             <div className="min-w-0">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">原文</span>
-                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/40">{draftText.length} 字</span>
+                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftText.length} 字</span>
               </div>
               <textarea
                 value={draftText}
@@ -105,7 +105,7 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
             <div className="min-w-0">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">AI 排版</span>
-                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/40">{draftFormattedText.length} 字</span>
+                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftFormattedText.length} 字</span>
               </div>
               <textarea
                 value={draftFormattedText}

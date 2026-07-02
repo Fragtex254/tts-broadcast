@@ -17,7 +17,7 @@ const PageLoader: React.FC = () => (
   <div className="flex-1 flex items-center justify-center bg-paper">
     <div className="flex flex-col items-center gap-3">
       <div className="w-6 h-6 border-2 border-ink/10 border-t-pink rounded-full animate-spin" />
-      <span className="font-body text-[12px] text-ink-soft/40">加载中...</span>
+      <span className="font-body text-[12px] text-ink-soft/70">加载中...</span>
     </div>
   </div>
 )

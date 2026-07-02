@@ -2,16 +2,16 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 
 const navItems = [
-  { path: '/', label: '信源收集', icon: '◉' },
-  { path: '/editor', label: '口播稿编辑', icon: '○' },
-  { path: '/transcribe', label: '转录', icon: '○' },
-  { path: '/history', label: '历史记录', icon: '○' },
-  { path: '/settings', label: '设置', icon: '○' },
+  { path: '/', label: '信源收集', shortLabel: '源' },
+  { path: '/editor', label: '口播稿编辑', shortLabel: '稿' },
+  { path: '/transcribe', label: '转录', shortLabel: '转' },
+  { path: '/history', label: '历史记录', shortLabel: '史' },
+  { path: '/settings', label: '设置', shortLabel: '设' },
 ];
 
 export const Sidebar: React.FC = () => {
   return (
-    <aside className="w-20 sm:w-64 bg-paper-2/70 border-r border-card-border flex flex-col flex-shrink-0">
+    <aside className="w-20 sm:w-64 bg-paper-2 border-r border-card-border flex flex-col flex-shrink-0">
       <div className="p-4 sm:p-6 sm:pb-5 border-b border-card-border text-center sm:text-left">
         <h1 className="font-display text-[20px] sm:text-[22px] font-medium text-ink leading-tight tracking-tight">
           <span className="sm:hidden">AI</span>
@@ -28,16 +28,18 @@ export const Sidebar: React.FC = () => {
             key={item.path}
             to={item.path}
             end={item.path === '/'}
+            aria-label={item.label}
+            title={item.label}
             className={({ isActive }) =>
-              `flex items-center justify-center sm:justify-start sm:gap-3 px-3 sm:px-4 py-2.5 rounded-xl text-[13px] font-body transition-all duration-200 ${
+              `flex flex-col sm:flex-row items-center justify-center sm:justify-start sm:gap-3 px-2 sm:px-4 py-2.5 rounded-xl text-[13px] font-body transition-all duration-200 ${
                 isActive
-                  ? 'bg-white/60 text-ink font-medium shadow-card'
-                  : 'text-ink-soft hover:text-ink hover:bg-white/30'
+                  ? 'bg-white/80 text-ink font-medium shadow-card border border-card-border'
+                  : 'text-ink-soft hover:text-ink hover:bg-white/50'
               }`
             }
           >
-            <span className={`text-[15px] leading-none ${item.path === '/' ? 'opacity-80' : 'opacity-40'}`}>
-              {item.icon}
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/60 border border-card-border text-[12px] leading-none sm:h-2 sm:w-2 sm:border-0 sm:bg-lilac">
+              <span className="sm:hidden">{item.shortLabel}</span>
             </span>
             <span className="hidden sm:inline">{item.label}</span>
           </NavLink>
