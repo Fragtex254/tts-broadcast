@@ -1,5 +1,5 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
-import type { NewsItem, Settings } from '../store/types';
+import type { NewsItem, Settings, VoiceConfig } from '../store/types';
 import { createScopedLogger, toLogError } from './logger';
 
 const logger = createScopedLogger('api-client');
@@ -60,7 +60,7 @@ export const broadcastApi = {
   generate: (data: {
     text: string;
     voice?: string;
-    voiceType?: string;
+    voiceType?: VoiceConfig['voiceType'];
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
@@ -112,7 +112,7 @@ export const broadcastApi = {
     api.post(`/broadcast/${broadcastId}/segments/suggest-tags`, { allowedTags }),
 
   updateVoiceConfig: (broadcastId: number, data: {
-    voiceType: string;
+    voiceType: VoiceConfig['voiceType'];
     voice?: string;
     voiceDesign?: string;
     voiceClone?: string;

@@ -2,6 +2,9 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createScopedLogger, toLogError } from '../../services/logger';
 
 const logger = createScopedLogger('audio-player');
+const WAVEFORM_BAR_WIDTH = 3;
+const WAVEFORM_BAR_GAP = 2;
+const DEFAULT_WAVEFORM_BAR_COUNT = 64;
 
 interface AudioPlayerProps {
   audioUrl: string | null;
@@ -37,16 +40,18 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   onSave,
   mode,
 }) => {
-  const waveformBars = React.useMemo(
-    () => generateWaveformBars(32, audioUrl || title),
-    [audioUrl, title]
-  );
+  const waveformRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [waveformBarCount, setWaveformBarCount] = useState(DEFAULT_WAVEFORM_BAR_COUNT);
+  const waveformBars = React.useMemo(
+    () => generateWaveformBars(waveformBarCount, audioUrl || title),
+    [waveformBarCount, audioUrl, title]
+  );
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -63,6 +68,23 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       audio.removeEventListener('ended', handleEnded);
     };
   }, [audioUrl]);
+
+  useEffect(() => {
+    const waveform = waveformRef.current;
+    if (!waveform) return;
+
+    const updateBarCount = () => {
+      const width = waveform.clientWidth;
+      if (width <= 0) return;
+      const nextCount = Math.max(12, Math.floor(width / (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)));
+      setWaveformBarCount((current) => (current === nextCount ? current : nextCount));
+    };
+
+    updateBarCount();
+    const observer = new ResizeObserver(updateBarCount);
+    observer.observe(waveform);
+    return () => observer.disconnect();
+  }, []);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -172,37 +194,42 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           )}
         </button>
 
-        {/* 波形可视化 */}
-        <div className="flex-1 flex items-center gap-[2px] h-7 overflow-hidden">
-          {waveformBars.map((height, i) => {
-            const barProgress = i / waveformBars.length;
-            const isPlayed = barProgress <= progress;
-            return (
-              <div
-                key={i}
-                className={`w-[3px] rounded-full transition-all duration-100 ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
-                style={{
-                  height: `${height}px`,
-                  ...(isPlaying && isPlayed ? { animation: `waveform-pulse 1.5s ease-in-out ${i * 0.05}s infinite` } : {}),
-                }}
-              />
-            );
-          })}
+        {/* 波形可视化 + 可拖动进度热区 */}
+        <div ref={waveformRef} className="relative flex-1 h-7 overflow-hidden">
+          <div className="absolute inset-0 flex items-center gap-[2px] pointer-events-none">
+            {waveformBars.map((height, i) => {
+              const barProgress = i / waveformBars.length;
+              const isPlayed = barProgress <= progress;
+              return (
+                <div
+                  key={i}
+                  data-waveform-bar="true"
+                  className={`w-[3px] rounded-full transition-all duration-100 ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
+                  style={{
+                    height: `${height}px`,
+                    ...(isPlaying && isPlayed ? { animation: `waveform-pulse 1.5s ease-in-out ${i * 0.05}s infinite` } : {}),
+                  }}
+                />
+              );
+            })}
+          </div>
+          <input
+            type="range"
+            aria-label="拖动调整播放进度"
+            min={0}
+            max={duration || 0}
+            step="0.01"
+            value={currentTime}
+            onChange={handleSeek}
+            disabled={duration <= 0}
+            className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+          />
         </div>
 
         <span className="font-body text-[11px] text-ink-soft/70 min-w-[72px] text-right tabular-nums">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>
-
-      <input
-        type="range"
-        min={0}
-        max={duration || 0}
-        value={currentTime}
-        onChange={handleSeek}
-        className="w-full h-0 opacity-0 -mt-3 relative z-10 cursor-pointer"
-      />
     </div>
   );
 };

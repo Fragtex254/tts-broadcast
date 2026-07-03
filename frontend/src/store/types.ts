@@ -121,7 +121,7 @@ export interface VoicePreset {
 
 export interface VoiceConfig {
   voice: string;
-  voiceType: string;
+  voiceType: '' | 'preset' | 'clone' | 'design';
   voiceDesign: string;
   voiceClone: string;
   stylePrompt: string;
@@ -277,7 +277,7 @@ export interface AppState {
   generateBroadcast: (data: {
     text: string;
     voice?: string;
-    voiceType?: string;
+    voiceType?: VoiceConfig['voiceType'];
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;

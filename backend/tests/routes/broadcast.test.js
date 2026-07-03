@@ -148,11 +148,38 @@ describe('播报 API', () => {
   });
 
   describe('POST /api/broadcast/generate (segmented)', () => {
+    test('未选择音色时返回 400', async () => {
+      const res = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '测试口播稿内容，足够长以生成标题。',
+          mode: 'segmented'
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('请先选择音色');
+    });
+
+    test('preset 类型缺少具体音色时返回 400', async () => {
+      const res = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '测试口播稿内容，足够长以生成标题。',
+          voiceType: 'preset',
+          mode: 'segmented'
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('请先选择音色');
+    });
+
     test('segmented 模式创建播报记录', async () => {
       const res = await request(app)
         .post('/api/broadcast/generate')
         .send({
           text: '测试口播稿内容，足够长以生成标题。',
+          voiceType: 'preset',
+          voice: '冰糖',
           mode: 'segmented'
         });
       expect(res.status).toBe(200);
@@ -211,6 +238,15 @@ describe('播报 API', () => {
         .send({ voiceType: 'design', voiceDesign: '温柔女声' });
       expect(res.status).toBe(200);
       expect(res.body.broadcast.voice_type).toBe('design');
+    });
+
+    test('未选择音色时拒绝更新配置', async () => {
+      const res = await request(app)
+        .patch(`/api/broadcast/${vcTestBroadcastId}/voice-config`)
+        .send({ voiceType: 'preset' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('请先选择音色');
     });
 
     test('design 音色配置保存 optimizeTextPreview 开关', async () => {
