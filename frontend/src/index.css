@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'MiSans App';
+  src: url('/fonts/misans/MiSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MiSans App';
+  src: url('/fonts/misans/MiSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MiSans App';
+  src: url('/fonts/misans/MiSans-Semibold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MiSans App';
+  src: url('/fonts/misans/MiSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* === TAILWIND v4 DESIGN TOKEN REGISTRATION === */
 @theme {
   /* Reference palette */
@@ -85,8 +117,8 @@
   --shadow-btn: 0 4px 10px rgba(42, 25, 9, 0.1);
 
   /* Font Families */
-  --font-display: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
-  --font-body: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-display: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-body: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
 
   /* Animations */
   --animate-fade-in-up: fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -119,12 +151,33 @@
   --shadow-card: 0 10px 30px rgba(42, 25, 9, 0.06);
   --shadow-card-hover: 0 14px 36px rgba(42, 25, 9, 0.1);
   --shadow-btn: 0 4px 10px rgba(42, 25, 9, 0.1);
-  --font-display: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
-  --font-body: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-display: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-body: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --ui-font-scale: 1;
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
 }
+
+html[data-ui-font-preset="modern"] {
+  --font-display: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  --font-body: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'PingFang SC', 'Noto Sans SC', sans-serif;
+}
+
+html[data-ui-font-preset="system"] {
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Noto Sans SC', sans-serif;
+}
+
+html[data-ui-font-preset="editorial"] {
+  --font-display: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'Noto Serif SC', serif;
+  --font-body: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'PingFang SC', 'Noto Sans SC', sans-serif;
+}
+
+html[data-ui-font-scale="compact"] { --ui-font-scale: 0.94; }
+html[data-ui-font-scale="comfortable"] { --ui-font-scale: 1; }
+html[data-ui-font-scale="large"] { --ui-font-scale: 1.08; }
+html[data-ui-font-scale="extra_large"] { --ui-font-scale: 1.16; }
 
 body {
   background-color: var(--color-paper);
@@ -138,6 +191,34 @@ body {
 .font-display,
 .font-display.italic {
   font-style: normal;
+}
+
+.font-display { font-family: var(--font-display); }
+.font-body { font-family: var(--font-body); }
+
+.text-\[9px\] { font-size: calc(9px * var(--ui-font-scale)); }
+.text-\[10px\] { font-size: calc(10px * var(--ui-font-scale)); }
+.text-\[11px\] { font-size: calc(11px * var(--ui-font-scale)); }
+.text-\[12px\] { font-size: calc(12px * var(--ui-font-scale)); }
+.text-\[13px\] { font-size: calc(13px * var(--ui-font-scale)); }
+.text-\[14px\] { font-size: calc(14px * var(--ui-font-scale)); }
+.text-\[15px\] { font-size: calc(15px * var(--ui-font-scale)); }
+.text-\[16px\] { font-size: calc(16px * var(--ui-font-scale)); }
+.text-\[17px\] { font-size: calc(17px * var(--ui-font-scale)); }
+.text-\[18px\] { font-size: calc(18px * var(--ui-font-scale)); }
+.text-\[19px\] { font-size: calc(19px * var(--ui-font-scale)); }
+.text-\[20px\] { font-size: calc(20px * var(--ui-font-scale)); }
+.text-\[22px\] { font-size: calc(22px * var(--ui-font-scale)); }
+.text-\[24px\] { font-size: calc(24px * var(--ui-font-scale)); }
+.text-\[26px\] { font-size: calc(26px * var(--ui-font-scale)); }
+.text-\[30px\] { font-size: calc(30px * var(--ui-font-scale)); }
+.text-\[32px\] { font-size: calc(32px * var(--ui-font-scale)); }
+.text-\[96px\] { font-size: calc(96px * var(--ui-font-scale)); }
+
+@media (width >= 40rem) {
+  .sm\:text-\[20px\] { font-size: calc(20px * var(--ui-font-scale)); }
+  .sm\:text-\[22px\] { font-size: calc(22px * var(--ui-font-scale)); }
+  .sm\:text-\[32px\] { font-size: calc(32px * var(--ui-font-scale)); }
 }
 
 ::selection {

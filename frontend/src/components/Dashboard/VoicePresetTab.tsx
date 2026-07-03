@@ -5,7 +5,7 @@ import MiniAudioPlayer from './MiniAudioPlayer';
 // ============ 接口定义 ============
 
 interface VoicePresetTabProps {
-  onApplyPreset: (preset: VoicePreset) => void;
+  onApplyPreset?: (preset: VoicePreset) => void;
 }
 
 // ============ 常量 ============
@@ -25,10 +25,17 @@ const TYPE_TAG_LABELS: Record<VoicePreset['type'], string> = {
 export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset }) => {
   const presets = useStore((s) => s.presets);
   const fetchPresets = useStore((s) => s.fetchPresets);
+  const updatePreset = useStore((s) => s.updatePreset);
   const deletePreset = useStore((s) => s.deletePreset);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editStylePrompt, setEditStylePrompt] = useState('');
+  const [editDesignPrompt, setEditDesignPrompt] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPresets();
@@ -36,7 +43,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
 
   const handleItemClick = (preset: VoicePreset) => {
     // 选中该预设作为当前音色
-    onApplyPreset(preset);
+    onApplyPreset?.(preset);
     // 展开/收起详情
     setExpandedId(expandedId === preset.id ? null : preset.id);
   };
@@ -45,6 +52,54 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
     e.stopPropagation();
     if (!preset.trial_audio_path) return;
     setPlayingId((prev) => (prev === preset.id ? null : preset.id));
+  };
+
+  const handleStartEdit = (e: React.MouseEvent, preset: VoicePreset) => {
+    e.stopPropagation();
+    setEditingId(preset.id);
+    setExpandedId(preset.id);
+    setEditName(preset.name);
+    setEditStylePrompt(preset.style_prompt || '');
+    setEditDesignPrompt(preset.design_prompt || '');
+    setEditError(null);
+  };
+
+  const handleCancelEdit = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setEditingId(null);
+    setEditName('');
+    setEditStylePrompt('');
+    setEditDesignPrompt('');
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (e: React.MouseEvent, preset: VoicePreset) => {
+    e.stopPropagation();
+    if (!editName.trim()) {
+      setEditError('请输入预设名称');
+      return;
+    }
+    if (preset.type === 'design' && !editDesignPrompt.trim()) {
+      setEditError('请输入音色描述');
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError(null);
+    try {
+      const formData = new FormData();
+      formData.append('name', editName.trim());
+      formData.append('style_prompt', editStylePrompt.trim());
+      if (preset.type === 'design') {
+        formData.append('design_prompt', editDesignPrompt.trim());
+      }
+      await updatePreset(preset.id, formData);
+      handleCancelEdit();
+    } catch {
+      setEditError('保存修改失败，请稍后重试');
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
@@ -119,6 +174,14 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                     {playingId === preset.id ? '⏹' : '▶'}
                   </button>
 
+                  <button
+                    onClick={(e) => handleStartEdit(e, preset)}
+                    className="text-[11px] text-ink-soft/70 hover:text-ink transition-colors px-1"
+                    title="编辑预设"
+                  >
+                    ✎
+                  </button>
+
                   {confirmDeleteId === preset.id ? (
                     <>
                       <button
@@ -152,36 +215,93 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {/* 分隔线 */}
                   <div className="border-t border-card-border" />
 
-                  {/* 风格提示词 */}
-                  {preset.style_prompt && (
-                    <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">风格</span>
-                      <p className="font-body text-[10px] text-ink-soft/70">{preset.style_prompt}</p>
+                  {editingId === preset.id ? (
+                    <div className="space-y-2 pt-1">
+                      <div>
+                        <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">预设名称</span>
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="mt-1 w-full bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">风格提示词</span>
+                        <input
+                          type="text"
+                          value={editStylePrompt}
+                          onChange={(e) => setEditStylePrompt(e.target.value)}
+                          placeholder="可选"
+                          className="mt-1 w-full bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors"
+                        />
+                      </div>
+                      {preset.type === 'design' && (
+                        <div>
+                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
+                          <textarea
+                            value={editDesignPrompt}
+                            onChange={(e) => setEditDesignPrompt(e.target.value)}
+                            className="mt-1 w-full h-20 bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[11px] transition-colors"
+                          />
+                        </div>
+                      )}
+                      {editError && (
+                        <div className="bg-pink/10 border border-pink/30 rounded-xl p-2 text-ink text-[10px] font-body animate-shake">
+                          {editError}
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={handleCancelEdit}
+                          className="text-ink-soft hover:text-ink font-body text-[11px] transition-colors px-2 py-1.5"
+                        >
+                          取消
+                        </button>
+                        <button
+                          onClick={(e) => handleSaveEdit(e, preset)}
+                          disabled={isSavingEdit}
+                          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[10px] rounded-xl px-3 py-1.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
+                        >
+                          {isSavingEdit ? '保存中...' : '保存修改'}
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  ) : (
+                    <>
 
-                  {/* 设计描述 */}
-                  {preset.type === 'design' && preset.design_prompt && (
-                    <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
-                      <p className="font-body text-[10px] text-ink-soft/70">{preset.design_prompt}</p>
-                    </div>
-                  )}
+                      {/* 风格提示词 */}
+                      {preset.style_prompt && (
+                        <div>
+                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">风格</span>
+                          <p className="font-body text-[10px] text-ink-soft/70">{preset.style_prompt}</p>
+                        </div>
+                      )}
 
-                  {/* 原始音频（克隆） */}
-                  {preset.type === 'clone' && preset.original_audio_path && (
-                    <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">参考音频</span>
-                      <div className="mt-0.5"><MiniAudioPlayer src={preset.original_audio_path} /></div>
-                    </div>
-                  )}
+                      {/* 设计描述 */}
+                      {preset.type === 'design' && preset.design_prompt && (
+                        <div>
+                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
+                          <p className="font-body text-[10px] text-ink-soft/70">{preset.design_prompt}</p>
+                        </div>
+                      )}
 
-                  {/* 试听音频 */}
-                  {preset.trial_audio_path && (
-                    <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">试听音频</span>
-                      <div className="mt-0.5"><MiniAudioPlayer src={preset.trial_audio_path} /></div>
-                    </div>
+                      {/* 原始音频（克隆） */}
+                      {preset.type === 'clone' && preset.original_audio_path && (
+                        <div>
+                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">参考音频</span>
+                          <div className="mt-0.5"><MiniAudioPlayer src={preset.original_audio_path} /></div>
+                        </div>
+                      )}
+
+                      {/* 试听音频 */}
+                      {preset.trial_audio_path && (
+                        <div>
+                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">试听音频</span>
+                          <div className="mt-0.5"><MiniAudioPlayer src={preset.trial_audio_path} /></div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

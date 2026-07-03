@@ -177,6 +177,11 @@ export const voicePresetApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
+  update: (id: number, formData: FormData) =>
+    api.put(`/voice-presets/${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
   delete: (id: number) => api.delete(`/voice-presets/${id}`),
 
   trialClone: (formData: FormData) =>

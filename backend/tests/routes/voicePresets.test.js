@@ -98,6 +98,59 @@ describe('Voice Presets API', () => {
     });
   });
 
+  // ==================== PUT /api/voice-presets/:id ====================
+
+  describe('PUT /api/voice-presets/:id', () => {
+    test('更新 design 类型预设成功', async () => {
+      const result = db.prepare(
+        "INSERT INTO voice_presets (type, name, style_prompt, design_prompt) VALUES ('design', '旧名称', '旧风格', '旧描述')"
+      ).run();
+      const id = result.lastInsertRowid;
+
+      const res = await request(app)
+        .put(`/api/voice-presets/${id}`)
+        .type('form')
+        .field('name', '新名称')
+        .field('style_prompt', '新风格')
+        .field('design_prompt', '新描述');
+
+      expect(res.status).toBe(200);
+      expect(res.body.preset).toEqual(expect.objectContaining({
+        id,
+        type: 'design',
+        name: '新名称',
+        style_prompt: '新风格',
+        design_prompt: '新描述',
+      }));
+    });
+
+    test('更新不存在的预设返回 404', async () => {
+      const res = await request(app)
+        .put('/api/voice-presets/999')
+        .type('form')
+        .field('name', '新名称')
+        .field('design_prompt', '新描述');
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toMatch(/不存在/);
+    });
+
+    test('更新时缺少名称返回 400', async () => {
+      const result = db.prepare(
+        "INSERT INTO voice_presets (type, name, design_prompt) VALUES ('design', '旧名称', '旧描述')"
+      ).run();
+
+      const res = await request(app)
+        .put(`/api/voice-presets/${result.lastInsertRowid}`)
+        .type('form')
+        .field('name', '   ')
+        .field('design_prompt', '新描述');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/名称/);
+    });
+  });
+
   // ==================== DELETE /api/voice-presets/:id ====================
 
   describe('DELETE /api/voice-presets/:id', () => {

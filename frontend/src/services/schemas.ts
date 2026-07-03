@@ -17,6 +17,8 @@ export const NewsItemSchema = z.object({
 
 export const LlmApiFormatSchema = z.enum(['openai', 'anthropic']);
 export const AsrProviderSchema = z.enum(['mimo', 'qwen_mlx', 'wsl_asr']);
+export const UiFontPresetSchema = z.enum(['modern', 'system', 'editorial']);
+export const UiFontScaleSchema = z.enum(['compact', 'comfortable', 'large', 'extra_large']);
 
 export const SettingsSchema = z.object({
   mimo_api_key: z.string(),
@@ -36,6 +38,8 @@ export const SettingsSchema = z.object({
   wsl_asr_model: z.string(),
   wsl_asr_api_key: z.string(),
   default_voice: z.string(),
+  ui_font_preset: UiFontPresetSchema,
+  ui_font_scale: UiFontScaleSchema,
   opening_script: z.string(),
   closing_script: z.string(),
   content_categories: z.string(),

@@ -144,6 +144,9 @@ SQLite 数据库包含 6 张表：
 - `llm_model`：LLM 模型 ID，默认 `mimo-v2.5`
 - `llm_rewrite_system_prompt` / `llm_split_system_prompt`：改写与切分分别使用的 system prompt
 - `llm_rewrite_thinking_enabled` / `llm_split_thinking_enabled`：Anthropic 兼容格式下的 thinking 开关
+- `ui_font_preset`：界面字体方案，`modern`（现代）、`system`（系统字体）或 `editorial`（标题出版感）
+- `ui_font_scale`：界面字号尺度，`compact`、`comfortable`、`large` 或 `extra_large`
+- 前端已内置 MiSans 常用字重到 `frontend/public/fonts/misans/`，`modern` 字体方案必须优先加载该静态资产，避免换电脑后退化为系统字体
 
 ## 外部 API
 
@@ -158,7 +161,7 @@ SQLite 数据库包含 6 张表：
 
 完整文档见 `docs/mimo-api-models-limits.md`、`docs/ttsSeries.md` 和 `docs/asr.md`。
 
-**限流规则**：TTS 模型 RPM（每分钟请求数）上限 100，TPM（每分钟 Token 数）上限 10M。超出会返回 `429 Too Many Requests`。所有 TTS 入口（整篇生成、分段批量、单段重新生成、音色试听）都必须通过 `services/ttsQueue.js` 做全局队列限速：默认 `MIMO_TTS_RPM_LIMIT=90`（留 10% 余量，硬上限 100）、`MIMO_TTS_MAX_CONCURRENT=6`，按请求启动速率限流并允许少量请求在途；`tts.generateSpeech()` 自身不做 429 快速重试，避免绕过队列造成实际 HTTP RPM 超限；遇到 MiMo 429 时队列会按 `Retry-After` 或默认 `MIMO_TTS_RATE_LIMIT_BACKOFF_MS=15000` 暂停，并对当前请求做队列级重试（默认 `MIMO_TTS_RATE_LIMIT_RETRIES=2`）。
+**限流规则**：TTS 模型 RPM（每分钟请求数）上限 100，TPM（每分钟 Token 数）上限 10M。超出会返回 `429 Too Many Requests`。所有 TTS 入口（整篇生成、分段批量、单段重新生成、音色试听）都必须通过 `services/ttsQueue.js` 做全局队列限速：默认 `MIMO_TTS_RPM_LIMIT=90`（留 10% 余量，硬上限 100）、`MIMO_TTS_TPM_LIMIT=9000000`（留 10% 余量，硬上限 10000000）、`MIMO_TTS_MAX_CONCURRENT=6`，按请求启动速率与最近一分钟估算文本 token 总量限流，并允许少量请求在途；`tts.generateSpeech()` 自身不做 429 快速重试，避免绕过队列造成实际 HTTP RPM/TPM 超限；遇到 MiMo 429 时队列会按 `Retry-After` 或默认 `MIMO_TTS_RATE_LIMIT_BACKOFF_MS=15000` 暂停，并对当前请求做队列级重试（默认 `MIMO_TTS_RATE_LIMIT_RETRIES=2`）。
 
 **TTS 模型**：
 

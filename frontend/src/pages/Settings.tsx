@@ -21,6 +21,19 @@ const asrProviderOptions: { value: AppSettings['asr_provider']; label: string; d
   { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）', description: '连接 Mac 上的 mlx-qwen3-asr serve 服务' },
 ];
 
+const fontPresetOptions: { value: AppSettings['ui_font_preset']; label: string; description: string }[] = [
+  { value: 'modern', label: '现代', description: '内置 MiSans，适合工作台与控制面板' },
+  { value: 'system', label: '系统', description: '跟随 macOS / Windows 系统字体，更稳妥' },
+  { value: 'editorial', label: '标题出版感', description: '标题更有杂志感，正文保持清晰' },
+];
+
+const fontScaleOptions: { value: AppSettings['ui_font_scale']; label: string; description: string }[] = [
+  { value: 'compact', label: '紧凑', description: '信息密度高' },
+  { value: 'comfortable', label: '标准', description: '默认平衡' },
+  { value: 'large', label: '舒展', description: '更清楚易读' },
+  { value: 'extra_large', label: '大字', description: '远看更舒服' },
+];
+
 const cronExamples = [
   { label: '每天早上 8:00', value: '0 8 * * *' },
   { label: '每天中午 12:00', value: '0 12 * * *' },
@@ -123,6 +136,25 @@ export const Settings: React.FC = () => {
   const handleApiFormatChange = (value: AppSettings['llm_api_format']) => {
     setApiFormatTouched(true);
     handleChange('llm_api_format', value);
+  };
+
+  const handleImmediateSettingChange = async <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
+    const nextFormData = { ...formDataRef.current, [field]: value };
+    formDataRef.current = nextFormData;
+    setFormData(nextFormData);
+    setSaveSuccess(false);
+    try {
+      await updateSettings({ [field]: value } as Pick<AppSettings, K>);
+      const nextDirtyFields = new Set(dirtyFieldsRef.current);
+      nextDirtyFields.delete(field);
+      setDirtyFieldsState(nextDirtyFields);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 1800);
+    } catch (e) {
+      const nextDirtyFields = new Set(dirtyFieldsRef.current).add(field);
+      setDirtyFieldsState(nextDirtyFields);
+      logger.error({ err: toLogError(e), field: String(field) }, '立即保存设置失败');
+    }
   };
 
   const handleSave = async () => {
@@ -235,7 +267,69 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && (
-            <SectionCard dotColor="bg-pink" title="API 配置" index={0}>
+            <SectionCard dotColor="bg-lilac" title="界面字体" index={0}>
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5">
+                <div className="space-y-4">
+                  <div>
+                    <label className="font-body text-[13px] font-medium text-ink-soft mb-2 block">字体方案</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {fontPresetOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleImmediateSettingChange('ui_font_preset', option.value)}
+                          className={`text-left p-4 rounded-2xl border transition-all ${
+                            formData.ui_font_preset === option.value
+                              ? 'bg-lilac/55 border-ink/15 shadow-btn'
+                              : 'bg-white/45 border-card-border hover:border-ink/15'
+                          }`}
+                        >
+                          <span className="block font-display text-[18px] font-medium text-ink">{option.label}</span>
+                          <span className="block mt-1 font-body text-[12px] leading-5 text-ink-soft/75">{option.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-body text-[13px] font-medium text-ink-soft mb-2 block">字号尺度</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {fontScaleOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleImmediateSettingChange('ui_font_scale', option.value)}
+                          className={`p-4 rounded-2xl border transition-all ${
+                            formData.ui_font_scale === option.value
+                              ? 'bg-sage/60 border-ink/15 shadow-btn'
+                              : 'bg-white/45 border-card-border hover:border-ink/15'
+                          }`}
+                        >
+                          <span className="block font-display text-[18px] font-medium text-ink">{option.label}</span>
+                          <span className="block mt-1 font-body text-[12px] leading-5 text-ink-soft/75">{option.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white/60 rounded-2xl border border-card-border p-5">
+                  <p className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-3">预览</p>
+                  <h4 className="font-display text-[26px] font-medium text-ink leading-tight">音色预设</h4>
+                  <p className="mt-2 font-body text-[14px] leading-7 text-ink-soft">
+                    用同一套字体节奏约束页面标题、卡片标题、正文和标签，避免不同功能各自随手写字号。
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="px-2.5 py-1 rounded-full bg-lilac/45 font-body text-[12px] text-ink">设计</span>
+                    <span className="px-2.5 py-1 rounded-full bg-sage/45 font-body text-[12px] text-ink">可试听</span>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          {!isLoadingSettings && (
+            <SectionCard dotColor="bg-pink" title="API 配置" index={1}>
               <div className="space-y-5">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
@@ -537,7 +631,7 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && (
-            <SectionCard dotColor="bg-blush" title="音色设置" index={1}>
+            <SectionCard dotColor="bg-blush" title="音色设置" index={2}>
               <div>
                 <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">默认音色</label>
                 <select
@@ -554,7 +648,7 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && (
-            <SectionCard dotColor="bg-sage" title="播报设置" index={2}>
+            <SectionCard dotColor="bg-sage" title="播报设置" index={3}>
               <div className="space-y-4">
                 <div>
                   <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">开场白</label>
