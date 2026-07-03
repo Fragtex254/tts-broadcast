@@ -284,7 +284,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           voiceConfig: resolvedVoiceConfig,
           resolveClone: false // clone 音色已在批量开始时统一解析
         });
-        const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech(speechParams));
+        const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => tts.generateSpeech(speechParams));
 
         const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
 
@@ -484,7 +484,7 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
         voiceConfig,
         resolveClone: true
       });
-      const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech(speechParams));
+      const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => tts.generateSpeech(speechParams));
 
       const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
 

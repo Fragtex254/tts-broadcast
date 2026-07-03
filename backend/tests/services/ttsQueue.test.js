@@ -141,4 +141,54 @@ describe('TTS 请求队列', () => {
     ]);
     await expect(second).resolves.toBe('second-done');
   });
+
+  test('按 TPM 控制一分钟内启动请求的 token 总量', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(0);
+
+    const queue = new TTSQueueManager({ rpmLimit: 60, tpmLimit: 10, maxConcurrent: 3 });
+    queue.lastStartAt = -queue.minIntervalMs;
+    const starts = [];
+
+    const first = queue.enqueue(() => {
+      starts.push({ label: 'first', at: Date.now() });
+      return 'first-done';
+    }, { tokenCost: 6 });
+    const second = queue.enqueue(() => {
+      starts.push({ label: 'second', at: Date.now() });
+      return 'second-done';
+    }, { tokenCost: 5 });
+
+    await jest.advanceTimersByTimeAsync(0);
+    await expect(first).resolves.toBe('first-done');
+    expect(starts).toEqual([{ label: 'first', at: 0 }]);
+
+    await jest.advanceTimersByTimeAsync(59999);
+    expect(starts).toHaveLength(1);
+
+    await jest.advanceTimersByTimeAsync(1);
+    expect(starts).toEqual([
+      { label: 'first', at: 0 },
+      { label: 'second', at: 60000 }
+    ]);
+    await expect(second).resolves.toBe('second-done');
+  });
+
+  test('超出 TPM 的单请求按 TPM 上限计入，避免永久阻塞', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(0);
+
+    const queue = new TTSQueueManager({ rpmLimit: 60, tpmLimit: 10, maxConcurrent: 1 });
+    queue.lastStartAt = -queue.minIntervalMs;
+    const starts = [];
+
+    const job = queue.enqueue(() => {
+      starts.push({ label: 'huge', at: Date.now() });
+      return 'done';
+    }, { tokenCost: 999 });
+
+    await jest.advanceTimersByTimeAsync(0);
+    expect(starts).toEqual([{ label: 'huge', at: 0 }]);
+    await expect(job).resolves.toBe('done');
+  });
 });

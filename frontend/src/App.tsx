@@ -7,6 +7,7 @@ import useStore from './store'
 
 // 代码分割：非首屏路由懒加载
 const ScriptEditor = lazy(() => import('./pages/ScriptEditor').then(m => ({ default: m.ScriptEditor })))
+const VoicePresets = lazy(() => import('./pages/VoicePresets').then(m => ({ default: m.VoicePresets })))
 const Transcribe = lazy(() => import('./pages/Transcribe').then(m => ({ default: m.Transcribe })))
 const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })))
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
@@ -24,10 +25,17 @@ const PageLoader: React.FC = () => (
 
 function App() {
   const fetchSettings = useStore((s) => s.fetchSettings)
+  const uiFontPreset = useStore((s) => s.settings.ui_font_preset)
+  const uiFontScale = useStore((s) => s.settings.ui_font_scale)
 
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
+
+  useEffect(() => {
+    document.documentElement.dataset.uiFontPreset = uiFontPreset
+    document.documentElement.dataset.uiFontScale = uiFontScale
+  }, [uiFontPreset, uiFontScale])
 
   return (
     <Router>
@@ -41,6 +49,7 @@ function App() {
             <Routes>
               <Route path="/" element={<SourceCollection />} />
               <Route path="/editor" element={<ScriptEditor />} />
+              <Route path="/voice-presets" element={<VoicePresets />} />
               <Route path="/transcribe" element={<Transcribe />} />
               <Route path="/history" element={<History />} />
               <Route path="/settings" element={<Settings />} />

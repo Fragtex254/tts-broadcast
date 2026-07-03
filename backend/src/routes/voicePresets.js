@@ -9,7 +9,7 @@ const voicePresetStore = require('../services/voicePresetStore');
 const audioAsset = require('../services/audioAsset');
 const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
-const { cleanAudioFile, audioDir } = require('../utils/validation');
+const { validateId, cleanAudioFile, audioDir } = require('../utils/validation');
 
 const logger = createScopedLogger('voice-presets-route');
 
@@ -91,12 +91,13 @@ router.post('/trial/clone', upload.single('reference_audio'), async (req, res) =
     );
 
     // 调用 TTS 克隆接口
-    const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech({
+    const speechParams = {
       text,
       voiceType: 'clone',
       voiceClone,
       stylePrompt
-    }));
+    };
+    const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => tts.generateSpeech(speechParams));
 
     const audioUrl = audioAsset.writeTrialAudio('clone', audioBuffer);
 
@@ -132,13 +133,14 @@ router.post('/trial/design', async (req, res) => {
 
     const text = trial_text || '你好，我是你的专属语音助手。';
 
-    const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech({
+    const speechParams = {
       text,
       voiceType: 'design',
       voiceDesign: design_prompt,
       stylePrompt: style_prompt || '',
       optimizeTextPreview: optimize_text_preview === true
-    }));
+    };
+    const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => tts.generateSpeech(speechParams));
 
     const audioUrl = audioAsset.writeTrialAudio('design', audioBuffer);
 
@@ -194,7 +196,7 @@ router.post('/', createUpload, (req, res) => {
     if (!type || !['clone', 'design'].includes(type)) {
       return res.status(400).json({ error: 'type 必须为 clone 或 design' });
     }
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({ error: '请提供预设名称' });
     }
     if (type === 'design' && !design_prompt) {
@@ -210,7 +212,7 @@ router.post('/', createUpload, (req, res) => {
     const files = req.files || {};
     const preset = voicePresetStore.create({
       type,
-      name,
+      name: name.trim(),
       stylePrompt: style_prompt || '',
       trialAudioPath: trial_audio_path || null,
       originalAudioPath: null,
@@ -253,17 +255,91 @@ router.post('/', createUpload, (req, res) => {
 });
 
 /**
+ * PUT /api/voice-presets/:id
+ * 更新音色预设（multipart/form-data）
+ *
+ * Fields:
+ *   - name: 预设名称（必填）
+ *   - style_prompt: 风格提示（可选）
+ *   - design_prompt: 音色描述，design 类型必填
+ *   - trial_audio_path: 试听音频路径（可选，来自试听接口返回的 URL）
+ *   - trial_audio: 试听音频文件（可选）
+ *   - reference_audio: 参考音频文件（可选，仅 clone 类型）
+ */
+router.put('/:id', createUpload, (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '预设 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const preset = voicePresetStore.getById(idCheck.id);
+    if (!preset) {
+      return res.status(404).json({ error: '预设不存在' });
+    }
+
+    const { name, style_prompt, design_prompt, trial_audio_path } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: '请提供预设名称' });
+    }
+    if (preset.type === 'design' && !design_prompt) {
+      return res.status(400).json({ error: '设计类型预设必须提供 design_prompt' });
+    }
+
+    const files = req.files || {};
+    let finalTrialAudioPath = trial_audio_path || preset.trial_audio_path;
+    let finalOriginalAudioPath = preset.original_audio_path;
+
+    if (files.trial_audio && files.trial_audio[0]) {
+      finalTrialAudioPath = audioAsset.writePresetUpload({
+        presetId: preset.id,
+        file: files.trial_audio[0],
+        kind: 'trial'
+      });
+    }
+
+    if (preset.type === 'clone' && files.reference_audio && files.reference_audio[0]) {
+      finalOriginalAudioPath = audioAsset.writePresetUpload({
+        presetId: preset.id,
+        file: files.reference_audio[0],
+        kind: 'original'
+      });
+    }
+
+    const updatedPreset = voicePresetStore.update(preset.id, {
+      name: name.trim(),
+      stylePrompt: style_prompt || '',
+      designPrompt: preset.type === 'design' ? design_prompt : null,
+      trialAudioPath: finalTrialAudioPath,
+      originalAudioPath: finalOriginalAudioPath
+    });
+
+    if (preset.trial_audio_path && preset.trial_audio_path !== updatedPreset.trial_audio_path) {
+      cleanAudioFile(preset.trial_audio_path);
+    }
+    if (preset.original_audio_path && preset.original_audio_path !== updatedPreset.original_audio_path) {
+      cleanAudioFile(preset.original_audio_path);
+    }
+
+    res.json({ preset: updatedPreset });
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasPresetId: Boolean(req.params.id),
+      presetIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '更新预设失败');
+    res.status(500).json({ error: error.message || '更新预设失败' });
+  }
+});
+
+/**
  * DELETE /api/voice-presets/:id
  * 删除音色预设及其关联音频文件
  */
 router.delete('/:id', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的预设 ID' });
-    }
+    const idCheck = validateId(req.params.id, '预设 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const preset = voicePresetStore.getById(id);
+    const preset = voicePresetStore.getById(idCheck.id);
     if (!preset) {
       return res.status(404).json({ error: '预设不存在' });
     }
@@ -276,9 +352,9 @@ router.delete('/:id', (req, res) => {
       cleanAudioFile(preset.original_audio_path);
     }
 
-    voicePresetStore.deleteById(id);
+    voicePresetStore.deleteById(idCheck.id);
 
-    res.json({ message: '预设已删除', id });
+    res.json({ message: '预设已删除', id: idCheck.id });
   } catch (error) {
     logger.error({
       err: error,

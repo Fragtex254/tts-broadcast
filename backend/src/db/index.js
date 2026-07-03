@@ -141,6 +141,8 @@ const defaultSettings = {
   wsl_asr_model: 'qwen3-asr-1.7b',
   wsl_asr_api_key: '',
   default_voice: '冰糖',
+  ui_font_preset: 'modern',
+  ui_font_scale: 'comfortable',
   opening_script: '大家好，欢迎收听今日 AI 简讯。',
   closing_script: '以上就是今天的 AI 简讯，感谢收听，我们明天再见。',
   content_categories: '["ai-models", "ai-products", "industry", "paper", "tip"]'

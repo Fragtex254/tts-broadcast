@@ -90,7 +90,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
 
   return (
     <div className="animate-fade-in">
-      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
+      <label className="font-body text-[14px] font-medium text-ink-soft mb-2 block">
         参考音频
       </label>
       <div
@@ -98,7 +98,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative flex items-center justify-center rounded-xl px-3 py-2 border border-card-border bg-white/70 font-body text-[11px] text-ink cursor-pointer transition-colors ${
+        className={`relative flex items-center justify-center min-h-24 rounded-2xl px-4 py-4 border border-card-border bg-white/80 font-body text-[14px] text-ink cursor-pointer transition-colors ${
           isDragOver ? 'border-ink/40 bg-lemon/10' : 'hover:border-ink/20'
         }`}
       >
@@ -116,7 +116,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
             <button
               type="button"
               onClick={handleClear}
-              className="text-ink-soft/70 hover:text-pink text-[12px] transition-colors flex-shrink-0"
+              className="text-ink-soft/70 hover:text-pink text-[16px] transition-colors flex-shrink-0"
               title="清除文件"
             >
               ✕
@@ -130,7 +130,7 @@ export const AudioUploader: React.FC<AudioUploaderProps> = ({
       </div>
 
       {error && (
-        <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-2 text-ink text-[10px] font-body animate-shake">
+        <div className="mt-2 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[13px] font-body animate-shake">
           {error}
         </div>
       )}

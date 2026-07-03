@@ -79,6 +79,42 @@ function updateAudioPaths(id, { trialAudioPath, originalAudioPath }) {
 }
 
 /**
+ * 更新音色预设基础信息
+ * @param {number} id - 预设 ID
+ * @param {Object} params
+ * @param {string} params.name - 预设名称
+ * @param {string} [params.stylePrompt] - 风格提示词
+ * @param {string|null} [params.designPrompt] - 音色设计提示词
+ * @param {string|null} [params.trialAudioPath] - 试听音频路径
+ * @param {string|null} [params.originalAudioPath] - 原始参考音频路径
+ * @returns {Object|undefined} 更新后的音色预设
+ */
+function update(id, { name, stylePrompt, designPrompt, trialAudioPath, originalAudioPath }) {
+  const existing = getById(id);
+  if (!existing) return undefined;
+
+  db.prepare(`
+    UPDATE voice_presets
+    SET name = ?,
+        style_prompt = ?,
+        design_prompt = ?,
+        trial_audio_path = ?,
+        original_audio_path = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    name,
+    stylePrompt ?? existing.style_prompt,
+    designPrompt ?? existing.design_prompt,
+    trialAudioPath ?? existing.trial_audio_path,
+    originalAudioPath ?? existing.original_audio_path,
+    id
+  );
+
+  return getById(id);
+}
+
+/**
  * 删除音色预设
  * @param {number} id - 预设 ID
  * @returns {Object|undefined} 被删除的音色预设
@@ -95,6 +131,7 @@ module.exports = {
   getById,
   countAll,
   create,
+  update,
   updateAudioPaths,
   deleteById,
 };

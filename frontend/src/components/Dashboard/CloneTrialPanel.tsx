@@ -140,13 +140,13 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
   const canSave = presets.length < 20 && !!trialAudioUrl;
 
   return (
-    <div className="flex flex-col gap-3 animate-fade-in">
+    <div className="flex flex-col gap-4 animate-fade-in">
       {/* 参考音频上传 */}
       <AudioUploader onFileSelect={handleFileSelect} currentFileName={fileName} />
 
       {/* 风格提示词 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
+        <label className="font-body text-[14px] font-medium text-ink-soft mb-2 block">
           风格提示词（可选）
         </label>
         <input
@@ -154,20 +154,20 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
           value={stylePrompt}
           onChange={(e) => onStylePromptChange(e.target.value)}
           placeholder="语速稍快，情绪饱满..."
-          className="w-full bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors"
+          className="w-full bg-white/80 text-ink rounded-2xl px-4 py-3 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[15px] transition-colors"
         />
       </div>
 
       {/* 试听文本 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
+        <label className="font-body text-[14px] font-medium text-ink-soft mb-2 block">
           试听文本
         </label>
         <textarea
           value={trialText}
           onChange={(e) => setTrialText(e.target.value)}
           placeholder="输入要试听的文本内容..."
-          className="w-full h-16 bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[11px] transition-colors"
+          className="w-full h-28 bg-white/80 text-ink rounded-2xl px-4 py-3 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[15px] leading-7 transition-colors"
         />
       </div>
 
@@ -176,7 +176,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
         <button
           onClick={handleTrial}
           disabled={isTrialLoading || !voiceClone}
-          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[11px] rounded-xl px-3 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider flex items-center justify-center gap-2"
+          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-2xl px-4 py-3 shadow-btn transition-all duration-150 flex items-center justify-center gap-2"
         >
           {isTrialLoading ? (
             <>
@@ -193,9 +193,9 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
           onClick={() => setShowSaveDialog(true)}
           disabled={!canSave}
           title={presets.length >= 20 ? '预设已满（上限 20）' : !trialAudioUrl ? '请先试听' : '保存预设'}
-          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[11px] rounded-xl px-3 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
+          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-2xl px-5 py-3 shadow-btn transition-all duration-150"
         >
-          💾
+          保存预设
         </button>
       </div>
 
@@ -204,8 +204,8 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
 
       {/* 保存对话框 */}
       {showSaveDialog && (
-        <div className="bg-white/60 rounded-2xl p-4 border border-card-border animate-fade-in">
-          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
+        <div className="bg-white/70 rounded-2xl p-5 border border-card-border animate-fade-in">
+          <label className="font-body text-[14px] font-medium text-ink-soft mb-2 block">
             预设名称
           </label>
           <input
@@ -213,7 +213,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
             value={presetName}
             onChange={(e) => setPresetName(e.target.value)}
             placeholder="为这个音色取个名字..."
-            className="w-full bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors mb-3"
+            className="w-full bg-white/80 text-ink rounded-2xl px-4 py-3 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[15px] transition-colors mb-4"
             autoFocus
           />
           <div className="flex gap-2 justify-end">
@@ -223,14 +223,14 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
                 setPresetName('');
                 setError(null);
               }}
-              className="text-ink-soft hover:text-ink font-body text-[12px] transition-colors px-3 py-1.5"
+              className="text-ink-soft hover:text-ink font-body text-[14px] transition-colors px-3 py-2"
             >
               取消
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving || !presetName.trim()}
-              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[11px] rounded-xl px-3 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
+              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150"
             >
               {isSaving ? '保存中...' : '保存'}
             </button>
@@ -240,7 +240,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
 
       {/* 错误提示 */}
       {error && (
-        <div className="bg-pink/10 border border-pink/30 rounded-xl p-2 text-ink text-[10px] font-body animate-shake">
+        <div className="bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[13px] font-body animate-shake">
           {error}
         </div>
       )}

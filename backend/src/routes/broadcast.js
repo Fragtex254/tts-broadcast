@@ -121,7 +121,7 @@ router.post('/generate', async (req, res) => {
       voiceConfig: normalized.voiceConfig,
       resolveClone: true
     });
-    const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech(speechParams));
+    const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => tts.generateSpeech(speechParams));
 
     const audioPath = audioAsset.writeBroadcastAudio(audioBuffer);
 

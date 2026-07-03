@@ -61,6 +61,8 @@ export interface TodayItem {
 /** 应用设置 */
 export type LlmApiFormat = 'openai' | 'anthropic';
 export type AsrProvider = 'mimo' | 'qwen_mlx' | 'wsl_asr';
+export type UiFontPreset = 'modern' | 'system' | 'editorial';
+export type UiFontScale = 'compact' | 'comfortable' | 'large' | 'extra_large';
 
 export interface LlmModelOption {
   id: string;
@@ -85,6 +87,8 @@ export interface Settings {
   wsl_asr_model: string;
   wsl_asr_api_key: string;
   default_voice: string;
+  ui_font_preset: UiFontPreset;
+  ui_font_scale: UiFontScale;
   opening_script: string;
   closing_script: string;
   content_categories: string;
@@ -265,6 +269,8 @@ export interface AppState {
 
   schedules: Schedule[];
   presets: VoicePreset[];
+  isLoadingPresets: boolean;
+  presetError: string | null;
 
   fetchTodayItems: (params?: { category?: string; take?: number }) => Promise<void>;
   rewriteScript: (data: { items: NewsItem[]; opening?: string; closing?: string }) => Promise<string>;
@@ -337,13 +343,14 @@ export interface AppState {
   }) => Promise<{ models: LlmModelOption[]; resolvedUrl?: string }>;
 
   fetchSchedules: () => Promise<void>;
+
+  fetchPresets: () => Promise<void>;
+  updatePreset: (id: number, formData: FormData) => Promise<void>;
+  deletePreset: (id: number) => Promise<void>;
   createSchedule: (data: { name: string; cron_expression: string; content_types?: string }) => Promise<Schedule>;
   updateSchedule: (id: number, data: { name?: string; cron_expression?: string; content_types?: string }) => Promise<Schedule>;
   deleteSchedule: (id: number) => Promise<void>;
   toggleSchedule: (id: number) => Promise<Schedule>;
-
-  fetchPresets: () => Promise<void>;
-  deletePreset: (id: number) => Promise<void>;
 
   isBatchDeleting: boolean;
   batchDeleteBroadcasts: (ids: number[]) => Promise<{ deleted: number; failed: number }>;
