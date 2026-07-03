@@ -7,7 +7,7 @@ const db = require('../db');
  * @param {string} params.title - 播报标题
  * @param {string} params.content - 播报稿件正文
  * @param {string|null} [params.audioPath] - 音频文件路径
- * @param {string} [params.voiceType='preset'] - 音色类型
+ * @param {string} [params.voiceType] - 音色类型
  * @param {string|Object} [params.voiceConfig] - 音色配置
  * @param {string|Array|null} [params.sourceItems] - 来源资讯列表
  * @param {string} [params.status='pending'] - 播报状态
@@ -22,7 +22,7 @@ function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems
     title,
     content,
     audioPath || null,
-    voiceType || 'preset',
+    voiceType || null,
     typeof voiceConfig === 'string' ? voiceConfig : JSON.stringify(voiceConfig || {}),
     sourceItems ? (typeof sourceItems === 'string' ? sourceItems : JSON.stringify(sourceItems)) : null,
     status || 'pending',
@@ -116,7 +116,7 @@ function updateAudioPath(id, audioPath) {
  */
 function updateVoiceConfig(id, { voiceType, voiceConfig }) {
   db.prepare('UPDATE broadcasts SET voice_type = ?, voice_config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-    .run(voiceType || 'preset', voiceConfig, id);
+    .run(voiceType || null, voiceConfig, id);
 }
 
 /**

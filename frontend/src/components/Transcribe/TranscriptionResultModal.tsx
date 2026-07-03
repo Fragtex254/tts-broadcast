@@ -57,12 +57,16 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 backdrop-blur-sm px-4 py-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 backdrop-blur-sm px-4 py-6"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-5xl max-h-[90vh] overflow-hidden bg-paper rounded-card shadow-card border border-card-border flex flex-col animate-fade-in"
         role="dialog"
         aria-modal="true"
         aria-label="转录结果"
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 p-5 border-b border-card-border">
           <div className="min-w-0">

@@ -19,6 +19,9 @@ const DEFAULT_LLM_SETTINGS = {
 
 const LLM_REQUEST_TIMEOUT_MS = 60000;
 const STYLE_TAG_SUGGEST_BATCH_SIZE = 10;
+const SPLIT_SCRIPT_CHUNK_LENGTH = 2500;
+const FORMAT_TRANSCRIPTION_CHUNK_LENGTH = 1200;
+const FORMAT_TRANSCRIPTION_MIN_RETRY_LENGTH = 260;
 
 /**
  * 读取设置值，缺失或格式错误时使用默认值
@@ -202,6 +205,137 @@ function extractJsonArrayText(text) {
   return jsonStr.trim();
 }
 
+function splitTextForFormatting(text, maxLength = FORMAT_TRANSCRIPTION_CHUNK_LENGTH) {
+  const source = String(text || '').trim();
+  if (source.length <= maxLength) return [source];
+
+  const chunks = [];
+  let remaining = source;
+  while (remaining.length > maxLength) {
+    const window = remaining.slice(0, maxLength);
+    const boundary = Math.max(
+      window.lastIndexOf('。'),
+      window.lastIndexOf('！'),
+      window.lastIndexOf('？'),
+      window.lastIndexOf('\n')
+    );
+    const splitAt = boundary >= Math.floor(maxLength * 0.6) ? boundary + 1 : maxLength;
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+function normalizeForCoverage(text) {
+  return String(text || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/[\s\u3000，。！？、；：,.!?;: “‘”"'\-—（）()\[\]【】《》<>]/g, '')
+    .trim();
+}
+
+function assertFormattedTextComplete(sourceText, formattedText) {
+  const source = normalizeForCoverage(sourceText);
+  const formatted = normalizeForCoverage(formattedText);
+  if (!source || !formatted) return;
+
+  const tailLength = Math.min(24, source.length);
+  const tail = source.slice(-tailLength);
+  if (tail.length >= 8 && !formatted.includes(tail)) {
+    throw new Error('AI 排版结果疑似不完整，请重试或先缩短文本后分段排版');
+  }
+}
+
+function isTextTailCovered(sourceText, targetText) {
+  const source = normalizeForCoverage(sourceText);
+  const target = normalizeForCoverage(targetText);
+  if (!source || !target) return true;
+
+  const tailLength = Math.min(24, source.length);
+  const tail = source.slice(-tailLength);
+  return tail.length < 8 || target.includes(tail);
+}
+
+function splitTextInHalfForFormatting(text) {
+  const source = String(text || '').trim();
+  const middle = Math.floor(source.length / 2);
+  const leftWindow = source.slice(0, middle);
+  const rightWindow = source.slice(middle);
+  const leftBoundary = Math.max(
+    leftWindow.lastIndexOf('。'),
+    leftWindow.lastIndexOf('！'),
+    leftWindow.lastIndexOf('？'),
+    leftWindow.lastIndexOf('\n')
+  );
+  const rightBoundaryCandidates = ['。', '！', '？', '\n']
+    .map((mark) => rightWindow.indexOf(mark))
+    .filter((index) => index >= 0);
+  const rightBoundary = rightBoundaryCandidates.length > 0
+    ? middle + Math.min(...rightBoundaryCandidates) + 1
+    : -1;
+
+  let splitAt = middle;
+  if (leftBoundary >= Math.floor(source.length * 0.3)) {
+    splitAt = leftBoundary + 1;
+  } else if (rightBoundary > 0 && rightBoundary <= Math.floor(source.length * 0.7)) {
+    splitAt = rightBoundary;
+  }
+
+  return [
+    source.slice(0, splitAt).trim(),
+    source.slice(splitAt).trim()
+  ].filter(Boolean);
+}
+
+async function formatTranscriptionChunk(chunk) {
+  const prompt = `你是一个严谨的中文转录稿编辑。请把下面的 ASR 转录文本整理成适合阅读和后续编辑的自然段。
+
+要求：
+1. 只做标点、换行和自然段排版，可修正明显的口语断句错误
+2. 不要改写事实、不要增删信息、不要总结
+3. 保留专有名词、数字、英文和原始顺序
+4. 每段围绕一个完整语义，段落之间用一个空行分隔
+5. 不要使用 Markdown 标题、列表、加粗或引用符号
+6. 不要输出思考过程、解释、分析或前后缀
+7. 只输出排版后的正文
+
+转录文本：
+${chunk}`;
+
+  const formatted = await createLlmMessage({
+    prompt,
+    systemPrompt: '你是一个转录稿排版助手，只输出排版后的正文。',
+    maxTokens: 4000,
+    thinkingEnabled: false
+  });
+
+  const chunkResult = stripThinkingContent(formatted);
+  if (!chunkResult) {
+    throw new Error('AI 排版结果为空');
+  }
+  assertFormattedTextComplete(chunk, chunkResult);
+  return chunkResult;
+}
+
+async function formatTranscriptionChunkWithRetry(chunk) {
+  try {
+    return await formatTranscriptionChunk(chunk);
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (!message.includes('AI 排版结果疑似不完整') || chunk.length <= FORMAT_TRANSCRIPTION_MIN_RETRY_LENGTH) {
+      throw error;
+    }
+
+    const parts = splitTextInHalfForFormatting(chunk);
+    if (parts.length < 2) throw error;
+    const results = [];
+    for (const part of parts) {
+      results.push(await formatTranscriptionChunkWithRetry(part));
+    }
+    return results.join('\n\n');
+  }
+}
+
 function fallbackStyleTag(text, allowedTags) {
   const allowed = new Set(allowedTags);
   const value = String(text || '');
@@ -356,18 +490,8 @@ ${itemsText}
   });
 }
 
-/**
- * 将口播稿切分为适合 TTS 的语义块
- * @param {string} text - 完整口播稿
- * @returns {Promise<string[]>} 切分后的语义块数组
- */
-async function splitScript(text) {
-  if (!text || typeof text !== 'string') {
-    throw new Error('请提供有效的口播稿文本');
-  }
-
-  const config = getLlmConfig();
-  const prompt = `你是一个专业的口播稿语义切块助手。请将以下口播稿切分为适合 TTS 语音合成的语义块。
+function buildSplitScriptPrompt(text) {
+  return `你是一个专业的口播稿语义切块助手。请将以下口播稿切分为适合 TTS 语音合成的语义块。
 
 切分原则：
 1. 以播报语义、话题推进、情绪承接为边界切分，不要简单按标点符号或单句话拆分
@@ -383,35 +507,56 @@ async function splitScript(text) {
 
 口播稿内容：
 ${text}`;
+}
 
+function parseSplitSegments(rawText, sourceText) {
+  try {
+    const jsonStr = extractJsonArrayText(rawText);
+    const segments = JSON.parse(jsonStr);
+    if (!Array.isArray(segments) || segments.length === 0) {
+      return null;
+    }
+    if (segments.some((seg) => typeof seg !== 'string' || seg.trim().length === 0)) {
+      return null;
+    }
+    const normalized = normalizeSegmentTexts(segments);
+    if (!isTextTailCovered(sourceText, normalized.join(''))) {
+      return null;
+    }
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+async function splitScriptChunk(text, config) {
   const rawText = await createLlmMessage({
-    prompt,
+    prompt: buildSplitScriptPrompt(text),
     systemPrompt: config.splitSystemPrompt,
     maxTokens: 4000,
     thinkingEnabled: config.splitThinkingEnabled
   });
 
-  const jsonStr = extractJsonArrayText(rawText);
+  return parseSplitSegments(rawText, text) || normalizeSegmentTexts([text]);
+}
 
-  let segments;
-  try {
-    segments = JSON.parse(jsonStr);
-  } catch (e) {
-    throw new Error(`AI 切分结果解析失败: ${e.message}`);
+/**
+ * 将口播稿切分为适合 TTS 的语义块
+ * @param {string} text - 完整口播稿
+ * @returns {Promise<string[]>} 切分后的语义块数组
+ */
+async function splitScript(text) {
+  if (!text || typeof text !== 'string') {
+    throw new Error('请提供有效的口播稿文本');
   }
 
-  if (!Array.isArray(segments) || segments.length === 0) {
-    throw new Error('AI 切分结果为空或格式不正确');
+  const config = getLlmConfig();
+  const chunks = splitTextForFormatting(text, SPLIT_SCRIPT_CHUNK_LENGTH);
+  const allSegments = [];
+  for (const chunk of chunks) {
+    allSegments.push(...await splitScriptChunk(chunk, config));
   }
-
-  // 验证每个 segment 是非空字符串；超长结果由本地规则兜底再切，保证 TTS 入参上限。
-  for (const seg of segments) {
-    if (typeof seg !== 'string' || seg.trim().length === 0) {
-      throw new Error('切分结果包含空段落');
-    }
-  }
-
-  return normalizeSegmentTexts(segments);
+  return normalizeSegmentTexts(allSegments);
 }
 
 /**
@@ -424,31 +569,18 @@ async function formatTranscriptionText(text) {
     throw new Error('请提供需要排版的转录文本');
   }
 
-  const prompt = `你是一个严谨的中文转录稿编辑。请把下面的 ASR 转录文本整理成适合阅读和后续编辑的自然段。
+  const chunks = splitTextForFormatting(text);
+  const formattedChunks = [];
 
-要求：
-1. 只做标点、换行和自然段排版，可修正明显的口语断句错误
-2. 不要改写事实、不要增删信息、不要总结
-3. 保留专有名词、数字、英文和原始顺序
-4. 每段围绕一个完整语义，段落之间用一个空行分隔
-5. 不要使用 Markdown 标题、列表、加粗或引用符号
-6. 不要输出思考过程、解释、分析或前后缀
-7. 只输出排版后的正文
+  for (const chunk of chunks) {
+    formattedChunks.push(await formatTranscriptionChunkWithRetry(chunk));
+  }
 
-转录文本：
-${text}`;
-
-  const formatted = await createLlmMessage({
-    prompt,
-    systemPrompt: '你是一个转录稿排版助手，只输出排版后的正文。',
-    maxTokens: 4000,
-    thinkingEnabled: false
-  });
-
-  const result = stripThinkingContent(formatted);
+  const result = formattedChunks.join('\n\n').trim();
   if (!result) {
     throw new Error('AI 排版结果为空');
   }
+  assertFormattedTextComplete(text, result);
   return result;
 }
 

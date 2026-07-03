@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useStore from '../../store';
+import { hasSelectedVoice, VOICE_REQUIRED_MESSAGE } from '../../store/voiceConfigModel';
 
 export const ScriptPreview: React.FC = () => {
   const script = useStore((s) => s.script);
@@ -9,6 +10,7 @@ export const ScriptPreview: React.FC = () => {
   const isSplitting = useStore((s) => s.isSplitting);
   const currentBroadcast = useStore((s) => s.currentBroadcast);
   const segments = useStore((s) => s.segments);
+  const voiceConfig = useStore((s) => s.voiceConfig);
 
   const [isEditing, setIsEditing] = useState(false);
   const [localScript, setLocalScript] = useState(script);
@@ -41,15 +43,20 @@ export const ScriptPreview: React.FC = () => {
 
   const handleSplit = async () => {
     if (!script) return;
+    if (!hasSelectedVoice(voiceConfig)) {
+      setSplitError(VOICE_REQUIRED_MESSAGE);
+      return;
+    }
     setSplitError(null);
     try {
       await splitScriptAction(script);
-    } catch {
-      setSplitError('切分失败，请稍后重试');
+    } catch (err) {
+      setSplitError(err instanceof Error ? err.message : '切分失败，请稍后重试');
     }
   };
 
   const isAlreadySplit = currentBroadcast?.mode === 'segmented' && segments.length > 0;
+  const canSplit = hasSelectedVoice(voiceConfig);
 
   const wordCount = script.length;
   const estimatedDuration = Math.ceil(wordCount / 4);
@@ -129,7 +136,7 @@ export const ScriptPreview: React.FC = () => {
         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-card-border">
           <button
             onClick={handleSplit}
-            disabled={isSplitting || isAlreadySplit}
+            disabled={isSplitting || isAlreadySplit || !canSplit}
             className="font-body text-[11px] px-3 py-1.5 bg-pink/20 hover:bg-pink/30 disabled:opacity-40 text-ink-soft rounded-full transition-colors uppercase tracking-wider flex items-center gap-1.5"
           >
             {isSplitting ? (
@@ -141,6 +148,8 @@ export const ScriptPreview: React.FC = () => {
               </>
             ) : isAlreadySplit ? (
               '✓ 已切分'
+            ) : !canSplit ? (
+              '先选音色'
             ) : (
               '✦ 切分口播稿'
             )}
@@ -157,6 +166,12 @@ export const ScriptPreview: React.FC = () => {
           >
             + 添加结束语
           </button>
+        </div>
+      )}
+
+      {script && !isEditing && !canSplit && (
+        <div className="mt-2 rounded-xl border border-lemon/45 bg-lemon/15 p-2.5 font-body text-[11px] text-ink-soft">
+          选择音色后才能切分并生成口播稿音频。
         </div>
       )}
 

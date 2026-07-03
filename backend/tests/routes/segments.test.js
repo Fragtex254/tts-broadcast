@@ -139,6 +139,21 @@ describe('Segments API', () => {
       );
     }, 15000);
 
+    test('播报未选择音色时拒绝批量生成', async () => {
+      db.prepare('UPDATE broadcasts SET voice_type = ?, voice_config = ? WHERE id = ?')
+        .run(null, '{}', broadcastId);
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句', 'pending');
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/batch-generate`)
+        .send();
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('请先选择音色');
+      expect(tts.generateSpeech).not.toHaveBeenCalled();
+    });
+
     test('无 style_tag 时文本原样传入', async () => {
       db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
         .run(broadcastId, 0, '第二句', 'pending', '');
@@ -550,6 +565,24 @@ describe('Segments API', () => {
         expect.objectContaining({ text: '需要重生成的句子' })
       );
       expect(res.body.segment.status).toBe('generated');
+    });
+
+    test('播报未选择音色时拒绝重新生成单句', async () => {
+      db.prepare('UPDATE broadcasts SET voice_type = ?, voice_config = ? WHERE id = ?')
+        .run(null, '{}', broadcastId);
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '需要重生成的句子', 'failed');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send();
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('请先选择音色');
+      expect(tts.generateSpeech).not.toHaveBeenCalled();
+      const unchanged = segmentStore.getByIdAndBroadcastId(segment.id, broadcastId);
+      expect(unchanged.status).toBe('failed');
     });
   });
 });

@@ -215,11 +215,14 @@ describe('MiMo 服务', () => {
   });
 
   test('splitScript 切分口播稿', async () => {
-    mockMessagesCreate.mockResolvedValue({
-      content: [{ type: 'text', text: '["大家好，欢迎收听今日AI简讯。","今天我们来聊聊几个重要的AI动态。"]' }],
-    });
-
     const script = `大家好，欢迎收听今日AI简讯。今天我们来聊聊几个重要的AI动态。首先是OpenAI发布了最新的GPT-5模型，这款模型在推理能力上有了显著提升。其次是谷歌推出了新的Gemini版本，在多模态理解方面表现出色。以上就是今天的AI简讯，感谢收听，我们明天再见。`;
+    mockMessagesCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify([
+        '大家好，欢迎收听今日AI简讯。今天我们来聊聊几个重要的AI动态。',
+        '首先是OpenAI发布了最新的GPT-5模型，这款模型在推理能力上有了显著提升。其次是谷歌推出了新的Gemini版本，在多模态理解方面表现出色。',
+        '以上就是今天的AI简讯，感谢收听，我们明天再见。'
+      ]) }],
+    });
 
     const segments = await mimo.splitScript(script);
     expect(Array.isArray(segments)).toBe(true);
@@ -253,6 +256,25 @@ describe('MiMo 服务', () => {
 
     expect(segments.length).toBe(2);
     expect(segments.every((seg) => seg.length <= 1024)).toBe(true);
+  });
+
+  test('splitScript 遇到 AI JSON 截断时使用本地切分兜底', async () => {
+    const script = [
+      '第一段开头，' + '甲'.repeat(1800) + '第一段结尾。',
+      '第二段开头，' + '乙'.repeat(1800) + '第二段结尾。'
+    ].join('\n\n');
+    mockMessagesCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '["第一段开头，甲甲甲' }],
+    });
+
+    const segments = await mimo.splitScript(script);
+    const combined = segments.join('');
+
+    expect(mockMessagesCreate.mock.calls.length).toBeGreaterThan(1);
+    expect(segments.length).toBeGreaterThan(1);
+    expect(segments.every((seg) => seg.length <= 1024)).toBe(true);
+    expect(combined).toContain('第一段开头');
+    expect(combined).toContain('第二段结尾');
   });
 
   describe('rewriteToScript 错误路径', () => {
@@ -320,6 +342,47 @@ describe('MiMo 服务', () => {
       expect(result).toBe('大家好，今天聊 AI。\n\n首先是新模型发布。');
       expect(result).not.toContain('<think>');
       expect(result).not.toContain('模型推理过程');
+    });
+
+    test('排版结果疑似截断时自动拆小重试，避免静默覆盖完整转录稿', async () => {
+      const text = `${'第一段内容'.repeat(40)}。${'第二段内容'.repeat(40)}。这是末尾不能丢。`;
+      mockMessagesCreate
+        .mockResolvedValueOnce({ content: [{ type: 'text', text: `${'第一段内容'.repeat(40)}。第二段只到一半` }] })
+        .mockResolvedValueOnce({ content: [{ type: 'text', text: `${'第一段内容'.repeat(40)}。` }] })
+        .mockResolvedValueOnce({ content: [{ type: 'text', text: `${'第二段内容'.repeat(40)}。这是末尾不能丢。` }] });
+
+      const result = await mimo.formatTranscriptionText(text);
+
+      expect(mockMessagesCreate).toHaveBeenCalledTimes(3);
+      expect(result).toContain('这是末尾不能丢');
+    });
+
+    test('很短文本排版结果仍疑似截断时抛出错误', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '第一段内容。\n\n第二段只到一半' }],
+      });
+
+      await expect(mimo.formatTranscriptionText('第一段内容 第二段只到一半 这是末尾不能丢'))
+        .rejects.toThrow('AI 排版结果疑似不完整');
+    });
+
+    test('长转录稿分块排版，避免单次输出过长导致末尾截断', async () => {
+      const longText = [
+        '第一段开头' + '甲'.repeat(2600) + '第一段结尾。',
+        '第二段开头' + '乙'.repeat(2600) + '第二段结尾。',
+        '第三段开头' + '丙'.repeat(1200) + '第三段结尾。'
+      ].join('');
+      mockMessagesCreate.mockImplementation(async (payload) => {
+        const text = payload.messages[0].content.split('转录文本：\n')[1];
+        return { content: [{ type: 'text', text }] };
+      });
+
+      const result = await mimo.formatTranscriptionText(longText);
+
+      expect(mockMessagesCreate.mock.calls.length).toBeGreaterThan(1);
+      expect(result).toContain('第一段结尾');
+      expect(result).toContain('第二段结尾');
+      expect(result).toContain('第三段结尾');
     });
 
     test('空文本抛出错误', async () => {

@@ -1,24 +1,11 @@
 import { broadcastApi } from '../services/api';
 import { createScopedLogger, toLogError } from '../services/logger';
 import { STYLE_TAGS } from '../constants/toneTags';
+import { buildVoicePayload } from './voiceConfigModel';
 import type { AppState } from './types';
 import type { StoreGet, StoreSet } from './storeTypes';
 
 const logger = createScopedLogger('segment-slice');
-
-function buildVoicePayload(voiceConfig: AppState['voiceConfig']) {
-  return {
-    voiceType: voiceConfig.voiceType,
-    voice: voiceConfig.voiceType === 'preset' ? voiceConfig.voice : undefined,
-    voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
-    voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
-    stylePrompt: voiceConfig.stylePrompt || undefined,
-    optimizeTextPreview: voiceConfig.voiceType === 'design' ? voiceConfig.optimizeTextPreview : undefined,
-    speed: voiceConfig.speed,
-    emotion: voiceConfig.emotion,
-    pitch: voiceConfig.pitch,
-  };
-}
 
 export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
   AppState,

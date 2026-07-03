@@ -1,8 +1,12 @@
 // 音色配置规范化与 TTS 参数转换
 const audio = require('./audio');
 
-const DEFAULT_VOICE = '冰糖';
 const VALID_VOICE_TYPES = new Set(['preset', 'clone', 'design']);
+const VOICE_REQUIRED_MESSAGE = '请先选择音色';
+
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
 
 /**
  * 规范化音色类型
@@ -10,7 +14,30 @@ const VALID_VOICE_TYPES = new Set(['preset', 'clone', 'design']);
  * @returns {string} 规范化后的音色类型
  */
 function normalizeVoiceType(voiceType) {
-  return VALID_VOICE_TYPES.has(voiceType) ? voiceType : 'preset';
+  return VALID_VOICE_TYPES.has(voiceType) ? voiceType : '';
+}
+
+/**
+ * 校验请求是否包含明确选择的音色。推荐/默认音色必须由调用方显式传入。
+ * @param {Object} input - 原始或规范化音色配置
+ * @returns {{ valid: boolean, error?: string }} 校验结果
+ */
+function validateVoiceSelection(input = {}) {
+  const voiceType = normalizeVoiceType(input.voiceType);
+  if (!voiceType) return { valid: false, error: VOICE_REQUIRED_MESSAGE };
+  if (voiceType === 'preset' && !hasText(input.voice)) return { valid: false, error: VOICE_REQUIRED_MESSAGE };
+  if (voiceType === 'design' && !hasText(input.voiceDesign)) return { valid: false, error: VOICE_REQUIRED_MESSAGE };
+  if (voiceType === 'clone' && !hasText(input.voiceClone)) return { valid: false, error: VOICE_REQUIRED_MESSAGE };
+  return { valid: true };
+}
+
+function assertVoiceSelection(input = {}) {
+  const result = validateVoiceSelection(input);
+  if (!result.valid) {
+    const error = new Error(result.error || VOICE_REQUIRED_MESSAGE);
+    error.statusCode = 400;
+    throw error;
+  }
 }
 
 /**
@@ -21,7 +48,7 @@ function normalizeVoiceType(voiceType) {
 function normalizeVoiceConfig(input = {}) {
   const voiceType = normalizeVoiceType(input.voiceType);
   const voiceConfig = {
-    voice: voiceType === 'preset' ? (input.voice || DEFAULT_VOICE) : undefined,
+    voice: voiceType === 'preset' ? (input.voice || '') : undefined,
     voiceDesign: voiceType === 'design' ? (input.voiceDesign || '') : undefined,
     voiceClone: voiceType === 'clone' ? (input.voiceClone || '') : undefined,
     stylePrompt: input.stylePrompt || '',
@@ -63,6 +90,10 @@ function parseBroadcastVoiceConfig(broadcast) {
  */
 async function toSpeechParams({ text, voiceType, voiceConfig, resolveClone = false }) {
   const normalizedType = normalizeVoiceType(voiceType);
+  assertVoiceSelection({
+    ...voiceConfig,
+    voiceType: normalizedType,
+  });
   const params = {
     text,
     voiceType: normalizedType,
@@ -101,7 +132,10 @@ async function resolveCloneVoiceConfig({ voiceType, voiceConfig }) {
 }
 
 module.exports = {
+  VOICE_REQUIRED_MESSAGE,
   normalizeVoiceType,
+  validateVoiceSelection,
+  assertVoiceSelection,
   normalizeVoiceConfig,
   parseBroadcastVoiceConfig,
   toSpeechParams,

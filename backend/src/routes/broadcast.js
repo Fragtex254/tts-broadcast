@@ -89,6 +89,16 @@ router.post('/generate', async (req, res) => {
       return res.status(400).json({ error: '请提供口播稿内容' });
     }
 
+    const voiceSelection = voiceConfigService.validateVoiceSelection({
+      voiceType,
+      voice,
+      voiceDesign,
+      voiceClone
+    });
+    if (!voiceSelection.valid) {
+      return res.status(400).json({ error: voiceSelection.error });
+    }
+
     const normalized = voiceConfigService.normalizeVoiceConfig({
       voiceType,
       voice,
@@ -257,6 +267,16 @@ router.patch('/:id/voice-config', (req, res) => {
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     const { voiceType, voice, voiceDesign, voiceClone, stylePrompt, optimizeTextPreview, speed, emotion, pitch } = req.body;
+    const voiceSelection = voiceConfigService.validateVoiceSelection({
+      voiceType,
+      voice,
+      voiceDesign,
+      voiceClone
+    });
+    if (!voiceSelection.valid) {
+      return res.status(400).json({ error: voiceSelection.error });
+    }
+
     const normalized = voiceConfigService.normalizeVoiceConfig({
       voiceType,
       voice,

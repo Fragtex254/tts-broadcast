@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import useStore from '../../store';
 import type { Segment } from '../../store';
 import { getApiErrorMessage } from '../../services/apiError';
+import { hasSelectedVoice, VOICE_REQUIRED_MESSAGE } from '../../store/voiceConfigModel';
 import { useBatchGenerateSSE } from '../../hooks/useSSE';
 import { TagPicker } from './TagPicker';
 import { AudioTagInserter } from './AudioTagInserter';
@@ -162,6 +163,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const updateSegmentStyleTag = useStore((s) => s.updateSegmentStyleTag);
   const suggestTags = useStore((s) => s.suggestTags);
   const isSuggestingTags = useStore((s) => s.isSuggestingTags);
+  const voiceConfig = useStore((s) => s.voiceConfig);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
@@ -216,6 +218,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
   const hasPendingOrFailed = segments.some((s) => s.status === 'pending' || s.status === 'failed' || s.status === 'generating');
   const allGenerated = segments.length > 0 && segments.every((s) => s.status === 'generated');
+  const canGenerateVoice = hasSelectedVoice(voiceConfig);
 
   const handleStartEdit = (seg: Segment) => { setEditingId(seg.id); setEditText(seg.text); };
   const handleCancelEdit = () => { setEditingId(null); setEditText(''); };
@@ -225,10 +228,22 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
     try { await updateSegmentText(broadcastId, segId, editText.trim()); setEditingId(null); setEditText(''); }
     catch { setError('保存编辑失败'); }
   };
-  const handleRegenerate = async (segId: number) => { setError(null); try { await regenerateSegment(broadcastId, segId); } catch { setError('重新生成失败'); } };
+  const handleRegenerate = async (segId: number) => {
+    setError(null);
+    if (!canGenerateVoice) {
+      setError(VOICE_REQUIRED_MESSAGE);
+      return;
+    }
+    try { await regenerateSegment(broadcastId, segId); }
+    catch (err) { setError(getApiErrorMessage(err, '重新生成失败')); }
+  };
   const handleDelete = async (segId: number) => { setError(null); try { await deleteSegment(broadcastId, segId); } catch { setError('删除失败'); } };
   const handleBatchGenerate = async () => {
     setError(null);
+    if (!canGenerateVoice) {
+      setError(VOICE_REQUIRED_MESSAGE);
+      return;
+    }
     try {
       const { results } = await batchGenerateSegments(broadcastId);
       const failed = results.filter((result) => result.status === 'failed');
@@ -358,7 +373,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                 <button onClick={() => handleStartEdit(seg)} disabled={seg.status === 'generating' || editingId === seg.id} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title="编辑">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                 </button>
-                <button onClick={() => handleRegenerate(seg.id)} disabled={seg.status === 'generating'} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title="重新生成">
+                <button onClick={() => handleRegenerate(seg.id)} disabled={seg.status === 'generating' || !canGenerateVoice} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title={canGenerateVoice ? '重新生成' : VOICE_REQUIRED_MESSAGE}>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
                 <button onClick={() => handleDelete(seg.id)} disabled={seg.status === 'generating'} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-pink hover:bg-white/50 transition-colors disabled:opacity-30" title="删除">
@@ -402,6 +417,11 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
       {error && (
         <div className="mb-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">{error}</div>
       )}
+      {!canGenerateVoice && (
+        <div className="mb-3 rounded-xl border border-lemon/45 bg-lemon/15 p-3 font-body text-[12px] text-ink-soft">
+          选择音色后才能生成段落音频。
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <button
@@ -413,10 +433,10 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
         </button>
         <button
           onClick={handleBatchGenerate}
-          disabled={!hasPendingOrFailed || isSuggestingTags}
+          disabled={!hasPendingOrFailed || isSuggestingTags || !canGenerateVoice}
           className="flex-1 bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
         >
-          全部生成
+          {canGenerateVoice ? '全部生成' : '先选音色'}
         </button>
         <button
           onClick={handleMerge}

@@ -26,8 +26,8 @@ export const defaultSettings: Settings = {
 };
 
 export const defaultVoiceConfig: VoiceConfig = {
-  voice: defaultSettings.default_voice,
-  voiceType: 'preset',
+  voice: '',
+  voiceType: '',
   voiceDesign: '',
   voiceClone: '',
   stylePrompt: '',

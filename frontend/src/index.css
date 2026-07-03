@@ -248,6 +248,10 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+@keyframes voice-selector-enter {
+  from { opacity: 0; transform: translate(18px, 24px) scale(0.96); }
+  to { opacity: 1; transform: translate(0, 0) scale(1); }
+}
 @keyframes breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }

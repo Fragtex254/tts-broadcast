@@ -227,6 +227,14 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       return res.json({ segments, results: [] });
     }
 
+    const voiceSelection = voiceConfigService.validateVoiceSelection({
+      ...voiceConfig,
+      voiceType
+    });
+    if (!voiceSelection.valid) {
+      return res.status(400).json({ error: voiceSelection.error });
+    }
+
     // 批量开始前一次性解析 clone 音色，避免在每段回调里重复读取文件 / 重复 base64 转换。
     // 解析失败时不直接中断批量任务，记录错误并让每段落到可重试的 failed 状态。
     let resolvedVoiceConfig = voiceConfig;
@@ -474,6 +482,13 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
 
     const broadcast = broadcastStore.getById(idCheck.id);
     const { voiceType, voiceConfig } = voiceConfigService.parseBroadcastVoiceConfig(broadcast);
+    const voiceSelection = voiceConfigService.validateVoiceSelection({
+      ...voiceConfig,
+      voiceType
+    });
+    if (!voiceSelection.valid) {
+      return res.status(400).json({ error: voiceSelection.error });
+    }
 
     segmentStore.updateStatus(segIdCheck.id, 'generating');
 
