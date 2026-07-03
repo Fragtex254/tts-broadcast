@@ -8,6 +8,8 @@ import { TagPicker } from './TagPicker';
 import { AudioTagInserter } from './AudioTagInserter';
 import { SegmentRefineModal } from './SegmentRefineModal';
 
+const PLAYBACK_RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
 // ============ StatusBadge ============
 
 interface StatusBadgeProps {
@@ -38,10 +40,16 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
 
 interface SegmentAudioProps {
   audioUrl: string;
+  playbackRate: number;
 }
 
-const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
-  const audioRef = useRef<HTMLAudioElement>(null);
+interface PitchSafeAudioElement extends HTMLAudioElement {
+  mozPreservesPitch?: boolean;
+  webkitPreservesPitch?: boolean;
+}
+
+const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl, playbackRate }) => {
+  const audioRef = useRef<PitchSafeAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -67,6 +75,15 @@ const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
       audio.removeEventListener('ended', handleEnded);
     };
   }, [audioUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.preservesPitch = true;
+    audio.mozPreservesPitch = true;
+    audio.webkitPreservesPitch = true;
+    audio.playbackRate = playbackRate;
+  }, [audioUrl, playbackRate]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -134,7 +151,7 @@ const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl }) => {
             </div>
             <div className="flex justify-between font-body text-[9px] text-ink-soft/70 tabular-nums leading-none">
               <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+              <span>{playbackRate.toFixed(2).replace(/\.00$/, '')}x · {formatTime(duration)}</span>
             </div>
           </div>
         </div>
@@ -161,6 +178,8 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const deleteSegment = useStore((s) => s.deleteSegment);
   const mergeSegments = useStore((s) => s.mergeSegments);
   const updateSegmentStyleTag = useStore((s) => s.updateSegmentStyleTag);
+  const updateSegmentPlaybackRate = useStore((s) => s.updateSegmentPlaybackRate);
+  const updateAllSegmentPlaybackRates = useStore((s) => s.updateAllSegmentPlaybackRates);
   const suggestTags = useStore((s) => s.suggestTags);
   const isSuggestingTags = useStore((s) => s.isSuggestingTags);
   const voiceConfig = useStore((s) => s.voiceConfig);
@@ -170,6 +189,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const [error, setError] = useState<string | null>(null);
   const [openTagPickerId, setOpenTagPickerId] = useState<number | null>(null);
   const [isRefineOpen, setIsRefineOpen] = useState(false);
+  const [updatingPlaybackRateId, setUpdatingPlaybackRateId] = useState<number | 'all' | null>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // SSE 监听批量生成进度（始终启用）
@@ -219,6 +239,9 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const hasPendingOrFailed = segments.some((s) => s.status === 'pending' || s.status === 'failed' || s.status === 'generating');
   const allGenerated = segments.length > 0 && segments.every((s) => s.status === 'generated');
   const canGenerateVoice = hasSelectedVoice(voiceConfig);
+  const commonPlaybackRate = segments.every((segment) => segment.playback_rate === segments[0]?.playback_rate)
+    ? segments[0]?.playback_rate || 1
+    : null;
 
   const handleStartEdit = (seg: Segment) => { setEditingId(seg.id); setEditText(seg.text); };
   const handleCancelEdit = () => { setEditingId(null); setEditText(''); };
@@ -262,6 +285,21 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
     try { await updateSegmentStyleTag(broadcastId, segId, styleTag); }
     catch { setError('设置风格标签失败'); }
   };
+  const handleSetSegmentPlaybackRate = async (segId: number, playbackRate: number) => {
+    setError(null);
+    setUpdatingPlaybackRateId(segId);
+    try { await updateSegmentPlaybackRate(broadcastId, segId, playbackRate); }
+    catch (err) { setError(getApiErrorMessage(err, '设置段落倍速失败')); }
+    finally { setUpdatingPlaybackRateId(null); }
+  };
+  const handleSetAllPlaybackRates = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const playbackRate = Number(event.target.value);
+    setError(null);
+    setUpdatingPlaybackRateId('all');
+    try { await updateAllSegmentPlaybackRates(broadcastId, playbackRate); }
+    catch (err) { setError(getApiErrorMessage(err, '批量设置倍速失败')); }
+    finally { setUpdatingPlaybackRateId(null); }
+  };
   const handleSuggestTags = async () => {
     setError(null);
     try { await suggestTags(broadcastId); }
@@ -283,19 +321,35 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both' }}>
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-lilac" />
           <h3 className="font-display italic text-[14px] font-medium text-ink-soft">段落编辑器</h3>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsRefineOpen(true)}
-          disabled={segments.some((s) => s.status === 'generating')}
-          className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
-        >
-          切分精修
-        </button>
+        <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+          <label className="flex items-center gap-1.5 font-body text-[11px] text-ink-soft/75">
+            全部倍速
+            <select
+              value={commonPlaybackRate === null ? '' : String(commonPlaybackRate)}
+              onChange={handleSetAllPlaybackRates}
+              disabled={updatingPlaybackRateId === 'all'}
+              className="bg-white/70 text-ink rounded-full px-3 py-1.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors disabled:opacity-40"
+            >
+              {commonPlaybackRate === null && <option value="">混合</option>}
+              {PLAYBACK_RATE_OPTIONS.map((rate) => (
+                <option key={rate} value={rate}>{rate}x</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setIsRefineOpen(true)}
+            disabled={segments.some((s) => s.status === 'generating')}
+            className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
+          >
+            切分精修
+          </button>
+        </div>
       </div>
 
       {/* 生成进度指示器 */}
@@ -365,7 +419,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
               <div className="flex flex-col items-end gap-2 flex-shrink-0">
                 <StatusBadge status={seg.status} />
                 {seg.status === 'generated' && seg.audio_path && (
-                  <SegmentAudio audioUrl={`${seg.audio_path}?t=${seg.updated_at}`} />
+                  <SegmentAudio audioUrl={`${seg.audio_path}?t=${seg.updated_at}`} playbackRate={seg.playback_rate || 1} />
                 )}
               </div>
 
@@ -384,7 +438,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
             {/* 第二行：风格标签 meta（编辑态隐藏） */}
             {editingId !== seg.id && (
-              <div className="relative flex items-center gap-2 mt-2 pl-[34px]">
+              <div className="relative flex flex-wrap items-center gap-2 mt-2 pl-[34px]">
                 <span className="text-[10px] text-ink-soft/60">风格</span>
                 <button
                   type="button"
@@ -402,6 +456,18 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                     onClose={() => setOpenTagPickerId(null)}
                   />
                 )}
+                <span className="ml-2 text-[10px] text-ink-soft/60">倍速</span>
+                <select
+                  value={seg.playback_rate || 1}
+                  onChange={(event) => handleSetSegmentPlaybackRate(seg.id, Number(event.target.value))}
+                  disabled={updatingPlaybackRateId === seg.id}
+                  className="bg-white/70 text-ink rounded-full px-2.5 py-0.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[11px] transition-colors disabled:opacity-40"
+                  title="设置本段播放和下载倍速"
+                >
+                  {PLAYBACK_RATE_OPTIONS.map((rate) => (
+                    <option key={rate} value={rate}>{rate}x</option>
+                  ))}
+                </select>
               </div>
             )}
 

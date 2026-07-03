@@ -6,10 +6,15 @@ const request = require('supertest');
 const app = require('../../src/app');
 const db = require('../../src/db');
 const aihot = require('../../src/services/aihot');
+const audio = require('../../src/services/audio');
 
 describe('播报 API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   test('GET /api/broadcast/today - 获取今日资讯（归一化驼峰字段为蛇形）', async () => {
@@ -283,6 +288,47 @@ describe('播报 API', () => {
       `).run('无音频', '内容', 'preset', '{}', 'pending', 'whole');
       const res = await request(app).get(`/api/broadcast/${result.lastInsertRowid}/audio`);
       expect(res.status).toBe(404);
+    });
+
+    test('分段播报预览时临时生成变速合并音频且不落盘', async () => {
+      const result = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('预览测试', '内容', 'preset', '{}', 'generated', 'segmented');
+      const broadcastId = result.lastInsertRowid;
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, playback_rate) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句', 'generated', '/audio/a.wav', 1.5);
+      jest.spyOn(audio, 'mergeSegmentAudioWithRates').mockResolvedValue(Buffer.from('preview-wav'));
+
+      const res = await request(app).get(`/api/broadcast/${broadcastId}/audio`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('audio/wav');
+      expect(res.text || res.body.toString()).toContain('preview-wav');
+      const broadcast = db.prepare('SELECT audio_path FROM broadcasts WHERE id = ?').get(broadcastId);
+      expect(broadcast.audio_path).toBeNull();
+    });
+  });
+
+  describe('GET /api/broadcast/:id/download', () => {
+    test('分段播报下载时按 playback_rate 实时生成变速合并音频', async () => {
+      const result = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('下载测试', '内容', 'preset', '{}', 'generated', 'segmented');
+      const broadcastId = result.lastInsertRowid;
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, playback_rate) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句', 'generated', '/audio/a.wav', 1.25);
+
+      jest.spyOn(audio, 'mergeSegmentAudioWithRates').mockResolvedValue(Buffer.from('download-wav'));
+
+      const res = await request(app).get(`/api/broadcast/${broadcastId}/download`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('audio/wav');
+      expect(audio.mergeSegmentAudioWithRates).toHaveBeenCalledWith([
+        expect.objectContaining({ playback_rate: 1.25 }),
+      ]);
     });
   });
 });

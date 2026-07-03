@@ -368,25 +368,31 @@ export const VoiceGenerator: React.FC = () => {
       <button
         type="button"
         onClick={() => setIsSelectorOpen(true)}
-        className={`fixed bottom-8 right-8 z-40 flex h-16 w-56 items-center gap-3 rounded-2xl border p-2 text-left text-ink shadow-card backdrop-blur-sm transition-all duration-200 hover:-translate-y-px hover:brightness-105 active:translate-y-0 active:shadow-none ${
+        className={`fixed bottom-8 right-0 z-40 flex h-32 w-24 flex-col items-center justify-between rounded-l-xl border border-r-0 p-2.5 text-center text-ink shadow-card backdrop-blur-sm transition-all duration-200 hover:-translate-x-1 hover:brightness-105 active:translate-x-0 active:shadow-none sm:w-28 xl:w-32 ${
           hasVoice ? 'border-card-border bg-white/90' : 'border-blush/45 bg-white/85'
         }`}
         style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0s both' }}
         title={hasVoice ? `当前音色：${currentVoiceName}` : '选择音色'}
       >
         <span
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition-colors duration-200 ${
+          className={`pointer-events-none absolute -left-1 top-2 h-[calc(100%-16px)] w-1 rounded-l-md ${
+            hasVoice ? 'bg-sage/25' : 'bg-blush/25'
+          }`}
+          aria-hidden="true"
+        />
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors duration-200 sm:h-12 sm:w-12 ${
             hasVoice ? 'border-sage/50 bg-sage/30' : 'border-blush/45 bg-blush/20'
           }`}
           aria-hidden="true"
         >
           <span className={`h-2.5 w-2.5 rounded-full ${hasVoice ? 'bg-sage' : 'bg-blush animate-breathe'}`} />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-body text-[12px] font-medium leading-none text-ink-soft">
+        <span className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1.5">
+          <span className="font-body text-[12px] font-medium leading-tight text-ink-soft">
             {hasVoice ? '更换音色' : '选择音色'}
           </span>
-          <span className="mt-1.5 block truncate font-display text-[18px] font-medium leading-none text-ink">
+          <span className="line-clamp-2 max-w-full break-words font-display text-[16px] font-medium leading-tight text-ink sm:text-[17px]">
             {hasVoice ? currentVoiceName : '未选择'}
           </span>
         </span>

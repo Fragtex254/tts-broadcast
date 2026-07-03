@@ -63,6 +63,7 @@ describe('Segments API', () => {
       expect(res.body.segments.length).toBe(2);
       expect(res.body.segments[0].text).toBe('第一句');
       expect(res.body.segments[1].text).toBe('第二句');
+      expect(res.body.segments[0].playback_rate).toBe(1);
     });
 
     test('不存在的 broadcast 返回 404', async () => {
@@ -227,6 +228,8 @@ describe('Segments API', () => {
   });
 
   describe('POST /api/broadcast/:id/segments/merge', () => {
+    afterEach(() => jest.restoreAllMocks());
+
     test('无 segments 时返回 400', async () => {
       const res = await request(app)
         .post(`/api/broadcast/${broadcastId}/segments/merge`)
@@ -251,6 +254,26 @@ describe('Segments API', () => {
         .post('/api/broadcast/99999/segments/merge')
         .send();
       expect(res.status).toBe(404);
+    });
+
+    test('合并时只标记播报已生成，不保存变速处理后的合并文件', async () => {
+      db.prepare('UPDATE broadcasts SET audio_path = ? WHERE id = ?').run('/audio/old_merged.wav', broadcastId);
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, playback_rate) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句', 'generated', '/audio/a.wav', 1.5);
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, playback_rate) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 1, '第二句', 'generated', '/audio/b.wav', 0.75);
+      const mergeSpy = jest.spyOn(audio, 'mergeSegmentAudioWithRates');
+      const writeSpy = jest.spyOn(audioAsset, 'writeMergedBroadcastAudio');
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/merge`)
+        .send();
+
+      expect(res.status).toBe(200);
+      expect(mergeSpy).not.toHaveBeenCalled();
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(res.body.broadcast.status).toBe('generated');
+      expect(res.body.broadcast.audio_path).toBeNull();
     });
   });
 
@@ -343,6 +366,37 @@ describe('Segments API', () => {
       expect(res.body.segment.style_tag).toBe('活泼');
     });
 
+    test('设置 playbackRate 不重置原始段音频并清空旧合并音频', async () => {
+      db.prepare('UPDATE broadcasts SET audio_path = ? WHERE id = ?').run('/audio/old_merged.wav', broadcastId);
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, playback_rate) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '文本', 'generated', '/audio/x.wav', 1);
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({ playbackRate: 1.5 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segment.playback_rate).toBe(1.5);
+      expect(res.body.segment.status).toBe('generated');
+      expect(res.body.segment.audio_path).toBe('/audio/x.wav');
+      const broadcast = db.prepare('SELECT audio_path FROM broadcasts WHERE id = ?').get(broadcastId);
+      expect(broadcast.audio_path).toBeNull();
+    });
+
+    test('非法 playbackRate 返回 400', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '文本', 'pending');
+      const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
+
+      const res = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
+        .send({ playbackRate: 2.5 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('倍速');
+    });
+
     test('suggest-tags 写回时对 AI 返回值做 sanitize 兜底', async () => {
       db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
         .run(broadcastId, 0, 'A', 'pending');
@@ -359,7 +413,7 @@ describe('Segments API', () => {
       expect(res.body.segments.map((s) => s.style_tag)).toEqual(['平静', '严肃']);
     });
 
-    test('text 与 styleTag 都不传返回 400', async () => {
+    test('text、styleTag 与 playbackRate 都不传返回 400', async () => {
       db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
         .run(broadcastId, 0, '文本', 'pending');
       const seg = db.prepare('SELECT id FROM segments WHERE broadcast_id = ?').get(broadcastId);
@@ -367,6 +421,33 @@ describe('Segments API', () => {
       const res = await request(app)
         .put(`/api/broadcast/${broadcastId}/segments/${seg.id}`)
         .send({});
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('PATCH /api/broadcast/:id/segments/playback-rate', () => {
+    test('一次性设置所有句子倍速并清空旧合并音频', async () => {
+      db.prepare('UPDATE broadcasts SET audio_path = ? WHERE id = ?').run('/audio/old_merged.wav', broadcastId);
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句', 'pending');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 1, '第二句', 'pending');
+
+      const res = await request(app)
+        .patch(`/api/broadcast/${broadcastId}/segments/playback-rate`)
+        .send({ playbackRate: 1.25 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segments.map((s) => s.playback_rate)).toEqual([1.25, 1.25]);
+      const broadcast = db.prepare('SELECT audio_path FROM broadcasts WHERE id = ?').get(broadcastId);
+      expect(broadcast.audio_path).toBeNull();
+    });
+
+    test('空 segments 返回 400', async () => {
+      const res = await request(app)
+        .patch(`/api/broadcast/${broadcastId}/segments/playback-rate`)
+        .send({ playbackRate: 1.25 });
+
       expect(res.status).toBe(400);
     });
   });

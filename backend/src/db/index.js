@@ -55,6 +55,13 @@ try {
   db.exec("ALTER TABLE segments ADD COLUMN error_message TEXT DEFAULT ''");
 }
 
+// 迁移：为旧数据库的 segments 添加 playback_rate 列
+try {
+  db.prepare('SELECT playback_rate FROM segments LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE segments ADD COLUMN playback_rate REAL DEFAULT 1.0');
+}
+
 // 迁移：确保 voice_presets 表存在
 try {
   db.prepare('SELECT id FROM voice_presets LIMIT 1').get();

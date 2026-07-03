@@ -36,6 +36,7 @@ export interface Segment {
   audio_path: string | null;
   status: 'pending' | 'generating' | 'generated' | 'failed';
   style_tag: string;
+  playback_rate: number;
   error_message: string;
   created_at: string;
   updated_at: string;
@@ -306,6 +307,8 @@ export interface AppState {
   mergeSegments: (broadcastId: number) => Promise<Broadcast>;
   isSuggestingTags: boolean;
   updateSegmentStyleTag: (broadcastId: number, segId: number, styleTag: string) => Promise<Segment>;
+  updateSegmentPlaybackRate: (broadcastId: number, segId: number, playbackRate: number) => Promise<Segment>;
+  updateAllSegmentPlaybackRates: (broadcastId: number, playbackRate: number) => Promise<Segment[]>;
   suggestTags: (broadcastId: number) => Promise<Segment[]>;
   clearSegments: () => void;
 

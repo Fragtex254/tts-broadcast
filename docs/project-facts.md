@@ -119,6 +119,7 @@ SQLite 数据库包含 6 张表：
 - `segments.audio_path`：该段音频路径
 - `segments.status`：该段状态
 - `segments.style_tag`：该段整体风格或短情绪铺垫（如 `平静`、`克制地转入兴奋`；空串=无），生成时前置为 `(提示)`，细粒度 `[音频标签]` 内联在 `segments.text`
+- `segments.playback_rate`：该段预览与导出的播放倍速，默认 `1.0`，范围 `0.5` 到 `2.0`；前端单段预览用浏览器原生 `HTMLMediaElement.playbackRate` 并开启保音高，主播放器预览/下载时后端用 FFmpeg `atempo` 做不变调变速，不覆盖原始 TTS 段音频，也不持久保存变速后的合并音频
 - `segments.error_message`：分段 TTS 失败原因，空串表示无；用于把 MiMo 限流、风控、网络或参数错误展示到前端对应段落
 - `voice_presets.type`：`clone`（克隆）或 `design`（设计）
 - `voice_presets.trial_audio_path`：试听音频路径
@@ -192,6 +193,7 @@ SQLite 数据库包含 6 张表：
 - 转录结果列表通过 `GET /api/transcribe/results` 读取 `transcription_results`，转录页历史面板支持查看、下载、导入稿件、刷新和删除；删除通过 `DELETE /api/transcribe/results/:id` 进入 `services/transcriptionResultStore.js`，只删除数据库记录，不删除用户上传源文件；转录结果排版通过 `POST /api/transcribe/results/:id/format` 调用 `mimo.formatTranscriptionText()`，只做标点、换行和自然段排版，结果写回 `transcription_results.formatted_text`；转录页弹窗在单文件、批量结果和历史记录中复用该能力，导入稿件时优先使用排版文本
 - 批量转录（`POST /api/transcribe/batch`）采用异步模型：multer `upload.array` 接收多文件后立即返回 202，实际转录在后台 `runBatchTranscription` 串行进行，所有进度和最终结果通过 SSE 推送（`phase` 为 `batch-preparing`/`file-start`/`file-progress`/`file-complete`/`file-error`/`completed`）；后台任务开始前 `waitForSseConnection` 等待 SSE 连接建立避免早期事件丢失；前端通过 `relativePaths`（JSON 字符串）保留子目录结构；每个成功文件独立保存一条 `transcription_results` 并在 SSE 中返回 `resultId`；multer/busboy 默认用 latin1 解码 multipart filename 导致中文乱码，`decodeFileName` 重编码为 utf8 修复
 - 分段生成时由 `routes/segments.js` 经 `utils/segmentText.js` 的 `prependStyleTag` 将 `segment.style_tag` 前置到合成文本；`mimo.splitScript` 按语义逻辑切块而非逐句硬切，单块最大 1024 字，模型返回超长块时由本地 `normalizeSegmentTexts` 兜底拆分；`POST /api/broadcast/:id/segments/replace` 支持前端二级页面一次性保存合并、拆分、重排与情绪提示，未变化段保留既有音频，文本或提示变化的段重置为 `pending`；`POST /api/broadcast/:id/segments/suggest-tags` 调 `mimo.suggestStyleTags` 为各段建议风格标签；批量语音生成查询待处理片段时包含 `pending`、`failed` 和可能因中断遗留的 `generating`，单段失败会写入 `segments.error_message` 并通过 SSE progress / HTTP result 返回，前端在对应段落下方展示具体原因，避免只显示泛化“失败”
+- 分段预览倍速只改变浏览器播放速度，不重生成 TTS；`PUT /api/broadcast/:id/segments/:segId` 可更新单段 `playbackRate`，`PATCH /api/broadcast/:id/segments/playback-rate` 可一次性更新所有段。倍速变化会清空旧的 `broadcasts.audio_path`；`POST /api/broadcast/:id/segments/merge` 只校验所有段已生成并把播报标记为 `generated`，不再保存合并文件；`GET /api/broadcast/:id/audio` 与 `GET /api/broadcast/:id/download` 都按段落 `playback_rate` 通过 FFmpeg `atempo` 临时生成不变调音频，响应结束后只保留原始分段 TTS 音频
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
 - voicedesign 模式默认严格使用 assistant 合成文本；只有前端显式开启 `optimizeTextPreview` 时，后端才向 MiMo 传 `optimize_text_preview: true`
@@ -199,7 +201,7 @@ SQLite 数据库包含 6 张表：
 - ID 校验使用 `utils/validation.js` 中的 `validateId()`
 - 前端使用 Zustand store 模式管理全局状态；新增状态优先按领域放入 `store/*Slice.ts`，类型放入 `store/types.ts`
 - 测试使用 supertest 进行 HTTP 端点测试
-- 音频文件通过 `/audio` 路由作为静态文件提供服务
+- 原始音频文件通过 `/audio` 路由作为静态文件提供服务；分段主播放器和下载通过 `/api/broadcast/:id/audio`、`/api/broadcast/:id/download` 动态合并返回
 
 ## 健壮性与可维护性开发规范
 
@@ -234,7 +236,8 @@ SQLite 数据库包含 6 张表：
 | 数据类型 | 存储位置 | 生命周期 |
 |---------|---------|---------|
 | 播报记录（标题、稿件、状态） | SQLite `broadcasts` 表 | 永久 |
-| 音频文件（.wav） | `backend/audio/` 目录 | 按需保留（见音频生命周期） |
+| 原始音频文件（整篇/分段 TTS .wav） | `backend/audio/` 目录 | 按需保留（见音频生命周期） |
+| 变速合并音频（分段主播放器/下载） | 请求内内存响应 + 系统临时目录 | 不持久化；请求结束后释放，临时文件由后端清理 |
 | 转录结果（原文、排版文本、来源文件名、provider/model/task） | SQLite `transcription_results` 表 | 永久，用户可在转录页历史面板删除记录 |
 | 应用设置（API Key、音色、开场白等） | SQLite `settings` 表 | 永久 |
 | 定时任务 | SQLite `schedules` 表 | 永久 |
@@ -250,6 +253,8 @@ SQLite 数据库包含 6 张表：
 - **未保存音频**：保留最近 10 条，超出时自动清理最旧记录及其文件
 - **已保存音频**：上限 50 条，超出时自动淘汰最旧的（FIFO）
 - **保存操作**：`POST /api/broadcast/:id/save` 切换 saved 状态，后端负责上限清理
+- **分段倍速**：`segments.playback_rate` 只保存速度配置；原始分段 TTS 音频始终按原速保存；主播放器预览和下载时再通过 FFmpeg `atempo` 临时生成不变调合并音频，不写入 `backend/audio/`
+- **分段合并标记**：`POST /api/broadcast/:id/segments/merge` 只校验所有段已生成并把播报标记为 `generated`，不会保存 `broadcast_*_merged.wav`
 
 ### 数据库迁移与新增字段（细则见 skill）
 

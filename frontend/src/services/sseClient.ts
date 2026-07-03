@@ -28,6 +28,7 @@ export interface SSESegment {
   audio_path: string | null;
   status: 'pending' | 'generating' | 'generated' | 'failed';
   style_tag: string;
+  playback_rate: number;
   error_message: string;
   created_at: string;
   updated_at: string;
