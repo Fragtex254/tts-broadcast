@@ -11,11 +11,17 @@ const audio = require('../../src/services/audio');
 const audioAsset = require('../../src/services/audioAsset');
 const mimo = require('../../src/services/mimo');
 const segmentStore = require('../../src/services/segmentStore');
+const ttsQueue = require('../../src/services/ttsQueue');
 
 describe('Segments API', () => {
   let broadcastId;
 
   beforeEach(() => {
+    ttsQueue.clear();
+    ttsQueue.minIntervalMs = 0;
+    ttsQueue.maxConcurrent = 10;
+    ttsQueue.lastStartAt = 0;
+
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
 
@@ -34,6 +40,7 @@ describe('Segments API', () => {
   });
 
   afterEach(() => {
+    ttsQueue.clear();
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
   });
@@ -144,6 +151,64 @@ describe('Segments API', () => {
         expect.objectContaining({ text: '第二句' })
       );
     }, 15000);
+  });
+
+  describe('POST /api/broadcast/:id/segments/replace', () => {
+    test('合并/拆分后批量替换并重置受影响段状态', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, style_tag) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句。', 'generated', '/audio/old_0.wav', '平静');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, style_tag) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 1, '第二句。', 'generated', '/audio/old_1.wav', '平静');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, style_tag) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 2, '第三句。', 'generated', '/audio/old_2.wav', '严肃');
+      const old = segmentStore.getByBroadcastId(broadcastId);
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/replace`)
+        .send({
+          segments: [
+            { id: old[0].id, text: '第一句。第二句。', styleTag: '平静转入铺垫' },
+            { id: old[2].id, text: '第三句。', styleTag: '严肃' },
+            { text: '新增补充段。', styleTag: '温柔' },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.segments.map((s) => s.text)).toEqual(['第一句。第二句。', '第三句。', '新增补充段。']);
+      expect(res.body.segments[0].status).toBe('pending');
+      expect(res.body.segments[0].audio_path).toBeNull();
+      expect(res.body.segments[1].status).toBe('generated');
+      expect(res.body.segments[1].audio_path).toBe('/audio/old_2.wav');
+      expect(res.body.segments[2].status).toBe('pending');
+      expect(res.body.segments[0].style_tag).toBe('平静转入铺垫');
+      expect(res.body.segments.map((s) => s.index)).toEqual([0, 1, 2]);
+    });
+
+    test('单段超过 1024 字返回 400', async () => {
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/replace`)
+        .send({ segments: [{ text: '一'.repeat(1025), styleTag: '' }] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('1024');
+    });
+
+    test('引用不属于当前播报的 segment 返回 400', async () => {
+      const otherBroadcast = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('其他', '内容', 'preset', '{"voice":"冰糖"}', 'pending', 'segmented');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(otherBroadcast.lastInsertRowid, 0, '其他句子', 'pending');
+      const otherSegment = segmentStore.getByBroadcastId(otherBroadcast.lastInsertRowid)[0];
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/replace`)
+        .send({ segments: [{ id: otherSegment.id, text: '非法引用', styleTag: '' }] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('不属于当前播报');
+    });
   });
 
   describe('POST /api/broadcast/:id/segments/merge', () => {
@@ -444,6 +509,47 @@ describe('Segments API', () => {
       // 解析失败则不应调用 TTS
       expect(tts.generateSpeech).not.toHaveBeenCalled();
       expect(res.body.segments.every((s) => s.status === 'failed')).toBe(true);
+      expect(res.body.segments.every((s) => s.error_message.includes('voiceClone 格式无效'))).toBe(true);
     }, 15000);
+
+    test('单段 TTS 失败时返回具体错误原因', async () => {
+      tts.generateSpeech.mockRejectedValue(new Error('MiMo API 请求过于频繁，请稍后再试'));
+
+      const res = await request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      expect(res.body.results[0].error).toContain('MiMo API 请求过于频繁');
+      expect(res.body.segments[0].error_message).toContain('MiMo API 请求过于频繁');
+    }, 15000);
+  });
+
+  describe('POST /api/broadcast/:id/segments/:segId/regenerate', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+      tts.generateSpeech.mockReset();
+    });
+
+    test('重新生成单句也经过 TTS 全局队列', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '需要重生成的句子', 'failed');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+      const enqueueSpy = jest.spyOn(ttsQueue, 'enqueue');
+
+      tts.generateSpeech.mockResolvedValue(Buffer.from('fake-wav'));
+      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/segment_regenerated.wav');
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      expect(enqueueSpy).toHaveBeenCalledTimes(1);
+      expect(tts.generateSpeech).toHaveBeenCalledWith(
+        expect.objectContaining({ text: '需要重生成的句子' })
+      );
+      expect(res.body.segment.status).toBe('generated');
+    });
   });
 });

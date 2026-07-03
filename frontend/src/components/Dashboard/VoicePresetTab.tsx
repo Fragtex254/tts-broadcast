@@ -67,7 +67,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
   if (presets.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center animate-fade-in min-h-0">
-        <p className="font-body text-[11px] text-ink-soft/40 text-center px-4">
+        <p className="font-body text-[11px] text-ink-soft/70 text-center px-4">
           暂无保存的预设<br />
           <span className="text-[9px]">在克隆或设计页签中试听满意后可保存</span>
         </p>
@@ -78,10 +78,10 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
   return (
     <div className="flex-1 overflow-y-auto mb-3 animate-fade-in min-h-0">
       <div className="flex items-center justify-between mb-1.5">
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
           已保存预设
         </label>
-        <span className="font-body text-[10px] text-ink-soft/40">
+        <span className="font-body text-[10px] text-ink-soft/70">
           {presets.length}/20
         </span>
       </div>
@@ -113,7 +113,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   <button
                     onClick={(e) => handleTogglePlay(e, preset)}
                     disabled={!preset.trial_audio_path}
-                    className="text-[11px] text-ink-soft/50 hover:text-ink disabled:opacity-30 transition-colors px-1"
+                    className="text-[11px] text-ink-soft/70 hover:text-ink disabled:opacity-30 transition-colors px-1"
                     title="试听"
                   >
                     {playingId === preset.id ? '⏹' : '▶'}
@@ -129,7 +129,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
-                        className="text-[10px] text-ink-soft/50 hover:text-ink font-body transition-colors px-1"
+                        className="text-[10px] text-ink-soft/70 hover:text-ink font-body transition-colors px-1"
                       >
                         取消
                       </button>
@@ -155,7 +155,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {/* 风格提示词 */}
                   {preset.style_prompt && (
                     <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40">风格</span>
+                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">风格</span>
                       <p className="font-body text-[10px] text-ink-soft/70">{preset.style_prompt}</p>
                     </div>
                   )}
@@ -163,7 +163,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {/* 设计描述 */}
                   {preset.type === 'design' && preset.design_prompt && (
                     <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40">音色描述</span>
+                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
                       <p className="font-body text-[10px] text-ink-soft/70">{preset.design_prompt}</p>
                     </div>
                   )}
@@ -171,7 +171,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {/* 原始音频（克隆） */}
                   {preset.type === 'clone' && preset.original_audio_path && (
                     <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40">参考音频</span>
+                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">参考音频</span>
                       <div className="mt-0.5"><MiniAudioPlayer src={preset.original_audio_path} /></div>
                     </div>
                   )}
@@ -179,7 +179,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {/* 试听音频 */}
                   {preset.trial_audio_path && (
                     <div>
-                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/40">试听音频</span>
+                      <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">试听音频</span>
                       <div className="mt-0.5"><MiniAudioPlayer src={preset.trial_audio_path} /></div>
                     </div>
                   )}

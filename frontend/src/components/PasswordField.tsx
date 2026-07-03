@@ -30,7 +30,7 @@ export const PasswordField: React.FC<PasswordFieldProps> = ({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-ink-soft/40 hover:text-ink-soft transition-colors"
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-ink-soft/70 hover:text-ink-soft transition-colors"
         title={visible ? '隐藏' : '显示'}
       >
         {visible ? (

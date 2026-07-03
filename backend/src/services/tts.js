@@ -1,6 +1,29 @@
 const axios = require('axios');
 const { getApiKey } = require('./mimo');
 
+const DEFAULT_RATE_LIMIT_RETRY_AFTER_MS = 15000;
+
+function parseRetryAfterMs(headers) {
+  const value = headers?.['retry-after'] || headers?.['Retry-After'];
+  if (!value) return DEFAULT_RATE_LIMIT_RETRY_AFTER_MS;
+  const seconds = Number.parseFloat(value);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.ceil(seconds * 1000);
+  }
+  const retryAt = Date.parse(value);
+  if (!Number.isNaN(retryAt)) {
+    return Math.max(retryAt - Date.now(), DEFAULT_RATE_LIMIT_RETRY_AFTER_MS);
+  }
+  return DEFAULT_RATE_LIMIT_RETRY_AFTER_MS;
+}
+
+function createRateLimitError(err) {
+  const error = new Error('MiMo API 请求过于频繁，请稍后再试');
+  error.code = 'MIMO_RATE_LIMIT';
+  error.retryAfterMs = parseRetryAfterMs(err.response?.headers);
+  return error;
+}
+
 /**
  * 生成 TTS 语音
  * @param {Object} params
@@ -10,13 +33,14 @@ const { getApiKey } = require('./mimo');
  * @param {string} [params.voiceDesign] - 音色设计描述
  * @param {string} [params.voiceClone] - 音色克隆音频 (base64)
  * @param {string} [params.stylePrompt] - 风格提示（与精细参数互斥）
+ * @param {boolean} [params.optimizeTextPreview=false] - 是否允许 voicedesign 优化/扩写试听文本
  * @param {Object} [params.speed] - 速度控制 { speed_ratio: 0.5-2.0, style: '固定'|'随机' }
  * @param {string|Array} [params.emotion] - 情感控制，字符串或 [{ emotion, weight }] 数组
  * @param {Object} [params.pitch] - 音调控制 { pitch_ratio: 0.5-2.0, style: '固定'|'随机' }
  * @param {string} [params.format='wav'] - 输出音频格式 (wav/pcm/mp3/ogg)
  * @returns {Promise<Buffer>} 音频 Buffer
  */
-async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch, format = 'wav' }) {
+async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', voiceDesign, voiceClone, stylePrompt, optimizeTextPreview = false, speed, emotion, pitch, format = 'wav' }) {
   // 输入校验
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     throw new Error('请提供合成文本');
@@ -43,10 +67,13 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
     case 'design':
       model = 'mimo-v2.5-tts-voicedesign';
       messages = [
-        { role: 'user', content: voiceDesign },
+        { role: 'user', content: stylePrompt ? `${voiceDesign}\n\n风格控制：${stylePrompt}` : voiceDesign },
         { role: 'assistant', content: text }
       ];
-      audioConfig = { format, optimize_text_preview: true };
+      audioConfig = { format };
+      if (optimizeTextPreview) {
+        audioConfig.optimize_text_preview = true;
+      }
       break;
 
     case 'clone':
@@ -77,44 +104,31 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
       if (pitch) audioConfig.pitch = pitch;
   }
 
-  // 带重试的 API 调用（429 限流时最多重试 3 次）
-  const MAX_RETRIES = 3;
   let response;
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
-        model,
-        messages,
-        audio: audioConfig
-      }, {
-        headers: {
-          'api-key': ttsApiKey,
-          'Content-Type': 'application/json'
-        },
-        timeout: 120000
-      });
-      break; // 成功，跳出重试循环
-    } catch (err) {
-      if (err.response?.status === 429 && attempt < MAX_RETRIES) {
-        // 429 限流，指数退避后重试
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      // 非 429 错误或重试耗尽
-      if (err.response?.status === 429) {
-        throw new Error('MiMo API 请求过于频繁，请稍后再试');
-      }
-      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-        throw new Error('MiMo TTS API 请求超时，请稍后再试');
-      }
-      if (!err.response) {
-        throw new Error(`MiMo TTS API 网络错误: ${err.message}`);
-      }
-      throw new Error(`MiMo TTS API 调用失败: ${err.response?.data?.error?.message || err.message}`);
+  try {
+    response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
+      model,
+      messages,
+      audio: audioConfig
+    }, {
+      headers: {
+        'api-key': ttsApiKey,
+        'Content-Type': 'application/json'
+      },
+      timeout: 120000
+    });
+  } catch (err) {
+    if (err.response?.status === 429) {
+      throw createRateLimitError(err);
     }
+    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+      throw new Error('MiMo TTS API 请求超时，请稍后再试');
+    }
+    if (!err.response) {
+      throw new Error(`MiMo TTS API 网络错误: ${err.message}`);
+    }
+    throw new Error(`MiMo TTS API 调用失败: ${err.response?.data?.error?.message || err.message}`);
   }
 
   const audioBase64 = response.data?.choices?.[0]?.message?.audio?.data;

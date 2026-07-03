@@ -64,6 +64,7 @@ export const broadcastApi = {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    optimizeTextPreview?: boolean;
     speed?: { speed_ratio: number; style?: string } | null;
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
@@ -104,6 +105,9 @@ export const broadcastApi = {
   reorderSegments: (broadcastId: number, segmentIds: number[]) =>
     api.post(`/broadcast/${broadcastId}/segments/reorder`, { segmentIds }),
 
+  replaceSegments: (broadcastId: number, segments: { id?: number; text: string; styleTag?: string }[]) =>
+    api.post(`/broadcast/${broadcastId}/segments/replace`, { segments }),
+
   suggestSegmentTags: (broadcastId: number, allowedTags: string[]) =>
     api.post(`/broadcast/${broadcastId}/segments/suggest-tags`, { allowedTags }),
 
@@ -113,6 +117,7 @@ export const broadcastApi = {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    optimizeTextPreview?: boolean;
     speed?: { speed_ratio: number; style?: string } | null;
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
@@ -179,7 +184,7 @@ export const voicePresetApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
-  trialDesign: (data: { design_prompt: string; trial_text: string; style_prompt?: string }) =>
+  trialDesign: (data: { design_prompt: string; trial_text: string; style_prompt?: string; optimize_text_preview?: boolean }) =>
     api.post('/voice-presets/trial/design', data),
 };
 
@@ -197,6 +202,12 @@ export const transcribeApi = {
     }),
   formatResult: (id: number, data: { text?: string }) =>
     api.post(`/transcribe/results/${id}/format`, data),
+  getResults: (params?: { limit?: number }) =>
+    api.get('/transcribe/results', { params }),
+  getStats: () =>
+    api.get('/transcribe/stats'),
+  deleteResult: (id: number) =>
+    api.delete(`/transcribe/results/${id}`),
 };
 
 export type { NewsItem, Settings };

@@ -96,7 +96,7 @@ export const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ src, onEnded }
             );
           })}
         </div>
-        <span className="font-body text-[9px] text-ink-soft/50 min-w-[56px] text-right tabular-nums">
+        <span className="font-body text-[9px] text-ink-soft/70 min-w-[56px] text-right tabular-nums">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>

@@ -18,7 +18,20 @@ function normalize(row) {
   if (!row) return undefined;
   return {
     ...row,
-    usage: parseUsage(row.usage)
+    usage: parseUsage(row.usage),
+    file_size_bytes: Number(row.file_size_bytes || 0),
+    audio_duration_seconds: Number(row.audio_duration_seconds || 0),
+    processing_seconds: Number(row.processing_seconds || 0)
+  };
+}
+
+function normalizeStats(row) {
+  return {
+    total_count: Number(row?.total_count || 0),
+    total_file_size_bytes: Number(row?.total_file_size_bytes || 0),
+    total_audio_duration_seconds: Number(row?.total_audio_duration_seconds || 0),
+    total_text_chars: Number(row?.total_text_chars || 0),
+    total_processing_seconds: Number(row?.total_processing_seconds || 0)
   };
 }
 
@@ -35,14 +48,32 @@ function normalize(row) {
  * @param {string} [params.context] - WSL/Qwen context
  * @param {Object|null} [params.usage] - ASR usage
  * @param {string} [params.taskId] - SSE 任务 ID
+ * @param {number} [params.fileSizeBytes] - 上传文件字节数
+ * @param {number} [params.audioDurationSeconds] - 媒体时长（秒）
+ * @param {number} [params.processingSeconds] - 转录处理耗时（秒）
  * @returns {Object} 创建后的转录结果
  */
-function create({ fileName, relativePath, text, formattedText, language, provider, model, context, usage, taskId }) {
+function create({
+  fileName,
+  relativePath,
+  text,
+  formattedText,
+  language,
+  provider,
+  model,
+  context,
+  usage,
+  taskId,
+  fileSizeBytes,
+  audioDurationSeconds,
+  processingSeconds
+}) {
   const result = db.prepare(`
     INSERT INTO transcription_results (
-      file_name, relative_path, text, formatted_text, language, provider, model, context, usage, task_id
+      file_name, relative_path, text, formatted_text, language, provider, model, context, usage, task_id,
+      file_size_bytes, audio_duration_seconds, processing_seconds
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fileName,
     relativePath || fileName,
@@ -53,7 +84,10 @@ function create({ fileName, relativePath, text, formattedText, language, provide
     model || '',
     context || '',
     serializeUsage(usage),
-    taskId || ''
+    taskId || '',
+    Number(fileSizeBytes || 0),
+    Number(audioDurationSeconds || 0),
+    Number(processingSeconds || 0)
   );
   return getById(result.lastInsertRowid);
 }
@@ -80,6 +114,23 @@ function getRecent({ limit }) {
 }
 
 /**
+ * 获取转录统计总览
+ * @returns {Object} 统计总览
+ */
+function getStats() {
+  const row = db.prepare(`
+    SELECT
+      COUNT(*) AS total_count,
+      COALESCE(SUM(file_size_bytes), 0) AS total_file_size_bytes,
+      COALESCE(SUM(audio_duration_seconds), 0) AS total_audio_duration_seconds,
+      COALESCE(SUM(LENGTH(COALESCE(NULLIF(formatted_text, ''), text))), 0) AS total_text_chars,
+      COALESCE(SUM(processing_seconds), 0) AS total_processing_seconds
+    FROM transcription_results
+  `).get();
+  return normalizeStats(row);
+}
+
+/**
  * 更新转录原文与 AI 排版文本
  * @param {number} id - 转录结果 ID
  * @param {Object} params
@@ -96,9 +147,21 @@ function updateTextAndFormatted(id, { text, formattedText }) {
   return getById(id);
 }
 
+/**
+ * 删除转录结果
+ * @param {number} id - 转录结果 ID
+ * @returns {boolean} 是否删除成功
+ */
+function remove(id) {
+  const result = db.prepare('DELETE FROM transcription_results WHERE id = ?').run(id);
+  return result.changes > 0;
+}
+
 module.exports = {
   create,
   getById,
   getRecent,
-  updateTextAndFormatted
+  getStats,
+  updateTextAndFormatted,
+  remove
 };

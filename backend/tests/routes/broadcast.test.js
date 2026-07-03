@@ -213,6 +213,20 @@ describe('播报 API', () => {
       expect(res.body.broadcast.voice_type).toBe('design');
     });
 
+    test('design 音色配置保存 optimizeTextPreview 开关', async () => {
+      const res = await request(app)
+        .patch(`/api/broadcast/${vcTestBroadcastId}/voice-config`)
+        .send({
+          voiceType: 'design',
+          voiceDesign: '温柔女声',
+          optimizeTextPreview: true
+        });
+
+      expect(res.status).toBe(200);
+      const config = JSON.parse(res.body.broadcast.voice_config);
+      expect(config.optimizeTextPreview).toBe(true);
+    });
+
     test('支持较大的克隆音频配置', async () => {
       const res = await request(app)
         .patch(`/api/broadcast/${vcTestBroadcastId}/voice-config`)

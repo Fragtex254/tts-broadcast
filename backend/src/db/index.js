@@ -48,6 +48,13 @@ try {
   db.exec("ALTER TABLE segments ADD COLUMN style_tag TEXT DEFAULT ''");
 }
 
+// 迁移：为旧数据库的 segments 添加 error_message 列
+try {
+  db.prepare('SELECT error_message FROM segments LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE segments ADD COLUMN error_message TEXT DEFAULT ''");
+}
+
 // 迁移：确保 voice_presets 表存在
 try {
   db.prepare('SELECT id FROM voice_presets LIMIT 1').get();
@@ -85,12 +92,34 @@ try {
       context TEXT DEFAULT '',
       usage TEXT,
       task_id TEXT DEFAULT '',
+      file_size_bytes INTEGER DEFAULT 0,
+      audio_duration_seconds REAL DEFAULT 0,
+      processing_seconds REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_transcription_results_created_at ON transcription_results(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_transcription_results_task_id ON transcription_results(task_id);
   `);
+}
+
+// 迁移：为旧数据库的 transcription_results 添加统计字段
+try {
+  db.prepare('SELECT file_size_bytes FROM transcription_results LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE transcription_results ADD COLUMN file_size_bytes INTEGER DEFAULT 0');
+}
+
+try {
+  db.prepare('SELECT audio_duration_seconds FROM transcription_results LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE transcription_results ADD COLUMN audio_duration_seconds REAL DEFAULT 0');
+}
+
+try {
+  db.prepare('SELECT processing_seconds FROM transcription_results LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE transcription_results ADD COLUMN processing_seconds REAL DEFAULT 0');
 }
 
 // 默认设置

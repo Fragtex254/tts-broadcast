@@ -9,8 +9,10 @@ import MiniAudioPlayer from './MiniAudioPlayer';
 interface DesignTrialPanelProps {
   onVoiceDesignChange: (design: string) => void;
   onStylePromptChange: (prompt: string) => void;
+  onOptimizeTextPreviewChange: (enabled: boolean) => void;
   voiceDesign: string;
   stylePrompt: string;
+  optimizeTextPreview: boolean;
 }
 
 // ============ 主组件 ============
@@ -18,8 +20,10 @@ interface DesignTrialPanelProps {
 export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
   onVoiceDesignChange,
   onStylePromptChange,
+  onOptimizeTextPreviewChange,
   voiceDesign,
   stylePrompt,
+  optimizeTextPreview,
 }) => {
   const presets = useStore((s) => s.presets);
   const fetchPresets = useStore((s) => s.fetchPresets);
@@ -52,6 +56,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
         design_prompt: voiceDesign,
         trial_text: trialText,
         style_prompt: stylePrompt.trim() || undefined,
+        optimize_text_preview: optimizeTextPreview,
       });
       setTrialAudioUrl(response.data.audioUrl);
     } catch (err: unknown) {
@@ -105,7 +110,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
     <div className="flex flex-col gap-3 animate-fade-in">
       {/* 音色设计描述 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           音色设计描述
         </label>
         <textarea
@@ -118,7 +123,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
 
       {/* 风格提示词 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           风格提示词（可选）
         </label>
         <input
@@ -132,7 +137,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
 
       {/* 试听文本 */}
       <div>
-        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
           试听文本
         </label>
         <textarea
@@ -142,6 +147,21 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
           className="w-full h-16 bg-white/70 text-ink rounded-xl px-3 py-2 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[11px] transition-colors"
         />
       </div>
+
+      <label className="flex items-start gap-2 bg-white/50 rounded-xl border border-card-border px-3 py-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={optimizeTextPreview}
+          onChange={(e) => onOptimizeTextPreviewChange(e.target.checked)}
+          className="mt-0.5 accent-lilac"
+        />
+        <span className="flex-1">
+          <span className="block font-body text-[11px] font-medium text-ink">优化试听文本</span>
+          <span className="block font-body text-[10px] text-ink-soft/60 leading-snug">
+            允许 MiMo 根据音色描述润色或扩写试听文本；关闭时严格使用上方文本。
+          </span>
+        </span>
+      </label>
 
       {/* 操作按钮 */}
       <div className="flex gap-2">
@@ -177,7 +197,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
       {/* 保存对话框 */}
       {showSaveDialog && (
         <div className="bg-white/60 rounded-2xl p-4 border border-card-border animate-fade-in">
-          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 mb-1.5 block">
+          <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1.5 block">
             预设名称
           </label>
           <input

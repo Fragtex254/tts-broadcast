@@ -36,8 +36,15 @@ export interface Segment {
   audio_path: string | null;
   status: 'pending' | 'generating' | 'generated' | 'failed';
   style_tag: string;
+  error_message: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SegmentDraftInput {
+  id?: number;
+  text: string;
+  styleTag?: string;
 }
 
 /** 今日资讯条目 */
@@ -114,6 +121,7 @@ export interface VoiceConfig {
   voiceDesign: string;
   voiceClone: string;
   stylePrompt: string;
+  optimizeTextPreview: boolean;
   speed: { speed_ratio: number; style?: string } | null;
   emotion: string | { emotion: string; weight: number }[] | null;
   pitch: { pitch_ratio: number; style?: string } | null;
@@ -144,8 +152,19 @@ export interface TranscriptionRecord {
   context: string;
   usage?: Record<string, unknown> | null;
   task_id: string;
+  file_size_bytes: number;
+  audio_duration_seconds: number;
+  processing_seconds: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface TranscriptionStats {
+  total_count: number;
+  total_file_size_bytes: number;
+  total_audio_duration_seconds: number;
+  total_text_chars: number;
+  total_processing_seconds: number;
 }
 
 export interface TranscriptionResult {
@@ -226,7 +245,12 @@ export interface AppState {
 
   transcriptionText: string;
   transcriptionRecord: TranscriptionRecord | null;
+  transcriptionHistory: TranscriptionRecord[];
+  transcriptionStats: TranscriptionStats;
   isTranscribing: boolean;
+  isLoadingTranscriptionHistory: boolean;
+  isLoadingTranscriptionStats: boolean;
+  isDeletingTranscriptionResult: boolean;
   transcribeProgress: TranscriptionProgress;
 
   batchTranscriptionItems: BatchTranscriptionItem[];
@@ -251,6 +275,7 @@ export interface AppState {
     voiceDesign?: string;
     voiceClone?: string;
     stylePrompt?: string;
+    optimizeTextPreview?: boolean;
     speed?: { speed_ratio: number; style?: string } | null;
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
@@ -271,6 +296,7 @@ export interface AppState {
   regenerateSegment: (broadcastId: number, segId: number) => Promise<Segment>;
   batchGenerateSegments: (broadcastId: number) => Promise<{ segments: Segment[]; results: BatchGenerateResult[] }>;
   deleteSegment: (broadcastId: number, segId: number) => Promise<Segment[]>;
+  replaceSegments: (broadcastId: number, segments: SegmentDraftInput[]) => Promise<Segment[]>;
   mergeSegments: (broadcastId: number) => Promise<Broadcast>;
   isSuggestingTags: boolean;
   updateSegmentStyleTag: (broadcastId: number, segId: number, styleTag: string) => Promise<Segment>;
@@ -283,6 +309,9 @@ export interface AppState {
     provider?: AsrProvider,
     options?: TranscribeOptions
   ) => Promise<TranscriptionResult>;
+  fetchTranscriptionHistory: (params?: { limit?: number }) => Promise<TranscriptionRecord[]>;
+  fetchTranscriptionStats: () => Promise<TranscriptionStats>;
+  deleteTranscriptionHistoryResult: (id: number) => Promise<void>;
   formatTranscriptionResult: (id: number, text: string) => Promise<TranscriptionRecord>;
   setTranscriptionText: (text: string) => void;
   clearTranscription: () => void;

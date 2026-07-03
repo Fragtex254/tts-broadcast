@@ -1,7 +1,13 @@
 import { transcribeApi } from '../services/api';
 import { getApiErrorMessage } from '../services/apiError';
 import { createScopedLogger, toLogError } from '../services/logger';
-import { safeParseStrict, TranscriptionRecordSchema, TranscriptionResultSchema } from '../services/schemas';
+import {
+  safeParseStrict,
+  TranscriptionRecordSchema,
+  TranscriptionResultSchema,
+  TranscriptionResultsResponseSchema,
+  TranscriptionStatsResponseSchema,
+} from '../services/schemas';
 import { createSSEClient, type SSECompleteEvent, type SSEErrorEvent, type SSEProgressEvent } from '../services/sseClient';
 import type {
   AppState,
@@ -13,6 +19,7 @@ import type {
   TranscriptionRecord,
   TranscriptionProgress,
   TranscriptionResult,
+  TranscriptionStats,
 } from './types';
 import type { StoreSet } from './storeTypes';
 
@@ -33,6 +40,14 @@ const IDLE_BATCH_PROGRESS: BatchTranscriptionProgress = {
   total: 0,
   currentFileName: '',
   message: '等待上传',
+};
+
+const EMPTY_TRANSCRIPTION_STATS: TranscriptionStats = {
+  total_count: 0,
+  total_file_size_bytes: 0,
+  total_audio_duration_seconds: 0,
+  total_text_chars: 0,
+  total_processing_seconds: 0,
 };
 
 interface BatchSSEProgress {
@@ -116,13 +131,41 @@ function updateBatchItemRecord(item: BatchTranscriptionItem, record: Transcripti
   };
 }
 
+function upsertTranscriptionHistory(history: TranscriptionRecord[], record: TranscriptionRecord): TranscriptionRecord[] {
+  return [record, ...history.filter((item) => item.id !== record.id)];
+}
+
+function collectBatchRecords(items: BatchTranscriptionItem[]): TranscriptionRecord[] {
+  return items
+    .map((item) => item.transcriptionResult)
+    .filter((record): record is TranscriptionRecord => Boolean(record));
+}
+
+async function refreshTranscriptionStats(set: StoreSet): Promise<void> {
+  try {
+    const response = await transcribeApi.getStats();
+    const data = safeParseStrict(TranscriptionStatsResponseSchema, response.data);
+    set({ transcriptionStats: data.stats });
+  } catch (error) {
+    logger.error({ err: toLogError(error) }, '刷新转录统计失败');
+  }
+}
+
 export function createTranscribeSlice(set: StoreSet): Pick<
   AppState,
   | 'transcriptionText'
   | 'transcriptionRecord'
+  | 'transcriptionHistory'
+  | 'transcriptionStats'
   | 'isTranscribing'
+  | 'isLoadingTranscriptionHistory'
+  | 'isLoadingTranscriptionStats'
+  | 'isDeletingTranscriptionResult'
   | 'transcribeProgress'
   | 'transcribeMedia'
+  | 'fetchTranscriptionHistory'
+  | 'fetchTranscriptionStats'
+  | 'deleteTranscriptionHistoryResult'
   | 'formatTranscriptionResult'
   | 'setTranscriptionText'
   | 'clearTranscription'
@@ -135,7 +178,12 @@ export function createTranscribeSlice(set: StoreSet): Pick<
   return {
     transcriptionText: '',
     transcriptionRecord: null,
+    transcriptionHistory: [],
+    transcriptionStats: EMPTY_TRANSCRIPTION_STATS,
     isTranscribing: false,
+    isLoadingTranscriptionHistory: false,
+    isLoadingTranscriptionStats: false,
+    isDeletingTranscriptionResult: false,
     transcribeProgress: IDLE_PROGRESS,
 
     transcribeMedia: async (file: File, language: AsrLanguage, provider?: AsrProvider, options?: TranscribeOptions) => {
@@ -219,10 +267,13 @@ export function createTranscribeSlice(set: StoreSet): Pick<
           },
         });
         const result = safeParseStrict(TranscriptionResultSchema, response.data) as TranscriptionResult;
-        set({
+        set((state) => ({
           transcriptionText: result.text,
           transcriptionRecord: result.transcriptionResult ?? null,
           isTranscribing: false,
+          transcriptionHistory: result.transcriptionResult
+            ? upsertTranscriptionHistory(state.transcriptionHistory, result.transcriptionResult)
+            : state.transcriptionHistory,
           transcribeProgress: {
             phase: 'completed',
             percent: 100,
@@ -230,7 +281,8 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             total: 0,
             message: '转录完成',
           },
-        });
+        }));
+        void refreshTranscriptionStats(set);
         return result;
       } catch (error) {
         set({
@@ -258,6 +310,60 @@ export function createTranscribeSlice(set: StoreSet): Pick<
       set({ transcriptionText: '', transcriptionRecord: null, transcribeProgress: IDLE_PROGRESS });
     },
 
+    fetchTranscriptionHistory: async (params) => {
+      set({ isLoadingTranscriptionHistory: true });
+      try {
+        const response = await transcribeApi.getResults(params);
+        const data = safeParseStrict(TranscriptionResultsResponseSchema, response.data);
+        set({ transcriptionHistory: data.results, isLoadingTranscriptionHistory: false });
+        return data.results;
+      } catch (error) {
+        set({ isLoadingTranscriptionHistory: false });
+        logger.error({ err: toLogError(error), limit: params?.limit }, '获取转录历史失败');
+        throw new Error(getApiErrorMessage(error, '获取转录历史失败'), { cause: error });
+      }
+    },
+
+    fetchTranscriptionStats: async () => {
+      set({ isLoadingTranscriptionStats: true });
+      try {
+        const response = await transcribeApi.getStats();
+        const data = safeParseStrict(TranscriptionStatsResponseSchema, response.data);
+        set({ transcriptionStats: data.stats, isLoadingTranscriptionStats: false });
+        return data.stats;
+      } catch (error) {
+        set({ isLoadingTranscriptionStats: false });
+        logger.error({ err: toLogError(error) }, '获取转录统计失败');
+        throw new Error(getApiErrorMessage(error, '获取转录统计失败'), { cause: error });
+      }
+    },
+
+    deleteTranscriptionHistoryResult: async (id) => {
+      set({ isDeletingTranscriptionResult: true });
+      try {
+        await transcribeApi.deleteResult(id);
+        set((state) => ({
+          isDeletingTranscriptionResult: false,
+          transcriptionHistory: state.transcriptionHistory.filter((record) => record.id !== id),
+          transcriptionRecord: state.transcriptionRecord?.id === id ? null : state.transcriptionRecord,
+          batchTranscriptionItems: state.batchTranscriptionItems.map((item) => {
+            const itemResultId = item.resultId ?? item.transcriptionResult?.id;
+            if (itemResultId !== id) return item;
+            return {
+              ...item,
+              formattedText: '',
+              resultId: undefined,
+              transcriptionResult: undefined,
+            };
+          }),
+        }));
+      } catch (error) {
+        set({ isDeletingTranscriptionResult: false });
+        logger.error({ err: toLogError(error), resultId: id }, '删除转录结果失败');
+        throw new Error(getApiErrorMessage(error, '删除转录结果失败'), { cause: error });
+      }
+    },
+
     formatTranscriptionResult: async (id, text) => {
       try {
         const response = await transcribeApi.formatResult(id, { text });
@@ -265,6 +371,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         set((state) => ({
           transcriptionText: state.transcriptionRecord?.id === id ? record.text : state.transcriptionText,
           transcriptionRecord: state.transcriptionRecord?.id === id ? record : state.transcriptionRecord,
+          transcriptionHistory: state.transcriptionHistory.map((item) => item.id === id ? record : item),
           batchTranscriptionItems: state.batchTranscriptionItems.map((item) => updateBatchItemRecord(item, record)),
         }));
         return record;
@@ -385,9 +492,12 @@ export function createTranscribeSlice(set: StoreSet): Pick<
           status: r.error ? 'failed' : 'completed',
           error: r.error,
         }));
-        set({
+        set((state) => {
+          const records = collectBatchRecords(items);
+          return {
           batchTranscriptionItems: items,
           isBatchTranscribing: false,
+          transcriptionHistory: records.reduce(upsertTranscriptionHistory, state.transcriptionHistory),
           batchTranscribeProgress: {
             phase: 'completed',
             percent: 100,
@@ -396,7 +506,9 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             currentFileName: '',
             message: `批量转录完成（成功 ${result.succeeded ?? 0}，失败 ${result.failed ?? 0}）`,
           },
+        };
         });
+        void refreshTranscriptionStats(set);
         sseClient.close();
       });
 

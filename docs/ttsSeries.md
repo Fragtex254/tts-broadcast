@@ -865,11 +865,11 @@ print("Audio saved to tmp/output.wav")
 
 **音色模式映射**：
 
-| voiceType | model | user message 内容 | audio.voice |
-|-----------|-------|-------------------|-------------|
-| `preset` | `mimo-v2.5-tts` | stylePrompt（默认："用专业新闻主播的语气，语速适中，沉稳大气"） | 音色名称 |
-| `design` | `mimo-v2.5-tts-voicedesign` | voiceDesign（音色描述） | 无 |
-| `clone` | `mimo-v2.5-tts-voiceclone` | stylePrompt | 参考音频 base64 |
+| voiceType | model | user message 内容 | assistant message 内容 | audio 配置 |
+|-----------|-------|-------------------|------------------------|------------|
+| `preset` | `mimo-v2.5-tts` | stylePrompt（默认："用专业新闻主播的语气，语速适中，沉稳大气"） | 待合成文本 | `format` + 音色名称 |
+| `design` | `mimo-v2.5-tts-voicedesign` | voiceDesign（音色描述）+ 可选 stylePrompt（风格控制） | 待合成文本 | `format`；仅当前端开启"优化试听文本"时传 `optimize_text_preview: true`，默认不传 |
+| `clone` | `mimo-v2.5-tts-voiceclone` | stylePrompt | 待合成文本 | `format` + 参考音频 base64 |
 
 **音频获取方式**：
 
@@ -893,7 +893,7 @@ return Buffer.from(audioBase64, 'base64');
 - **RPM**（每分钟请求数）：100
 - **TPM**（每分钟 Token 数）：10M
 - 超出返回 `429 Too Many Requests`
-- 批量生成语音时（分段模式）需注意串行调用，项目中已采用逐个生成策略
+- 整篇生成、分段批量生成、单句重新生成和音色试听统一经过 `services/ttsQueue.js` 全局限速：默认按 90 RPM 启动请求（可用 `MIMO_TTS_RPM_LIMIT` 调整，硬上限 100），最多 6 个在途请求（`MIMO_TTS_MAX_CONCURRENT`）。遇到 429 时队列按 `Retry-After` 或默认 15 秒退避，并对当前请求做队列级重试（`MIMO_TTS_RATE_LIMIT_RETRIES` 默认 2 次）。这样不会绕过 MiMo 100 RPM 限制，也不会因为某个短句 TTS 请求慢而阻塞后续请求启动。
 
 ## 计费说明
 

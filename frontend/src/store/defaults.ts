@@ -29,6 +29,7 @@ export const defaultVoiceConfig: VoiceConfig = {
   voiceDesign: '',
   voiceClone: '',
   stylePrompt: '',
+  optimizeTextPreview: false,
   speed: null,
   emotion: null,
   pitch: null,

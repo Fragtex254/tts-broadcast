@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 const multer = require('multer');
 const asr = require('../services/asr');
+const media = require('../services/media');
 const mimo = require('../services/mimo');
 const sseManager = require('../services/sseManager');
 const transcriptionResultStore = require('../services/transcriptionResultStore');
@@ -117,6 +118,30 @@ function saveTranscriptionResult({ fileName, relativePath, text, usage, taskId, 
   });
 }
 
+function roundSeconds(value) {
+  return Math.round(value * 1000) / 1000;
+}
+
+async function buildTranscriptionFileStats(file) {
+  const fileSizeBytes = media.getUploadSize(file);
+  let audioDurationSeconds = 0;
+
+  try {
+    audioDurationSeconds = await media.getMediaDuration(file);
+  } catch (error) {
+    logger.warn({
+      err: error,
+      extension: path.extname(file?.originalname || '').toLowerCase(),
+      fileSizeBytes
+    }, '读取转录媒体时长失败');
+  }
+
+  return {
+    fileSizeBytes,
+    audioDurationSeconds
+  };
+}
+
 /**
  * POST /api/transcribe
  * 上传音频或视频并转录为文本
@@ -151,6 +176,8 @@ router.post('/', (req, res) => {
         });
       }
 
+      const fileStats = await buildTranscriptionFileStats(req.file);
+      const processingStartedAt = Date.now();
       const result = await asr.transcribeMedia({
         file: req.file,
         language,
@@ -160,13 +187,18 @@ router.post('/', (req, res) => {
           ? (progress) => sseManager.sendProgress(taskId, { ...progress, timestamp: Date.now() })
           : undefined
       });
+      const processingSeconds = roundSeconds((Date.now() - processingStartedAt) / 1000);
       const transcriptionResult = saveTranscriptionResult({
         fileName,
         relativePath: fileName,
         text: result.text,
         usage: result.usage,
         taskId,
-        metadata
+        metadata: {
+          ...metadata,
+          ...fileStats,
+          processingSeconds
+        }
       });
 
       if (taskId) {
@@ -256,6 +288,8 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
     }
 
     try {
+      const fileStats = await buildTranscriptionFileStats(file);
+      const processingStartedAt = Date.now();
       const result = await asr.transcribeMedia({
         file,
         language,
@@ -281,6 +315,7 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
             }
           : undefined
       });
+      const processingSeconds = roundSeconds((Date.now() - processingStartedAt) / 1000);
 
       const transcriptionResult = saveTranscriptionResult({
         fileName,
@@ -288,7 +323,11 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
         text: result.text,
         usage: result.usage,
         taskId,
-        metadata
+        metadata: {
+          ...metadata,
+          ...fileStats,
+          processingSeconds
+        }
       });
 
       results.push({
@@ -406,6 +445,20 @@ router.get('/results', (req, res) => {
 });
 
 /**
+ * GET /api/transcribe/stats
+ * 获取转录功能累计统计
+ */
+router.get('/stats', (req, res) => {
+  try {
+    const stats = transcriptionResultStore.getStats();
+    res.json({ stats });
+  } catch (error) {
+    logger.error({ err: error }, '获取转录统计失败');
+    res.status(500).json({ error: error.message || '获取转录统计失败' });
+  }
+});
+
+/**
  * POST /api/transcribe/results/:id/format
  * AI 排版并分段转录结果
  */
@@ -430,6 +483,29 @@ router.post('/results/:id/format', async (req, res) => {
       resultIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '转录结果 AI 排版失败');
     res.status(500).json({ error: error.message || '转录结果 AI 排版失败' });
+  }
+});
+
+/**
+ * DELETE /api/transcribe/results/:id
+ * 删除已保存的转录结果
+ */
+router.delete('/results/:id', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '转录结果 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const deleted = transcriptionResultStore.remove(idCheck.id);
+    if (!deleted) return res.status(404).json({ error: '转录结果不存在' });
+
+    res.json({ message: '转录结果已删除' });
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasResultId: Boolean(req.params.id),
+      resultIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '删除转录结果失败');
+    res.status(500).json({ error: error.message || '删除转录结果失败' });
   }
 });
 

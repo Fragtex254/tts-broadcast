@@ -2,34 +2,91 @@
 
 /* === TAILWIND v4 DESIGN TOKEN REGISTRATION === */
 @theme {
+  /* Reference palette */
+  --color-burnt-peach-50: #fbeee9;
+  --color-burnt-peach-100: #f7dcd4;
+  --color-burnt-peach-200: #efb9a9;
+  --color-burnt-peach-300: #e7967e;
+  --color-burnt-peach-400: #df7353;
+  --color-burnt-peach-500: #d75128;
+  --color-burnt-peach-600: #ac4020;
+  --color-burnt-peach-700: #813018;
+  --color-burnt-peach-800: #562010;
+  --color-burnt-peach-900: #2b1008;
+  --color-burnt-peach-950: #1e0b06;
+  --color-sandy-clay-50: #fbf2ea;
+  --color-sandy-clay-100: #f6e5d5;
+  --color-sandy-clay-200: #eecbaa;
+  --color-sandy-clay-300: #e5b180;
+  --color-sandy-clay-400: #dc9756;
+  --color-sandy-clay-500: #d47d2b;
+  --color-sandy-clay-600: #a96423;
+  --color-sandy-clay-700: #7f4b1a;
+  --color-sandy-clay-800: #553211;
+  --color-sandy-clay-900: #2a1909;
+  --color-sandy-clay-950: #1e1106;
+  --color-powder-blush-50: #fcebe9;
+  --color-powder-blush-100: #f9d6d2;
+  --color-powder-blush-200: #f2ada6;
+  --color-powder-blush-300: #ec8579;
+  --color-powder-blush-400: #e65c4c;
+  --color-powder-blush-500: #df3320;
+  --color-powder-blush-600: #b32919;
+  --color-powder-blush-700: #861f13;
+  --color-powder-blush-800: #59140d;
+  --color-powder-blush-900: #2d0a06;
+  --color-powder-blush-950: #1f0704;
+  --color-tea-green-50: #f4faeb;
+  --color-tea-green-100: #e8f4d7;
+  --color-tea-green-200: #d2e9af;
+  --color-tea-green-300: #bbde87;
+  --color-tea-green-400: #a5d35f;
+  --color-tea-green-500: #8ec837;
+  --color-tea-green-600: #72a02c;
+  --color-tea-green-700: #557821;
+  --color-tea-green-800: #395016;
+  --color-tea-green-900: #1c280b;
+  --color-tea-green-950: #141c08;
+  --color-sky-blue-light-50: #eef6f7;
+  --color-sky-blue-light-100: #dcedef;
+  --color-sky-blue-light-200: #b9dadf;
+  --color-sky-blue-light-300: #96c8cf;
+  --color-sky-blue-light-400: #73b6bf;
+  --color-sky-blue-light-500: #50a4af;
+  --color-sky-blue-light-600: #40838c;
+  --color-sky-blue-light-700: #306269;
+  --color-sky-blue-light-800: #204146;
+  --color-sky-blue-light-900: #102123;
+  --color-sky-blue-light-950: #0b1718;
+
   /* Colors */
-  --color-paper: #F2EEDF;
-  --color-paper-2: #ECE6D2;
-  --color-ink: #2A241B;
-  --color-ink-soft: #5C5345;
-  --color-pink: #E1A4C2;
-  --color-lemon: #D6DD63;
-  --color-blush: #E8C9B6;
-  --color-sage: #B7C7A8;
-  --color-lilac: #C9BEDC;
-  --color-card-fill: rgba(255, 255, 255, 0.55);
-  --color-card-border: rgba(42, 36, 27, 0.08);
-  --color-rule-soft: rgba(42, 36, 27, 0.12);
+  --color-paper: #fbf2ea;
+  --color-paper-2: #f6e5d5;
+  --color-ink: #0b1718;
+  --color-ink-soft: #204146;
+  --color-pink: #e65c4c;
+  --color-lemon: #8ec837;
+  --color-blush: #e5b180;
+  --color-sage: #bbde87;
+  --color-lilac: #96c8cf;
+  --color-card-fill: rgba(255, 255, 255, 0.78);
+  --color-card-border: rgba(127, 75, 26, 0.16);
+  --color-rule-soft: rgba(127, 75, 26, 0.2);
 
   /* Border Radius */
-  --radius-card: 24px;
+  --radius-card: 18px;
   --radius-pill: 9999px;
   --radius-btn: 12px;
   --radius-input: 12px;
 
   /* Box Shadows */
-  --shadow-card: 0 1px 4px rgba(42, 36, 27, 0.04);
-  --shadow-card-hover: 0 4px 12px rgba(42, 36, 27, 0.08);
-  --shadow-btn: 0 1px 3px rgba(42, 36, 27, 0.06);
+  --shadow-card: 0 10px 30px rgba(42, 25, 9, 0.06);
+  --shadow-card-hover: 0 14px 36px rgba(42, 25, 9, 0.1);
+  --shadow-btn: 0 4px 10px rgba(42, 25, 9, 0.1);
 
   /* Font Families */
-  --font-display: 'Cormorant Garamond', 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
-  --font-body: 'Work Sans', 'Yozai', 'Noto Sans SC', sans-serif;
+  --font-display: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-body: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
 
   /* Animations */
   --animate-fade-in-up: fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -43,27 +100,27 @@
 
 /* === SOFT EDITORIAL DESIGN TOKENS (CSS Custom Properties) === */
 :root {
-  --color-paper: #F2EEDF;
-  --color-paper-2: #ECE6D2;
-  --color-ink: #2A241B;
-  --color-ink-soft: #5C5345;
-  --color-pink: #E1A4C2;
-  --color-lemon: #D6DD63;
-  --color-blush: #E8C9B6;
-  --color-sage: #B7C7A8;
-  --color-lilac: #C9BEDC;
-  --color-card-fill: rgba(255, 255, 255, 0.55);
-  --color-card-border: rgba(42, 36, 27, 0.08);
-  --color-rule-soft: rgba(42, 36, 27, 0.12);
-  --radius-card: 24px;
+  --color-paper: #fbf2ea;
+  --color-paper-2: #f6e5d5;
+  --color-ink: #0b1718;
+  --color-ink-soft: #204146;
+  --color-pink: #e65c4c;
+  --color-lemon: #8ec837;
+  --color-blush: #e5b180;
+  --color-sage: #bbde87;
+  --color-lilac: #96c8cf;
+  --color-card-fill: rgba(255, 255, 255, 0.78);
+  --color-card-border: rgba(127, 75, 26, 0.16);
+  --color-rule-soft: rgba(127, 75, 26, 0.2);
+  --radius-card: 18px;
   --radius-pill: 9999px;
   --radius-btn: 12px;
   --radius-input: 12px;
-  --shadow-card: 0 1px 4px rgba(42, 36, 27, 0.04);
-  --shadow-card-hover: 0 4px 12px rgba(42, 36, 27, 0.08);
-  --shadow-btn: 0 1px 3px rgba(42, 36, 27, 0.06);
-  --font-display: 'Cormorant Garamond', 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
-  --font-body: 'Work Sans', 'Yozai', 'Noto Sans SC', sans-serif;
+  --shadow-card: 0 10px 30px rgba(42, 25, 9, 0.06);
+  --shadow-card-hover: 0 14px 36px rgba(42, 25, 9, 0.1);
+  --shadow-btn: 0 4px 10px rgba(42, 25, 9, 0.1);
+  --font-display: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
+  --font-body: 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
@@ -78,9 +135,19 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.font-display,
+.font-display.italic {
+  font-style: normal;
+}
+
 ::selection {
-  background: rgba(225, 164, 194, 0.3);
+  background: rgba(150, 200, 207, 0.45);
   color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-sky-blue-light-600);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar { width: 6px; }

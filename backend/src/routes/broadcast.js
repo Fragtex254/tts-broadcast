@@ -11,6 +11,7 @@ const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
 const voiceConfigService = require('../services/voiceConfig');
 const audioAsset = require('../services/audioAsset');
+const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
 const { validateId, cleanAudioFile } = require('../utils/validation');
 
@@ -82,7 +83,7 @@ router.post('/rewrite', async (req, res) => {
  */
 router.post('/generate', async (req, res) => {
   try {
-    const { text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch, sourceItems, mode } = req.body;
+    const { text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, optimizeTextPreview, speed, emotion, pitch, sourceItems, mode } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: '请提供口播稿内容' });
@@ -94,6 +95,7 @@ router.post('/generate', async (req, res) => {
       voiceDesign,
       voiceClone,
       stylePrompt,
+      optimizeTextPreview,
       speed,
       emotion,
       pitch
@@ -119,7 +121,7 @@ router.post('/generate', async (req, res) => {
       voiceConfig: normalized.voiceConfig,
       resolveClone: true
     });
-    const audioBuffer = await tts.generateSpeech(speechParams);
+    const audioBuffer = await ttsQueue.enqueue(() => tts.generateSpeech(speechParams));
 
     const audioPath = audioAsset.writeBroadcastAudio(audioBuffer);
 
@@ -254,13 +256,14 @@ router.patch('/:id/voice-config', (req, res) => {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const { voiceType, voice, voiceDesign, voiceClone, stylePrompt, speed, emotion, pitch } = req.body;
+    const { voiceType, voice, voiceDesign, voiceClone, stylePrompt, optimizeTextPreview, speed, emotion, pitch } = req.body;
     const normalized = voiceConfigService.normalizeVoiceConfig({
       voiceType,
       voice,
       voiceDesign,
       voiceClone,
       stylePrompt,
+      optimizeTextPreview,
       speed,
       emotion,
       pitch

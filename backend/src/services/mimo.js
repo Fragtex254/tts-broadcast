@@ -3,6 +3,7 @@ const axios = require('axios');
 const db = require('../db');
 const llmModels = require('./llmModels');
 const { createScopedLogger } = require('./logger');
+const { MAX_SEGMENT_TEXT_LENGTH, normalizeSegmentTexts } = require('../utils/segmentText');
 
 const logger = createScopedLogger('mimo-service');
 
@@ -17,6 +18,7 @@ const DEFAULT_LLM_SETTINGS = {
 };
 
 const LLM_REQUEST_TIMEOUT_MS = 60000;
+const STYLE_TAG_SUGGEST_BATCH_SIZE = 10;
 
 /**
  * 读取设置值，缺失或格式错误时使用默认值
@@ -109,6 +111,10 @@ function createThinkingOption(enabled) {
   return enabled ? undefined : { type: 'disabled' };
 }
 
+function isMiniMaxOpenAiConfig(config) {
+  return /minimax/i.test(String(config.baseUrl || '')) || /minimax/i.test(String(config.model || ''));
+}
+
 /**
  * 拼接 OpenAI chat completions URL
  * @param {string} baseUrl - LLM baseURL
@@ -181,6 +187,43 @@ function stripThinkingContent(text) {
     .trim();
 }
 
+function extractJsonArrayText(text) {
+  let jsonStr = stripThinkingContent(text);
+  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  }
+
+  const arrayStart = jsonStr.indexOf('[');
+  const arrayEnd = jsonStr.lastIndexOf(']');
+  if (arrayStart >= 0 && arrayEnd > arrayStart) {
+    return jsonStr.slice(arrayStart, arrayEnd + 1).trim();
+  }
+  return jsonStr.trim();
+}
+
+function fallbackStyleTag(text, allowedTags) {
+  const allowed = new Set(allowedTags);
+  const value = String(text || '');
+  if (allowed.has('惊讶') && /没想到|竟然|突然|震惊|意外|惊人|出乎/.test(value)) return '惊讶';
+  if (allowed.has('兴奋') && /发布|突破|上线|提升|成功|灿烂|笃定|烈日|未来/.test(value)) return '兴奋';
+  if (allowed.has('严肃') && /战争|危机|饥荒|压力|管控|失败|风险|寒冷|死亡|困境/.test(value)) return '严肃';
+  if (allowed.has('温柔') && /细雨|温暖|湿润|春水|听雨|轻轻|柔和|西湖/.test(value)) return '温柔';
+  if (allowed.has('深沉') && /历史|文明|王朝|命运|悲歌|大雪|正统|文学|地理/.test(value)) return '深沉';
+  if (allowed.has('干练') && value.length < 28) return '干练';
+  if (allowed.has('平静')) return '平静';
+  return allowedTags[0] || '';
+}
+
+function isRecoverableStructuredOutputError(error) {
+  const status = getErrorStatus(error);
+  const message = String(error?.message || error?.response?.data?.error?.message || '');
+  return status === 422 || status === '422'
+    || message.includes('数量与句子数量不一致')
+    || message.includes('解析失败')
+    || message.includes('格式不正确');
+}
+
 /**
  * 调用 Anthropic 兼容 LLM
  * @param {Object} params
@@ -221,14 +264,19 @@ async function createAnthropicMessage({ prompt, systemPrompt, maxTokens, thinkin
  */
 async function createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, apiKeyOverride }) {
   const apiKey = apiKeyOverride || getApiKey('anthropic');
-  const response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), {
+  const payload = {
     model: config.model,
     max_tokens: maxTokens,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt }
     ]
-  }, {
+  };
+  if (isMiniMaxOpenAiConfig(config)) {
+    payload.thinking = createThinkingOption(false);
+  }
+
+  const response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), payload, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'api-key': apiKey,
@@ -309,9 +357,9 @@ ${itemsText}
 }
 
 /**
- * 将口播稿切分为适合 TTS 的短句
+ * 将口播稿切分为适合 TTS 的语义块
  * @param {string} text - 完整口播稿
- * @returns {Promise<string[]>} 切分后的短句数组
+ * @returns {Promise<string[]>} 切分后的语义块数组
  */
 async function splitScript(text) {
   if (!text || typeof text !== 'string') {
@@ -319,18 +367,19 @@ async function splitScript(text) {
   }
 
   const config = getLlmConfig();
-  const prompt = `你是一个专业的文本切分助手。请将以下口播稿切分为适合 TTS 语音合成的短句。
+  const prompt = `你是一个专业的口播稿语义切块助手。请将以下口播稿切分为适合 TTS 语音合成的语义块。
 
 切分原则：
-1. 按语义完整性和自然停顿切分，不要简单按标点符号拆分
-2. 每句长度控制在 15~80 个字符（太短影响 TTS 韵律，太长不便独立编辑）
-3. 开场白和结束语各自作为独立的一句
-4. 不要修改原文内容，只做切分
-5. 保持原文顺序
+1. 以播报语义、话题推进、情绪承接为边界切分，不要简单按标点符号或单句话拆分
+2. 尽量让连续铺垫、同一新闻点、同一转折保留在同一块中，减少 TTS 分段后情绪跳变
+3. 每个块最大文本长度不超过 ${MAX_SEGMENT_TEXT_LENGTH} 个中文字符；明显短于 120 字的块应尽量与相邻同主题内容合并
+4. 开场白和结束语可独立成块，但不要把普通自然句拆成零碎短句
+5. 不要修改、概括、增删原文内容，只做切分
+6. 保持原文顺序
 
-请以 JSON 数组格式输出，每个元素是一个短句。只输出 JSON 数组，不要有其他内容。
+请以 JSON 数组格式输出，每个元素是一个语义块字符串。只输出 JSON 数组，不要有其他内容。
 
-示例输出：["大家好，欢迎收听今日AI简讯。", "今天我们来聊聊几个重要的AI动态。", "..."]
+示例输出：["大家好，欢迎收听今日AI简讯。今天我们来聊聊几个重要的AI动态。", "首先是OpenAI发布了最新模型……这一部分值得关注的是……", "..."]
 
 口播稿内容：
 ${text}`;
@@ -342,14 +391,7 @@ ${text}`;
     thinkingEnabled: config.splitThinkingEnabled
   });
 
-  const trimmedText = rawText.trim();
-
-  // 尝试解析 JSON，处理可能的 markdown 代码块包裹
-  let jsonStr = trimmedText;
-  const codeBlockMatch = trimmedText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1].trim();
-  }
+  const jsonStr = extractJsonArrayText(rawText);
 
   let segments;
   try {
@@ -362,14 +404,14 @@ ${text}`;
     throw new Error('AI 切分结果为空或格式不正确');
   }
 
-  // 验证每个 segment 是非空字符串
+  // 验证每个 segment 是非空字符串；超长结果由本地规则兜底再切，保证 TTS 入参上限。
   for (const seg of segments) {
     if (typeof seg !== 'string' || seg.trim().length === 0) {
-      throw new Error('切分结果包含空句子');
+      throw new Error('切分结果包含空段落');
     }
   }
 
-  return segments.map(s => s.trim());
+  return normalizeSegmentTexts(segments);
 }
 
 /**
@@ -416,15 +458,7 @@ ${text}`;
  * @param {string[]} allowedTags - 候选风格标签集
  * @returns {Promise<string[]>} 与 texts 等长的标签数组（候选之一或空串）
  */
-async function suggestStyleTags(texts, allowedTags) {
-  if (!Array.isArray(texts) || texts.length === 0) {
-    throw new Error('请提供有效的句子列表');
-  }
-  if (!Array.isArray(allowedTags) || allowedTags.length === 0) {
-    throw new Error('请提供候选风格标签');
-  }
-
-  const config = getLlmConfig();
+async function suggestStyleTagsBatch(texts, allowedTags, config) {
   const numbered = texts.map((t, i) => `${i + 1}. ${t}`).join('\n');
   const prompt = `你是一个语音风格标注助手。下面是一篇新闻播报被切分后的若干句子。请为【每一句】从候选风格标签中选出最贴合的一个，用于控制该句的语音语气；如果都不贴合就返回空字符串。
 
@@ -441,16 +475,11 @@ ${numbered}`;
   const rawText = await createLlmMessage({
     prompt,
     systemPrompt: '你是一个语音风格标注助手，只输出 JSON 数组格式。',
-    maxTokens: Math.min(4000, 200 + texts.length * 20),
+    maxTokens: Math.min(1200, 200 + texts.length * 60),
     thinkingEnabled: config.splitThinkingEnabled,
   });
 
-  const trimmed = rawText.trim();
-  let jsonStr = trimmed;
-  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1].trim();
-  }
+  const jsonStr = extractJsonArrayText(rawText);
 
   let tags;
   try {
@@ -465,6 +494,34 @@ ${numbered}`;
 
   const allowed = new Set(allowedTags);
   return tags.map((t) => (typeof t === 'string' && allowed.has(t) ? t : ''));
+}
+
+async function suggestStyleTags(texts, allowedTags) {
+  if (!Array.isArray(texts) || texts.length === 0) {
+    throw new Error('请提供有效的句子列表');
+  }
+  if (!Array.isArray(allowedTags) || allowedTags.length === 0) {
+    throw new Error('请提供候选风格标签');
+  }
+
+  const config = getLlmConfig();
+  const allTags = [];
+  for (let start = 0; start < texts.length; start += STYLE_TAG_SUGGEST_BATCH_SIZE) {
+    const batch = texts.slice(start, start + STYLE_TAG_SUGGEST_BATCH_SIZE);
+    try {
+      const batchTags = await suggestStyleTagsBatch(batch, allowedTags, config);
+      allTags.push(...batchTags);
+    } catch (error) {
+      if (!isRecoverableStructuredOutputError(error)) throw error;
+      logger.warn({
+        err: error,
+        start,
+        batchSize: batch.length,
+      }, 'AI 风格建议批次失败，使用本地兜底标签');
+      allTags.push(...batch.map((text) => fallbackStyleTag(text, allowedTags)));
+    }
+  }
+  return allTags;
 }
 
 /**

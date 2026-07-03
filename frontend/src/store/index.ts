@@ -23,10 +23,12 @@ export type {
   LlmModelOption,
   Schedule,
   Segment,
+  SegmentDraftInput,
   Settings,
   TodayItem,
   TranscriptionResult,
   TranscriptionRecord,
+  TranscriptionStats,
   VoiceConfig,
   VoicePreset,
 } from './types';

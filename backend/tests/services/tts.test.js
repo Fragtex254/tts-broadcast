@@ -54,6 +54,50 @@ describe('TTS 服务', () => {
       );
     });
 
+    test('design 模式将合成文本放入 assistant 消息', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '这段试听文本必须进入请求',
+        voiceType: 'design',
+        voiceDesign: '温柔女声'
+      });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body.messages).toEqual([
+        { role: 'user', content: '温柔女声' },
+        { role: 'assistant', content: '这段试听文本必须进入请求' }
+      ]);
+      expect(body.audio).toEqual({ format: 'wav' });
+    });
+
+    test('design 模式显式开启时才优化试听文本', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '短试听',
+        voiceType: 'design',
+        voiceDesign: '温柔女声',
+        optimizeTextPreview: true
+      });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body.audio).toEqual({ format: 'wav', optimize_text_preview: true });
+    });
+
+    test('design 模式将风格提示合并进 user context', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '试听文本',
+        voiceType: 'design',
+        voiceDesign: '低柔磁性的成熟女性声线',
+        stylePrompt: '语速更慢，尾音轻轻下落'
+      });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body.messages[0].content).toContain('低柔磁性的成熟女性声线');
+      expect(body.messages[0].content).toContain('风格控制：语速更慢，尾音轻轻下落');
+      expect(body.messages[1].content).toBe('试听文本');
+    });
+
     test('clone 模式使用 voiceclone 模型', async () => {
       mockTtsResponse();
       await tts.generateSpeech({
@@ -68,33 +112,22 @@ describe('TTS 服务', () => {
       );
     });
 
-    test('429 错误最终抛出友好消息', async () => {
-      axios.post.mockRejectedValue({ response: { status: 429 } });
-      await expect(tts.generateSpeech({ text: '测试' }))
-        .rejects.toThrow('MiMo API 请求过于频繁，请稍后再试');
-      expect(axios.post).toHaveBeenCalledTimes(3);
+    test('429 错误抛出友好消息并携带退避时间', async () => {
+      axios.post.mockRejectedValue({ response: { status: 429, headers: { 'retry-after': '8' } } });
+      await expect(tts.generateSpeech({ text: '测试' })).rejects.toMatchObject({
+        message: 'MiMo API 请求过于频繁，请稍后再试',
+        code: 'MIMO_RATE_LIMIT',
+        retryAfterMs: 8000,
+      });
+      expect(axios.post).toHaveBeenCalledTimes(1);
     });
 
-    test('429 错误自动重试最多 3 次', async () => {
-      // 前两次 429，第三次成功
-      axios.post
-        .mockRejectedValueOnce({ response: { status: 429 } })
-        .mockRejectedValueOnce({ response: { status: 429 } })
-        .mockResolvedValueOnce({
-          data: { choices: [{ message: { audio: { data: fakeAudioBase64 } } }] }
-        });
-
-      const result = await tts.generateSpeech({ text: '测试' });
-      expect(Buffer.isBuffer(result)).toBe(true);
-      expect(axios.post).toHaveBeenCalledTimes(3);
-    });
-
-    test('429 重试 3 次后仍失败则抛错', async () => {
+    test('429 不在 TTS 服务内快速重试，避免绕过全局队列', async () => {
       axios.post.mockRejectedValue({ response: { status: 429 } });
 
       await expect(tts.generateSpeech({ text: '测试' }))
         .rejects.toThrow('MiMo API 请求过于频繁，请稍后再试');
-      expect(axios.post).toHaveBeenCalledTimes(3);
+      expect(axios.post).toHaveBeenCalledTimes(1);
     });
 
     test('超时错误抛出超时提示', async () => {

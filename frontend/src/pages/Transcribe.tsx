@@ -1,9 +1,17 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Header } from '../components/Layout/Header';
+import { TranscriptionHistoryPanel } from '../components/Transcribe/TranscriptionHistoryPanel';
 import { TranscriptionResultModal } from '../components/Transcribe/TranscriptionResultModal';
-import useStore, { type AsrProvider, type AsrLanguage, type BatchTranscriptionItem } from '../store';
+import useStore, {
+  type AsrProvider,
+  type AsrLanguage,
+  type BatchTranscriptionItem,
+  type TranscriptionRecord,
+  type TranscriptionStats,
+} from '../store';
 
 const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
   { value: 'auto', label: '自动检测' },
@@ -47,6 +55,10 @@ const BATCH_STATUS_DOTS: Record<BatchTranscriptionItem['status'], string> = {
   failed: 'bg-pink',
 };
 
+const ACTION_BUTTON_NEUTRAL = 'px-3.5 py-2 font-body text-[12px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150';
+const ACTION_BUTTON_FORMAT = 'px-3.5 py-2 font-body text-[12px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150';
+const ACTION_BUTTON_IMPORT = 'px-3.5 py-2 font-body text-[12px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150';
+
 // webkitdirectory 不是标准 React 属性，需通过 cast 透传
 const FOLDER_INPUT_PROPS = {
   webkitdirectory: '',
@@ -54,7 +66,7 @@ const FOLDER_INPUT_PROPS = {
 } as unknown as React.InputHTMLAttributes<HTMLInputElement>;
 
 type TranscribeMode = 'single' | 'batch';
-type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number };
+type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number } | { type: 'history'; id: number };
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -78,7 +90,78 @@ function getRelativePath(file: File): string {
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function formatDuration(seconds: number): string {
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  if (totalSeconds < 60) return `${totalSeconds} 秒`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const restSeconds = totalSeconds % 60;
+  if (minutes < 60) return restSeconds > 0 ? `${minutes} 分 ${restSeconds} 秒` : `${minutes} 分`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return restMinutes > 0 ? `${hours} 小时 ${restMinutes} 分` : `${hours} 小时`;
+}
+
+function formatInteger(value: number): string {
+  return Math.round(value).toLocaleString('zh-CN');
+}
+
+function formatSeconds(value: number): string {
+  return value.toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+}
+
+function TranscriptionStatsCenter({
+  stats,
+  isLoading,
+  onRefresh,
+}: {
+  stats: TranscriptionStats;
+  isLoading: boolean;
+  onRefresh: () => void;
+}) {
+  const items = [
+    { label: '文件总量', value: formatBytes(stats.total_file_size_bytes) },
+    { label: '音频总时长', value: formatDuration(stats.total_audio_duration_seconds) },
+    { label: '累计字数', value: `${formatInteger(stats.total_text_chars)} 字` },
+    { label: 'GPU 累计耗时', value: `${formatSeconds(stats.total_processing_seconds)} 秒` },
+  ];
+
+  return (
+    <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blush" />
+          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录统计中心</h3>
+          <span className="px-2 py-1 rounded-full bg-white/70 border border-card-border font-body text-[10px] text-ink-soft">
+            {formatInteger(stats.total_count)} 条记录
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
+        >
+          {isLoading ? '刷新中...' : '刷新'}
+        </button>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {items.map((item) => (
+          <div key={item.label} className="bg-white/65 rounded-2xl border border-card-border p-3 min-h-20">
+            <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-2">
+              {item.label}
+            </p>
+            <p className="font-display italic text-[20px] leading-tight text-ink break-words">
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function sanitizeFileName(name: string): string {
@@ -141,6 +224,14 @@ export const Transcribe: React.FC = () => {
   const isTranscribing = useStore((s) => s.isTranscribing);
   const transcribeProgress = useStore((s) => s.transcribeProgress);
   const transcribeMedia = useStore((s) => s.transcribeMedia);
+  const transcriptionHistory = useStore((s) => s.transcriptionHistory);
+  const transcriptionStats = useStore((s) => s.transcriptionStats);
+  const isLoadingTranscriptionHistory = useStore((s) => s.isLoadingTranscriptionHistory);
+  const isLoadingTranscriptionStats = useStore((s) => s.isLoadingTranscriptionStats);
+  const isDeletingTranscriptionResult = useStore((s) => s.isDeletingTranscriptionResult);
+  const fetchTranscriptionHistory = useStore((s) => s.fetchTranscriptionHistory);
+  const fetchTranscriptionStats = useStore((s) => s.fetchTranscriptionStats);
+  const deleteTranscriptionHistoryResult = useStore((s) => s.deleteTranscriptionHistoryResult);
   const formatTranscriptionResult = useStore((s) => s.formatTranscriptionResult);
   const setTranscriptionText = useStore((s) => s.setTranscriptionText);
   const updateScript = useStore((s) => s.updateScript);
@@ -164,12 +255,41 @@ export const Transcribe: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [batchCopiedIndex, setBatchCopiedIndex] = useState<number | null>(null);
   const [resultModalTarget, setResultModalTarget] = useState<ResultModalTarget | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TranscriptionRecord | null>(null);
 
   const asrProvider = selectedAsrProvider ?? settings.asr_provider ?? 'wsl_asr';
   const wslModel = selectedWslModel ?? settings.wsl_asr_model ?? 'qwen3-asr-1.7b';
   const transcribeOptions = asrProvider === 'wsl_asr'
     ? { wslModel: wslModel || settings.wsl_asr_model || 'qwen3-asr-1.7b', context: wslContext }
     : undefined;
+
+  const loadTranscriptionHistory = useCallback(async () => {
+    setHistoryError(null);
+    try {
+      await fetchTranscriptionHistory({ limit: 30 });
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : '获取转录历史失败');
+    }
+  }, [fetchTranscriptionHistory]);
+
+  const loadTranscriptionStats = useCallback(async () => {
+    setStatsError(null);
+    try {
+      await fetchTranscriptionStats();
+    } catch (err) {
+      setStatsError(err instanceof Error ? err.message : '获取转录统计失败');
+    }
+  }, [fetchTranscriptionStats]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadTranscriptionHistory();
+      void loadTranscriptionStats();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadTranscriptionHistory, loadTranscriptionStats]);
 
   const handleFile = useCallback((nextFile: File | null) => {
     setError(null);
@@ -291,6 +411,34 @@ export const Transcribe: React.FC = () => {
     downloadTextFile(relativePathToTxtName(item.relativePath), item.text);
   };
 
+  const handleDownloadHistoryRecord = (record: TranscriptionRecord) => {
+    const text = record.formatted_text.trim() || record.text.trim();
+    if (!text) return;
+    downloadTextFile(relativePathToTxtName(record.relative_path || record.file_name), text);
+  };
+
+  const handleImportHistoryRecord = (record: TranscriptionRecord) => {
+    const text = record.formatted_text.trim() || record.text.trim();
+    if (!text) return;
+    updateScript(text);
+    navigate('/editor');
+  };
+
+  const handleConfirmDeleteHistoryRecord = async () => {
+    if (!deleteTarget) return;
+    setHistoryError(null);
+    try {
+      await deleteTranscriptionHistoryResult(deleteTarget.id);
+      await loadTranscriptionStats();
+      if (resultModalTarget?.type === 'history' && resultModalTarget.id === deleteTarget.id) {
+        setResultModalTarget(null);
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : '删除转录结果失败');
+    }
+  };
+
   const [isZipping, setIsZipping] = useState(false);
 
   const handleDownloadAll = async () => {
@@ -333,18 +481,29 @@ export const Transcribe: React.FC = () => {
   const modalItem = resultModalTarget?.type === 'batch'
     ? batchTranscriptionItems[resultModalTarget.index]
     : null;
+  const modalHistoryRecord = resultModalTarget?.type === 'history'
+    ? transcriptionHistory.find((record) => record.id === resultModalTarget.id) ?? null
+    : null;
   const modalTitle = resultModalTarget?.type === 'single'
     ? (file?.name || transcriptionRecord?.file_name || '转录结果')
-    : (modalItem?.relativePath || '转录结果');
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.relativePath || '转录结果')
+    : (modalHistoryRecord?.relative_path || modalHistoryRecord?.file_name || '转录结果');
   const modalText = resultModalTarget?.type === 'single'
     ? (transcriptionRecord?.text || transcriptionText)
-    : (modalItem?.transcriptionResult?.text || modalItem?.text || '');
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.transcriptionResult?.text || modalItem?.text || '')
+    : (modalHistoryRecord?.text || '');
   const modalFormattedText = resultModalTarget?.type === 'single'
     ? (transcriptionRecord?.formatted_text || '')
-    : (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '');
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '')
+    : (modalHistoryRecord?.formatted_text || '');
   const modalResultId = resultModalTarget?.type === 'single'
     ? transcriptionRecord?.id
-    : (modalItem?.resultId || modalItem?.transcriptionResult?.id);
+    : resultModalTarget?.type === 'batch'
+    ? (modalItem?.resultId || modalItem?.transcriptionResult?.id)
+    : modalHistoryRecord?.id;
 
   const handleFormatModalResult = async (text: string) => {
     if (!modalResultId) {
@@ -358,6 +517,8 @@ export const Transcribe: React.FC = () => {
     if (!text.trim()) return;
     const baseName = resultModalTarget?.type === 'single'
       ? (file ? stripExtension(file.name) : stripExtension(transcriptionRecord?.file_name || '转录结果'))
+      : resultModalTarget?.type === 'history'
+      ? stripExtension(modalHistoryRecord?.relative_path || modalHistoryRecord?.file_name || '转录结果')
       : stripExtension(modalItem?.relativePath || '转录结果');
     downloadTextFile(`${sanitizeFileName(baseName)}_排版.txt`, text);
   };
@@ -367,7 +528,7 @@ export const Transcribe: React.FC = () => {
       <Header title="转录" subtitle="上传音频或视频并转换为口播稿文本" />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl mx-auto space-y-4">
+        <div className="max-w-4xl mx-auto space-y-4">
           {/* 模式切换 */}
           <div className="flex gap-2">
             {(['single', 'batch'] as const).map((m) => (
@@ -384,10 +545,21 @@ export const Transcribe: React.FC = () => {
             ))}
           </div>
 
+          <TranscriptionStatsCenter
+            stats={transcriptionStats}
+            isLoading={isLoadingTranscriptionStats}
+            onRefresh={loadTranscriptionStats}
+          />
+          {statsError && (
+            <div className="bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
+              {statsError}
+            </div>
+          )}
+
           {mode === 'single' ? (
             <>
               <section
-                className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
+                className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
                 style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both' }}
               >
                 <div className="flex items-center gap-2 mb-4">
@@ -414,7 +586,7 @@ export const Transcribe: React.FC = () => {
                   <p className="font-display italic text-[18px] text-ink-soft mb-1">
                     {file ? file.name : '选择或拖拽音频 / 视频'}
                   </p>
-                  <p className="font-body text-[12px] text-ink-soft/45">
+                  <p className="font-body text-[12px] text-ink-soft/70">
                     wav, mp3, m4a, mp4, mov, webm
                   </p>
                 </div>
@@ -450,7 +622,7 @@ export const Transcribe: React.FC = () => {
                   </button>
                 </div>
                 {asrProvider === 'qwen_mlx' && (
-                  <p className="mt-2 font-body text-[11px] text-ink-soft/45 animate-fade-in">
+                  <p className="mt-2 font-body text-[11px] text-ink-soft/70 animate-fade-in">
                     将连接 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，请先在 Mac 上启动 mlx-qwen3-asr serve。
                   </p>
                 )}
@@ -474,7 +646,7 @@ export const Transcribe: React.FC = () => {
                       placeholder="上下文：人名、术语、产品名"
                       className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
                     />
-                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
                       将提交到 {settings.wsl_asr_base_url || 'http://192.168.31.137:18080/v1'} 的 WSL job 队列。
                     </p>
                   </div>
@@ -508,7 +680,7 @@ export const Transcribe: React.FC = () => {
                       />
                     </div>
                     {transcribeProgress.total > 0 && (
-                      <p className="mt-2 font-body text-[11px] text-ink-soft/45">
+                      <p className="mt-2 font-body text-[11px] text-ink-soft/70">
                         已完成 {transcribeProgress.current} / {transcribeProgress.total} 个音频片段
                       </p>
                     )}
@@ -517,7 +689,7 @@ export const Transcribe: React.FC = () => {
               </section>
 
               <section
-                className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
+                className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
                 style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
               >
                 <div className="flex items-center justify-between mb-4">
@@ -526,7 +698,7 @@ export const Transcribe: React.FC = () => {
                     <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录结果</h3>
                   </div>
                   {transcriptionText && (
-                    <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/40">
+                    <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
                       {transcriptionText.length} 字
                     </span>
                   )}
@@ -543,28 +715,28 @@ export const Transcribe: React.FC = () => {
                   <button
                     onClick={handleCopy}
                     disabled={!transcriptionText}
-                    className="px-4 py-2 font-body text-[12px] text-ink-soft hover:text-ink disabled:opacity-40 transition-colors"
+                    className={ACTION_BUTTON_NEUTRAL}
                   >
                     {copied ? '已复制' : '复制'}
                   </button>
                   <button
                     onClick={handleDownload}
                     disabled={!transcriptionText.trim()}
-                    className="px-4 py-2 font-body text-[12px] text-ink-soft hover:text-ink disabled:opacity-40 transition-colors"
+                    className={ACTION_BUTTON_NEUTRAL}
                   >
                     下载 TXT
                   </button>
                   <button
                     onClick={() => setResultModalTarget({ type: 'single' })}
                     disabled={!transcriptionText.trim() || !transcriptionRecord?.id}
-                    className="px-4 py-2 font-body text-[12px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150"
+                    className={ACTION_BUTTON_FORMAT}
                   >
                     查看 / 排版
                   </button>
                   <button
                     onClick={handleImport}
                     disabled={!transcriptionText.trim()}
-                    className="px-4 py-2 font-body text-[12px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150"
+                    className={ACTION_BUTTON_IMPORT}
                   >
                     导入稿件
                   </button>
@@ -574,7 +746,7 @@ export const Transcribe: React.FC = () => {
           ) : (
             <>
               <section
-                className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
+                className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
                 style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both' }}
               >
                 <div className="flex items-center gap-2 mb-4">
@@ -600,7 +772,7 @@ export const Transcribe: React.FC = () => {
                       ? `已选择 ${batchFiles.length} 个音视频文件`
                       : '选择一个文件夹'}
                   </p>
-                  <p className="font-body text-[12px] text-ink-soft/45">
+                  <p className="font-body text-[12px] text-ink-soft/70">
                     自动遍历子目录，仅保留 mp3 / mp4 / m4a / wav / mov / webm
                   </p>
                 </div>
@@ -642,7 +814,7 @@ export const Transcribe: React.FC = () => {
                   </button>
                 </div>
                 {asrProvider === 'qwen_mlx' && (
-                  <p className="mt-2 font-body text-[11px] text-ink-soft/45 animate-fade-in">
+                  <p className="mt-2 font-body text-[11px] text-ink-soft/70 animate-fade-in">
                     批量文件会串行发送到 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，建议 Mac 先用 1 个任务验证负载。
                   </p>
                 )}
@@ -666,7 +838,7 @@ export const Transcribe: React.FC = () => {
                       placeholder="上下文：人名、术语、产品名"
                       className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
                     />
-                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/45">
+                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
                       批量文件会逐个提交到 {settings.wsl_asr_base_url || 'http://192.168.31.137:18080/v1'} 的 WSL job 队列。
                     </p>
                   </div>
@@ -700,7 +872,7 @@ export const Transcribe: React.FC = () => {
                       />
                     </div>
                     {batchTranscribeProgress.total > 0 && (
-                      <p className="mt-2 font-body text-[11px] text-ink-soft/45">
+                      <p className="mt-2 font-body text-[11px] text-ink-soft/70">
                         文件 {batchTranscribeProgress.currentIndex + (isBatchTranscribing ? 1 : 0)} / {batchTranscribeProgress.total}
                       </p>
                     )}
@@ -711,7 +883,7 @@ export const Transcribe: React.FC = () => {
               {/* 文件 / 结果列表 */}
               {showBatchItems ? (
                 <section
-                  className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
+                  className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
                   style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
                 >
                   <div className="flex items-center justify-between mb-4">
@@ -745,7 +917,7 @@ export const Transcribe: React.FC = () => {
                           <p className="font-body text-[12px] text-ink truncate flex-1" title={item.relativePath}>
                             {item.relativePath}
                           </p>
-                          <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/50 shrink-0">
+                          <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 shrink-0">
                             {BATCH_STATUS_LABELS[item.status]}
                           </span>
                         </div>
@@ -765,32 +937,32 @@ export const Transcribe: React.FC = () => {
 
                         {item.status === 'completed' && item.text && (
                           <div className="flex items-center justify-between mt-2">
-                            <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/40">
+                            <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
                               {item.text.length} 字
                             </span>
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleCopyItem(index, item.text)}
-                                className="px-3 py-1 font-body text-[11px] text-ink-soft hover:text-ink transition-colors"
+                                className={ACTION_BUTTON_NEUTRAL}
                               >
                                 {batchCopiedIndex === index ? '已复制' : '复制'}
                               </button>
                               <button
                                 onClick={() => handleDownloadItem(item)}
-                                className="px-3 py-1 font-body text-[11px] text-ink-soft hover:text-ink transition-colors"
+                                className={ACTION_BUTTON_NEUTRAL}
                               >
                                 下载
                               </button>
                               <button
                                 onClick={() => setResultModalTarget({ type: 'batch', index })}
                                 disabled={!item.resultId && !item.transcriptionResult?.id}
-                                className="px-3 py-1 font-body text-[11px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-all duration-150"
+                                className={ACTION_BUTTON_FORMAT}
                               >
                                 查看 / 排版
                               </button>
                               <button
                                 onClick={() => handleImportItem(item.text)}
-                                className="px-3 py-1 font-body text-[11px] bg-sage hover:brightness-105 text-ink rounded-lg transition-all duration-150"
+                                className={ACTION_BUTTON_IMPORT}
                               >
                                 导入稿件
                               </button>
@@ -804,7 +976,7 @@ export const Transcribe: React.FC = () => {
               ) : (
                 batchFiles.length > 0 && (
                   <section
-                    className="bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
+                    className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
                     style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
                   >
                     <div className="flex items-center justify-between mb-4">
@@ -868,7 +1040,7 @@ export const Transcribe: React.FC = () => {
                             <p className={`font-body text-[11px] truncate flex-1 ${isSelected ? 'text-ink' : 'text-ink-soft/60'}`} title={getRelativePath(f)}>
                               {getRelativePath(f)}
                             </p>
-                            <span className="font-body text-[10px] text-ink-soft/40 shrink-0">
+                            <span className="font-body text-[10px] text-ink-soft/70 shrink-0">
                               {formatBytes(f.size)}
                             </span>
                             <button
@@ -876,7 +1048,7 @@ export const Transcribe: React.FC = () => {
                                 e.stopPropagation();
                                 if (!isBatchTranscribing) removeBatchFile(index);
                               }}
-                              className="font-body text-[11px] text-ink-soft/50 hover:text-pink transition-colors shrink-0"
+                              className="font-body text-[11px] text-ink-soft/70 hover:text-pink transition-colors shrink-0"
                             >
                               移除
                             </button>
@@ -889,8 +1061,32 @@ export const Transcribe: React.FC = () => {
               )}
             </>
           )}
+
+          <TranscriptionHistoryPanel
+            records={transcriptionHistory}
+            isLoading={isLoadingTranscriptionHistory}
+            error={historyError}
+            onRefresh={loadTranscriptionHistory}
+            onOpen={(record) => setResultModalTarget({ type: 'history', id: record.id })}
+            onDownload={handleDownloadHistoryRecord}
+            onImport={handleImportHistoryRecord}
+            onDelete={setDeleteTarget}
+          />
         </div>
       </main>
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        title="删除转录文稿"
+        message={`确定删除「${deleteTarget?.relative_path || deleteTarget?.file_name || '这条转录文稿'}」吗？`}
+        warningMessage="删除后无法从转录历史中恢复。"
+        confirmText="确认删除"
+        cancelText="取消"
+        isLoading={isDeletingTranscriptionResult}
+        onConfirm={handleConfirmDeleteHistoryRecord}
+        onCancel={() => {
+          if (!isDeletingTranscriptionResult) setDeleteTarget(null);
+        }}
+      />
       {resultModalTarget && (
         <TranscriptionResultModal
           key={`${resultModalTarget.type}-${modalResultId ?? 'unsaved'}-${resultModalTarget.type === 'batch' ? resultModalTarget.index : 0}`}

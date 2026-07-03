@@ -13,6 +13,7 @@ function buildVoicePayload(voiceConfig: AppState['voiceConfig']) {
     voiceDesign: voiceConfig.voiceType === 'design' ? voiceConfig.voiceDesign : undefined,
     voiceClone: voiceConfig.voiceType === 'clone' ? voiceConfig.voiceClone : undefined,
     stylePrompt: voiceConfig.stylePrompt || undefined,
+    optimizeTextPreview: voiceConfig.voiceType === 'design' ? voiceConfig.optimizeTextPreview : undefined,
     speed: voiceConfig.speed,
     emotion: voiceConfig.emotion,
     pitch: voiceConfig.pitch,
@@ -31,6 +32,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
   | 'regenerateSegment'
   | 'batchGenerateSegments'
   | 'deleteSegment'
+  | 'replaceSegments'
   | 'mergeSegments'
   | 'isSuggestingTags'
   | 'updateSegmentStyleTag'
@@ -110,7 +112,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     regenerateSegment: async (broadcastId, segId) => {
       set((state) => ({
         segments: state.segments.map((s) =>
-          s.id === segId ? { ...s, status: 'generating' as const } : s
+          s.id === segId ? { ...s, status: 'generating' as const, error_message: '' } : s
         ),
       }));
       try {
@@ -126,8 +128,8 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         return updated;
       } catch (error) {
         set((state) => ({
-          segments: state.segments.map((s) =>
-            s.id === segId ? { ...s, status: 'failed' as const } : s
+        segments: state.segments.map((s) =>
+            s.id === segId ? { ...s, status: 'failed' as const, error_message: '重新生成失败' } : s
           ),
         }));
         logger.error({ err: toLogError(error), broadcastId, segmentId: segId }, '重新生成失败');
@@ -138,8 +140,8 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     batchGenerateSegments: async (broadcastId) => {
       set((state) => ({
         segments: state.segments.map((s) =>
-          s.status === 'pending' || s.status === 'failed'
-            ? { ...s, status: 'generating' as const }
+          s.status === 'pending' || s.status === 'failed' || s.status === 'generating'
+            ? { ...s, status: 'generating' as const, error_message: '' }
             : s
         ),
       }));
@@ -150,6 +152,16 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         set({ segments });
         return { segments, results };
       } catch (error) {
+        try {
+          const response = await broadcastApi.getSegments(broadcastId);
+          set({ segments: response.data.segments });
+        } catch {
+          set((state) => ({
+            segments: state.segments.map((s) =>
+              s.status === 'generating' ? { ...s, status: 'failed' as const, error_message: '批量生成失败' } : s
+            ),
+          }));
+        }
         logger.error({ err: toLogError(error), broadcastId }, '批量生成失败');
         throw error;
       }
@@ -163,6 +175,18 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         return segments;
       } catch (error) {
         logger.error({ err: toLogError(error), broadcastId, segmentId: segId }, '删除句子失败');
+        throw error;
+      }
+    },
+
+    replaceSegments: async (broadcastId, segments) => {
+      try {
+        const response = await broadcastApi.replaceSegments(broadcastId, segments);
+        const updatedSegments = response.data.segments;
+        set({ segments: updatedSegments });
+        return updatedSegments;
+      } catch (error) {
+        logger.error({ err: toLogError(error), broadcastId, count: segments.length }, '批量整理句子失败');
         throw error;
       }
     },
