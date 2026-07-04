@@ -111,8 +111,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const handleDownload = () => {
     if (!audioUrl) return;
     const a = document.createElement('a');
-    a.href = audioUrl;
-    a.download = `${title}.mp3`;
+    const version = audioUrl.includes('?') ? audioUrl.slice(audioUrl.indexOf('?')) : '';
+    a.href = broadcastId ? `/api/broadcast/${broadcastId}/download${version}` : audioUrl;
+    a.download = `${title}.wav`;
     a.click();
   };
 

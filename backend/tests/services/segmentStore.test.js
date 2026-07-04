@@ -35,6 +35,7 @@ describe('segmentStore', () => {
       const segs = segmentStore.getByBroadcastId(broadcastId);
       expect(segs[0].status).toBe('pending');
       expect(segs[0].error_message).toBe('');
+      expect(segs[0].playback_rate).toBe(1);
     });
   });
 
@@ -103,6 +104,26 @@ describe('segmentStore', () => {
       segmentStore.updateStatus(seg.id, 'generating');
       const generating = segmentStore.getByIdAndBroadcastId(seg.id, broadcastId);
       expect(generating.error_message).toBe('');
+    });
+  });
+
+  describe('playbackRate', () => {
+    test('单段更新 playback_rate 不重置音频状态', () => {
+      segmentStore.createMany(broadcastId, ['测试']);
+      const seg = segmentStore.getByBroadcastId(broadcastId)[0];
+      segmentStore.updateStatus(seg.id, 'generated', '/audio/seg.wav');
+      segmentStore.updatePlaybackRate(seg.id, 1.5);
+      const updated = segmentStore.getByIdAndBroadcastId(seg.id, broadcastId);
+      expect(updated.playback_rate).toBe(1.5);
+      expect(updated.status).toBe('generated');
+      expect(updated.audio_path).toBe('/audio/seg.wav');
+    });
+
+    test('批量更新 playback_rate', () => {
+      segmentStore.createMany(broadcastId, ['A', 'B']);
+      segmentStore.bulkUpdatePlaybackRate(broadcastId, 0.75);
+      const segments = segmentStore.getByBroadcastId(broadcastId);
+      expect(segments.map((s) => s.playback_rate)).toEqual([0.75, 0.75]);
     });
   });
 

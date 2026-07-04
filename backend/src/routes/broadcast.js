@@ -6,6 +6,7 @@ const fs = require('fs');
 const aihot = require('../services/aihot');
 const mimo = require('../services/mimo');
 const tts = require('../services/tts');
+const audio = require('../services/audio');
 const db = require('../db');
 const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
@@ -16,6 +17,14 @@ const { createScopedLogger } = require('../services/logger');
 const { validateId, cleanAudioFile } = require('../utils/validation');
 
 const logger = createScopedLogger('broadcast-route');
+
+function sanitizeDownloadName(value) {
+  const base = String(value || 'tts-broadcast')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 80);
+  return `${base || 'tts-broadcast'}.wav`;
+}
 
 /**
  * GET /api/broadcast/today
@@ -351,16 +360,79 @@ router.post('/:id/save', (req, res) => {
 });
 
 /**
- * GET /api/broadcast/:id/audio
- * 获取播报音频文件
+ * GET /api/broadcast/:id/download
+ * 下载播报音频；分段播报会按各段 playback_rate 实时生成不变调变速音频
  */
-router.get('/:id/audio', (req, res) => {
+router.get('/:id/download', async (req, res) => {
   try {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     const broadcast = broadcastStore.getById(idCheck.id);
     if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    const filename = sanitizeDownloadName(broadcast.title);
+    if (broadcast.mode === 'segmented') {
+      const segments = segmentStore.getByBroadcastId(idCheck.id);
+      if (segments.length === 0) {
+        return res.status(400).json({ error: '没有可下载的句子音频' });
+      }
+      const notGenerated = segments.filter((segment) => segment.status !== 'generated' || !segment.audio_path);
+      if (notGenerated.length > 0) {
+        return res.status(400).json({ error: `还有 ${notGenerated.length} 个句子未生成音频，请先完成所有句子的生成` });
+      }
+
+      const buffer = await audio.mergeSegmentAudioWithRates(segments);
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Content-Disposition', `attachment; filename="tts-broadcast.wav"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      return res.send(buffer);
+    }
+
+    if (!broadcast.audio_path) {
+      return res.status(404).json({ error: '音频文件不存在' });
+    }
+    const filepath = path.join(__dirname, '../..', broadcast.audio_path);
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: '音频文件不存在' });
+    }
+
+    return res.download(filepath, filename);
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '下载音频失败');
+    res.status(500).json({ error: error.message || '下载音频失败' });
+  }
+});
+
+/**
+ * GET /api/broadcast/:id/audio
+ * 获取播报音频文件
+ */
+router.get('/:id/audio', async (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    if (broadcast.mode === 'segmented') {
+      const segments = segmentStore.getByBroadcastId(idCheck.id);
+      if (segments.length === 0) {
+        return res.status(400).json({ error: '没有可播放的句子音频' });
+      }
+      const notGenerated = segments.filter((segment) => segment.status !== 'generated' || !segment.audio_path);
+      if (notGenerated.length > 0) {
+        return res.status(400).json({ error: `还有 ${notGenerated.length} 个句子未生成音频，请先完成所有句子的生成` });
+      }
+
+      const buffer = await audio.mergeSegmentAudioWithRates(segments);
+      res.setHeader('Content-Type', 'audio/wav');
+      return res.send(buffer);
+    }
 
     if (!broadcast.audio_path) {
       return res.status(404).json({ error: '音频文件不存在' });
@@ -371,14 +443,14 @@ router.get('/:id/audio', (req, res) => {
       return res.status(404).json({ error: '音频文件不存在' });
     }
 
-    res.sendFile(filepath);
+    return res.sendFile(filepath);
   } catch (error) {
     logger.error({
       err: error,
       hasBroadcastId: Boolean(req.params.id),
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '获取音频失败');
-    res.status(500).json({ error: '获取音频失败' });
+    res.status(500).json({ error: error.message || '获取音频失败' });
   }
 });
 

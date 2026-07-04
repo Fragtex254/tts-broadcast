@@ -87,8 +87,11 @@ export const broadcastApi = {
   getSegments: (id: number) =>
     api.get(`/broadcast/${id}/segments`),
 
-  updateSegment: (broadcastId: number, segId: number, data: { text?: string; styleTag?: string }) =>
+  updateSegment: (broadcastId: number, segId: number, data: { text?: string; styleTag?: string; playbackRate?: number }) =>
     api.put(`/broadcast/${broadcastId}/segments/${segId}`, data),
+
+  updateAllSegmentPlaybackRates: (broadcastId: number, playbackRate: number) =>
+    api.patch(`/broadcast/${broadcastId}/segments/playback-rate`, { playbackRate }),
 
   regenerateSegment: (broadcastId: number, segId: number) =>
     api.post(`/broadcast/${broadcastId}/segments/${segId}/regenerate`),

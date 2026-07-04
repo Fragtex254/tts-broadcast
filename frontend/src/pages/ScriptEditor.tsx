@@ -13,8 +13,10 @@ export const ScriptEditor: React.FC = () => {
   const saveBroadcast = useStore((s) => s.saveBroadcast);
   const voiceConfig = useStore((s) => s.voiceConfig);
 
-  const audioUrl = currentBroadcast?.audio_path
-    ? `/api/broadcast/${currentBroadcast.id}/audio`
+  const audioUrl = currentBroadcast && (
+    currentBroadcast.audio_path || (currentBroadcast.mode === 'segmented' && currentBroadcast.status === 'generated')
+  )
+    ? `/api/broadcast/${currentBroadcast.id}/audio?t=${encodeURIComponent(currentBroadcast.updated_at)}`
     : null;
 
   const isSegmented = currentBroadcast?.mode === 'segmented';

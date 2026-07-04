@@ -23,6 +23,8 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
   | 'mergeSegments'
   | 'isSuggestingTags'
   | 'updateSegmentStyleTag'
+  | 'updateSegmentPlaybackRate'
+  | 'updateAllSegmentPlaybackRates'
   | 'suggestTags'
   | 'clearSegments'
 > {
@@ -88,6 +90,10 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         const updated = response.data.segment;
         set((state) => ({
           segments: state.segments.map((s) => (s.id === segId ? updated : s)),
+          currentBroadcast: state.currentBroadcast?.id === broadcastId
+            ? { ...state.currentBroadcast, audio_path: null }
+            : state.currentBroadcast,
+          broadcasts: state.broadcasts.map((b) => (b.id === broadcastId ? { ...b, audio_path: null } : b)),
         }));
         return updated;
       } catch (error) {
@@ -202,6 +208,10 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         const updated = response.data.segment;
         set((state) => ({
           segments: state.segments.map((s) => (s.id === segId ? updated : s)),
+          currentBroadcast: state.currentBroadcast?.id === broadcastId
+            ? { ...state.currentBroadcast, audio_path: null }
+            : state.currentBroadcast,
+          broadcasts: state.broadcasts.map((b) => (b.id === broadcastId ? { ...b, audio_path: null } : b)),
         }));
         return updated;
       } catch (error) {
@@ -220,6 +230,42 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       } catch (error) {
         set({ isSuggestingTags: false });
         logger.error({ err: toLogError(error), broadcastId }, 'AI 建议风格失败');
+        throw error;
+      }
+    },
+
+    updateSegmentPlaybackRate: async (broadcastId, segId, playbackRate) => {
+      try {
+        const response = await broadcastApi.updateSegment(broadcastId, segId, { playbackRate });
+        const updated = response.data.segment;
+        set((state) => ({
+          segments: state.segments.map((s) => (s.id === segId ? updated : s)),
+          currentBroadcast: state.currentBroadcast?.id === broadcastId
+            ? { ...state.currentBroadcast, audio_path: null }
+            : state.currentBroadcast,
+          broadcasts: state.broadcasts.map((b) => (b.id === broadcastId ? { ...b, audio_path: null } : b)),
+        }));
+        return updated;
+      } catch (error) {
+        logger.error({ err: toLogError(error), broadcastId, segmentId: segId, playbackRate }, '设置句子倍速失败');
+        throw error;
+      }
+    },
+
+    updateAllSegmentPlaybackRates: async (broadcastId, playbackRate) => {
+      try {
+        const response = await broadcastApi.updateAllSegmentPlaybackRates(broadcastId, playbackRate);
+        const segments = response.data.segments;
+        set((state) => ({
+          segments,
+          currentBroadcast: state.currentBroadcast?.id === broadcastId
+            ? { ...state.currentBroadcast, audio_path: null }
+            : state.currentBroadcast,
+          broadcasts: state.broadcasts.map((b) => (b.id === broadcastId ? { ...b, audio_path: null } : b)),
+        }));
+        return segments;
+      } catch (error) {
+        logger.error({ err: toLogError(error), broadcastId, playbackRate }, '批量设置句子倍速失败');
         throw error;
       }
     },

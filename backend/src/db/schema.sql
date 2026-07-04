@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS segments (
   audio_path TEXT,
   status TEXT DEFAULT 'pending',
   style_tag TEXT DEFAULT '',
+  playback_rate REAL DEFAULT 1.0,
   error_message TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

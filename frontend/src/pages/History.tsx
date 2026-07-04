@@ -175,7 +175,11 @@ export const History: React.FC = () => {
     }
     navigate('/editor');
   }, [setCurrentBroadcast, fetchSegments, navigate]);
-  const getAudioUrl = useCallback((broadcast: Broadcast): string | null => broadcast.audio_path ? `/api/broadcast/${broadcast.id}/audio` : null, []);
+  const getAudioUrl = useCallback((broadcast: Broadcast): string | null => (
+    broadcast.audio_path || (broadcast.mode === 'segmented' && broadcast.status === 'generated')
+      ? `/api/broadcast/${broadcast.id}/audio?t=${encodeURIComponent(broadcast.updated_at)}`
+      : null
+  ), []);
   const totalPages = Math.ceil(total / limit);
 
   return (

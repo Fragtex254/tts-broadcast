@@ -1,7 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { mergeWavFiles } = require('../../src/services/audio');
+const {
+  buildAtempoFilter,
+  mergeWavFiles,
+  normalizePlaybackRate,
+} = require('../../src/services/audio');
 
 /**
  * 创建一个最小的有效 WAV 文件（24kHz, 16bit, mono）
@@ -35,6 +39,39 @@ function createTestWav(sampleCount) {
   for (let i = 0; i < sampleCount; i++) {
     buffer.writeInt16LE(i % 32000, 44 + i * 2);
   }
+
+  return buffer;
+}
+
+function createTestWavWithListChunk(sampleCount) {
+  const pcm = createTestWav(sampleCount).slice(44);
+  const listPayload = Buffer.from('INFOISFTtest');
+  const listSize = listPayload.length + (listPayload.length % 2);
+  const dataSize = pcm.length;
+  const buffer = Buffer.alloc(12 + 24 + 8 + listSize + 8 + dataSize);
+
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(buffer.length - 8, 4);
+  buffer.write('WAVE', 8);
+
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(24000, 24);
+  buffer.writeUInt32LE(48000, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+
+  const listOffset = 36;
+  buffer.write('LIST', listOffset);
+  buffer.writeUInt32LE(listPayload.length, listOffset + 4);
+  listPayload.copy(buffer, listOffset + 8);
+
+  const dataOffset = listOffset + 8 + listSize;
+  buffer.write('data', dataOffset);
+  buffer.writeUInt32LE(dataSize, dataOffset + 4);
+  pcm.copy(buffer, dataOffset + 8);
 
   return buffer;
 }
@@ -103,6 +140,19 @@ describe('WAV 合并服务', () => {
     expect(merged).toEqual(wav);
   });
 
+  test('兼容包含 LIST 元数据块的 WAV，合并后输出标准 data chunk', () => {
+    const file1 = path.join(tmpDir, 'with-list-a.wav');
+    const file2 = path.join(tmpDir, 'with-list-b.wav');
+    fs.writeFileSync(file1, createTestWavWithListChunk(100));
+    fs.writeFileSync(file2, createTestWavWithListChunk(200));
+
+    const merged = mergeWavFiles([file1, file2]);
+
+    expect(merged.toString('ascii', 36, 40)).toBe('data');
+    expect(merged.readUInt32LE(40)).toBe((100 + 200) * 2);
+    expect(merged.length).toBe(44 + (100 + 200) * 2);
+  });
+
   test('空文件列表抛出错误', () => {
     expect(() => mergeWavFiles([])).toThrow('至少需要一个 WAV 文件');
   });
@@ -115,6 +165,23 @@ describe('WAV 合并服务', () => {
     const tiny = path.join(tmpDir, 'tiny.wav');
     fs.writeFileSync(tiny, Buffer.alloc(10)); // 小于 44 字节
     expect(() => mergeWavFiles([tiny])).toThrow(/太小/);
+  });
+});
+
+describe('音频不变调倍速工具', () => {
+  test('校验并保留两位小数倍速', () => {
+    expect(normalizePlaybackRate(1)).toBe(1);
+    expect(normalizePlaybackRate(1.255)).toBe(1.25);
+  });
+
+  test('拒绝超出稳定范围的倍速', () => {
+    expect(() => normalizePlaybackRate(0.49)).toThrow('倍速必须在');
+    expect(() => normalizePlaybackRate(2.01)).toThrow('倍速必须在');
+    expect(() => normalizePlaybackRate('1.5')).toThrow('倍速必须是数字');
+  });
+
+  test('使用 FFmpeg atempo filter 做不变调变速', () => {
+    expect(buildAtempoFilter(1.5)).toBe('atempo=1.5');
   });
 });
 

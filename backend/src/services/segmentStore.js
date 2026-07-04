@@ -12,11 +12,11 @@ const audioDir = path.join(__dirname, '../../audio');
  */
 function createMany(broadcastId, texts) {
   const insertStmt = db.prepare(
-    'INSERT INTO segments (broadcast_id, "index", text, status, error_message) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO segments (broadcast_id, "index", text, status, playback_rate, error_message) VALUES (?, ?, ?, ?, ?, ?)'
   );
   const insertMany = db.transaction((items) => {
     for (const item of items) {
-      insertStmt.run(item.broadcastId, item.index, item.text, 'pending', '');
+      insertStmt.run(item.broadcastId, item.index, item.text, 'pending', 1, '');
     }
   });
   insertMany(texts.map((text, index) => ({ broadcastId, index, text })));
@@ -32,7 +32,7 @@ function replaceAll(broadcastId, items) {
   const existingById = new Map(existing.map((segment) => [segment.id, segment]));
   const keptIds = new Set();
   const insertStmt = db.prepare(
-    'INSERT INTO segments (broadcast_id, "index", text, status, style_tag, error_message) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO segments (broadcast_id, "index", text, status, style_tag, playback_rate, error_message) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
   const updateChangedStmt = db.prepare(
     'UPDATE segments SET "index" = ?, text = ?, style_tag = ?, status = ?, audio_path = NULL, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
@@ -47,7 +47,7 @@ function replaceAll(broadcastId, items) {
       const existingSegment = item.id ? existingById.get(item.id) : null;
       const styleTag = item.styleTag || '';
       if (!existingSegment) {
-        insertStmt.run(broadcastId, index, item.text, 'pending', styleTag, '');
+        insertStmt.run(broadcastId, index, item.text, 'pending', styleTag, 1, '');
         return;
       }
 
@@ -165,6 +165,26 @@ function bulkUpdateStyleTags(broadcastId, items) {
 }
 
 /**
+ * 更新单个 segment 的播放/导出倍速，不重置已生成的 TTS 原始音频。
+ * @param {number} segId - segment ID
+ * @param {number} playbackRate - 播放/导出倍速
+ */
+function updatePlaybackRate(segId, playbackRate) {
+  db.prepare('UPDATE segments SET playback_rate = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(playbackRate, segId);
+}
+
+/**
+ * 批量更新播报下所有 segments 的播放/导出倍速。
+ * @param {number} broadcastId - 播报 ID
+ * @param {number} playbackRate - 播放/导出倍速
+ */
+function bulkUpdatePlaybackRate(broadcastId, playbackRate) {
+  db.prepare('UPDATE segments SET playback_rate = ?, updated_at = CURRENT_TIMESTAMP WHERE broadcast_id = ?')
+    .run(playbackRate, broadcastId);
+}
+
+/**
  * 按新 ID 顺序重排 segments 的 index
  * @param {number} broadcastId - 播报 ID
  * @param {number[]} segmentIds - 新排序后的 segment ID 数组
@@ -261,6 +281,8 @@ module.exports = {
   updateText,
   updateStyleTag,
   bulkUpdateStyleTags,
+  updatePlaybackRate,
+  bulkUpdatePlaybackRate,
   reorder,
   deleteById,
   deleteByBroadcastId,

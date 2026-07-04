@@ -1,7 +1,6 @@
 // 口播句子（segment）路由
 const express = require('express');
 const router = express.Router();
-const path = require('path');
 const mimo = require('../services/mimo');
 const tts = require('../services/tts');
 const audio = require('../services/audio');
@@ -16,6 +15,12 @@ const { validateId, cleanAudioFile } = require('../utils/validation');
 const { prependStyleTag, sanitizeStyleTag, MAX_SEGMENT_TEXT_LENGTH } = require('../utils/segmentText');
 
 const logger = createScopedLogger('segments-route');
+
+function invalidateMergedAudio(broadcast) {
+  if (!broadcast) return;
+  cleanAudioFile(broadcast.audio_path);
+  broadcastStore.clearAudioPath(broadcast.id);
+}
 
 /**
  * POST /api/broadcast/:id/split
@@ -346,7 +351,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
  * POST /api/broadcast/:id/segments/merge
  * 合并所有 segment 音频
  */
-router.post('/:id/segments/merge', (req, res) => {
+router.post('/:id/segments/merge', async (req, res) => {
   try {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
@@ -367,14 +372,8 @@ router.post('/:id/segments/merge', (req, res) => {
       });
     }
 
-    const audioPaths = segments.map(s => path.join(__dirname, '../..', s.audio_path));
-    const mergedBuffer = audio.mergeWavFiles(audioPaths);
-
     cleanAudioFile(broadcast.audio_path);
-
-    const audioPath = audioAsset.writeMergedBroadcastAudio(idCheck.id, mergedBuffer);
-
-    broadcastStore.updateAudioPath(idCheck.id, audioPath);
+    broadcastStore.clearAudioPath(idCheck.id);
     broadcastStore.updateStatus(idCheck.id, 'generated');
 
     const updated = broadcastStore.getById(idCheck.id);
@@ -424,8 +423,47 @@ router.post('/:id/segments/reorder', (req, res) => {
 });
 
 /**
+ * PATCH /api/broadcast/:id/segments/playback-rate
+ * 一次性设置当前播报下所有 segments 的播放/导出倍速
+ */
+router.patch('/:id/segments/playback-rate', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+
+    const { playbackRate } = req.body;
+    let normalizedRate;
+    try {
+      normalizedRate = audio.normalizePlaybackRate(playbackRate);
+    } catch (validationError) {
+      return res.status(400).json({ error: validationError.message });
+    }
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+
+    const segments = segmentStore.getByBroadcastId(idCheck.id);
+    if (segments.length === 0) {
+      return res.status(400).json({ error: '没有可设置倍速的句子' });
+    }
+
+    segmentStore.bulkUpdatePlaybackRate(idCheck.id, normalizedRate);
+    invalidateMergedAudio(broadcast);
+
+    res.json({ segments: segmentStore.getByBroadcastId(idCheck.id) });
+  } catch (error) {
+    logger.error({
+      err: error,
+      hasBroadcastId: Boolean(req.params.id),
+      broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+    }, '批量设置倍速失败');
+    res.status(500).json({ error: error.message || '批量设置倍速失败' });
+  }
+});
+
+/**
  * PUT /api/broadcast/:id/segments/:segId
- * 编辑单个 segment（支持 text 和/或 styleTag）
+ * 编辑单个 segment（支持 text、styleTag 和/或 playbackRate）
  */
 router.put('/:id/segments/:segId', (req, res) => {
   try {
@@ -434,23 +472,43 @@ router.put('/:id/segments/:segId', (req, res) => {
     const segIdCheck = validateId(req.params.segId, '句子 ID');
     if (!segIdCheck.valid) return res.status(400).json({ error: segIdCheck.error });
 
-    const { text, styleTag } = req.body;
+    const { text, styleTag, playbackRate } = req.body;
     const hasText = text !== undefined;
     const hasStyleTag = styleTag !== undefined;
-    if (!hasText && !hasStyleTag) {
-      return res.status(400).json({ error: '请提供 text 或 styleTag' });
+    const hasPlaybackRate = playbackRate !== undefined;
+    if (!hasText && !hasStyleTag && !hasPlaybackRate) {
+      return res.status(400).json({ error: '请提供 text、styleTag 或 playbackRate' });
     }
     if (hasText && (typeof text !== 'string' || text.trim().length === 0)) {
       return res.status(400).json({ error: '请提供有效的文本内容' });
+    }
+    let normalizedRate;
+    if (hasPlaybackRate) {
+      try {
+        normalizedRate = audio.normalizePlaybackRate(playbackRate);
+      } catch (validationError) {
+        return res.status(400).json({ error: validationError.message });
+      }
     }
 
     const segment = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
     if (!segment) return res.status(404).json({ error: '句子不存在' });
 
-    // 改文本或改风格都会改变合成结果，统一清旧音频并由 DAL 重置为 pending
-    cleanAudioFile(segment.audio_path);
-    if (hasText) segmentStore.updateText(segIdCheck.id, text.trim());
-    if (hasStyleTag) segmentStore.updateStyleTag(segIdCheck.id, sanitizeStyleTag(styleTag));
+    const broadcast = broadcastStore.getById(idCheck.id);
+    const changesSynthesis = hasText || hasStyleTag;
+
+    // 改文本或改风格会改变 TTS 合成结果；改倍速只影响浏览器播放和下载后处理，不删原始段音频。
+    if (changesSynthesis) {
+      cleanAudioFile(segment.audio_path);
+      if (hasText) segmentStore.updateText(segIdCheck.id, text.trim());
+      if (hasStyleTag) segmentStore.updateStyleTag(segIdCheck.id, sanitizeStyleTag(styleTag));
+    }
+    if (hasPlaybackRate) {
+      segmentStore.updatePlaybackRate(segIdCheck.id, normalizedRate);
+    }
+    if (changesSynthesis || (hasPlaybackRate && segment.playback_rate !== normalizedRate)) {
+      invalidateMergedAudio(broadcast);
+    }
 
     const updated = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
     res.json({ segment: updated });

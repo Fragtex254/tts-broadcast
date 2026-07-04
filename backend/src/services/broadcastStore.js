@@ -185,6 +185,15 @@ function clearAudioAndSetMode(id, mode) {
 }
 
 /**
+ * 清空播报合并音频路径，保留当前模式。
+ * @param {number} id - 播报 ID
+ */
+function clearAudioPath(id) {
+  db.prepare('UPDATE broadcasts SET audio_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(id);
+}
+
+/**
  * 更新播报状态
  * @param {number} id - 播报 ID
  * @param {string} status - 新状态
@@ -209,5 +218,6 @@ module.exports = {
   deleteById,
   batchDeleteByIds,
   clearAudioAndSetMode,
+  clearAudioPath,
   updateStatus
 };
