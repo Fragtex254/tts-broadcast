@@ -45,3 +45,6 @@ backend/audio/*.wav
 backend/logs/
 .superpowers/
 .workbuddy/
+
+# Course (codebase-to-course output)
+.course-tts-broadcast/
