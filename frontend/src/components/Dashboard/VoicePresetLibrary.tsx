@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore, type VoicePreset } from '../../store';
 import MiniAudioPlayer from './MiniAudioPlayer';
+import { PresetCharacterImage } from './PresetCharacterImage';
+import AudioDownloadLink from './AudioDownloadLink';
 
 type PresetFilter = 'all' | VoicePreset['type'];
 
@@ -43,7 +45,10 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
   const [editName, setEditName] = useState('');
   const [editStylePrompt, setEditStylePrompt] = useState('');
   const [editDesignPrompt, setEditDesignPrompt] = useState('');
+  const [editCharacterImageFile, setEditCharacterImageFile] = useState<File | null>(null);
+  const [editRemoveCharacterImage, setEditRemoveCharacterImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [togglingCloneId, setTogglingCloneId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,11 +63,22 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
     presets.find((preset) => preset.id === selectedId) || filteredPresets[0] || null
   ), [filteredPresets, presets, selectedId]);
 
+  const editCharacterImagePreviewUrl = useMemo(() => (
+    editCharacterImageFile ? URL.createObjectURL(editCharacterImageFile) : null
+  ), [editCharacterImageFile]);
+
+  useEffect(() => {
+    if (!editCharacterImagePreviewUrl) return undefined;
+    return () => URL.revokeObjectURL(editCharacterImagePreviewUrl);
+  }, [editCharacterImagePreviewUrl]);
+
   const startEdit = (preset: VoicePreset) => {
     setEditingId(preset.id);
     setEditName(preset.name);
     setEditStylePrompt(preset.style_prompt || '');
     setEditDesignPrompt(preset.design_prompt || '');
+    setEditCharacterImageFile(null);
+    setEditRemoveCharacterImage(false);
     setError(null);
   };
 
@@ -71,7 +87,25 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
     setEditName('');
     setEditStylePrompt('');
     setEditDesignPrompt('');
+    setEditCharacterImageFile(null);
+    setEditRemoveCharacterImage(false);
     setError(null);
+  };
+
+  const handleEditCharacterImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (!file) {
+      setEditCharacterImageFile(null);
+      return;
+    }
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setError('仅支持 PNG、JPG 或 WebP 角色立绘');
+      event.target.value = '';
+      return;
+    }
+    setError(null);
+    setEditRemoveCharacterImage(false);
+    setEditCharacterImageFile(file);
   };
 
   const saveEdit = async (preset: VoicePreset) => {
@@ -92,6 +126,12 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
       formData.append('style_prompt', editStylePrompt.trim());
       if (preset.type === 'design') {
         formData.append('design_prompt', editDesignPrompt.trim());
+        formData.append('use_trial_audio_as_clone', preset.use_trial_audio_as_clone ? 'true' : 'false');
+        if (editCharacterImageFile) {
+          formData.append('character_image', editCharacterImageFile);
+        } else if (editRemoveCharacterImage) {
+          formData.append('remove_character_image', 'true');
+        }
       }
       await updatePreset(preset.id, formData);
       cancelEdit();
@@ -99,6 +139,24 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
       setError('保存修改失败，请稍后重试');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const toggleUseTrialAudioAsClone = async (preset: VoicePreset) => {
+    if (preset.type !== 'design' || !preset.trial_audio_path || !preset.design_prompt) return;
+    setTogglingCloneId(preset.id);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('name', preset.name);
+      formData.append('style_prompt', preset.style_prompt || '');
+      formData.append('design_prompt', preset.design_prompt);
+      formData.append('use_trial_audio_as_clone', preset.use_trial_audio_as_clone ? 'false' : 'true');
+      await updatePreset(preset.id, formData);
+    } catch {
+      setError('切换克隆生成失败，请稍后重试');
+    } finally {
+      setTogglingCloneId(null);
     }
   };
 
@@ -222,10 +280,20 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                       {preset.trial_audio_path && (
                         <span className="px-2.5 py-1 rounded-full bg-sage/45 font-body text-[12px] text-ink">可试听</span>
                       )}
+                      {preset.type === 'design' && preset.use_trial_audio_as_clone === 1 && (
+                        <span className="px-2.5 py-1 rounded-full bg-lemon/45 font-body text-[12px] text-ink">克隆生成</span>
+                      )}
                     </div>
                     <h4 className="font-display text-[19px] font-medium text-ink truncate">{preset.name}</h4>
                   </div>
                 </div>
+                {preset.character_image_path && (
+                  <PresetCharacterImage
+                    src={preset.character_image_path}
+                    alt=""
+                    className="mt-3 h-28 w-full rounded-xl border border-card-border bg-white/70"
+                  />
+                )}
                 <p className="mt-3 font-body text-[13px] leading-6 text-ink-soft/80 line-clamp-2">
                   {preset.type === 'design'
                     ? preset.design_prompt || preset.style_prompt || '未填写音色描述'
@@ -269,14 +337,52 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                   />
                 </div>
                 {selectedPreset.type === 'design' && (
-                  <div>
-                    <label className="font-body text-[13px] font-medium text-ink-soft mb-1.5 block">音色描述</label>
-                    <textarea
-                      value={editDesignPrompt}
-                      onChange={(e) => setEditDesignPrompt(e.target.value)}
-                      className="w-full h-36 bg-white/80 text-ink rounded-xl px-4 py-3 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[14px] leading-6 transition-colors"
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label className="font-body text-[13px] font-medium text-ink-soft mb-1.5 block">音色描述</label>
+                      <textarea
+                        value={editDesignPrompt}
+                        onChange={(e) => setEditDesignPrompt(e.target.value)}
+                        className="w-full h-36 bg-white/80 text-ink rounded-xl px-4 py-3 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[14px] leading-6 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-body text-[13px] font-medium text-ink-soft mb-1.5 block">角色立绘</label>
+                      {(editCharacterImagePreviewUrl || (!editRemoveCharacterImage && selectedPreset.character_image_path)) && (
+                        editCharacterImagePreviewUrl ? (
+                          <img
+                            src={editCharacterImagePreviewUrl}
+                            alt=""
+                            className="mb-2 h-32 w-full rounded-xl border border-card-border bg-white/70 object-contain"
+                          />
+                        ) : (
+                          <PresetCharacterImage
+                            src={selectedPreset.character_image_path || ''}
+                            alt=""
+                            className="mb-2 h-32 w-full rounded-xl border border-card-border bg-white/70"
+                          />
+                        )
+                      )}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handleEditCharacterImageChange}
+                        className="block w-full cursor-pointer rounded-xl border border-card-border bg-white/80 px-3 py-2 font-body text-[12px] text-ink file:mr-3 file:rounded-lg file:border-0 file:bg-lilac file:px-3 file:py-1.5 file:font-body file:text-[11px] file:text-ink"
+                      />
+                      {selectedPreset.character_image_path && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditCharacterImageFile(null);
+                            setEditRemoveCharacterImage(true);
+                          }}
+                          className="mt-2 text-ink-soft hover:text-ink font-body text-[12px] transition-colors"
+                        >
+                          移除已保存立绘
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
                 {error && (
                   <div className="bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[13px] font-body animate-shake">
@@ -313,6 +419,38 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                     <p className="mt-1 font-body text-[14px] leading-6 text-ink">{selectedPreset.design_prompt}</p>
                   </div>
                 )}
+                {selectedPreset.type === 'design' && (
+                  <button
+                    type="button"
+                    onClick={() => toggleUseTrialAudioAsClone(selectedPreset)}
+                    disabled={!selectedPreset.trial_audio_path || togglingCloneId === selectedPreset.id}
+                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 font-body text-[13px] transition-all duration-150 ${
+                      selectedPreset.use_trial_audio_as_clone
+                        ? 'border-sage/40 bg-sage/25 text-ink'
+                        : 'border-card-border bg-white/55 text-ink-soft hover:bg-white/80 hover:text-ink'
+                    } disabled:opacity-40`}
+                    title={selectedPreset.trial_audio_path ? '使用试听音频作为克隆音频生成' : '请先保存试听音频'}
+                  >
+                    <span>用试听音频走 voiceclone</span>
+                    <span className={`h-5 w-9 rounded-full p-0.5 transition-colors ${
+                      selectedPreset.use_trial_audio_as_clone ? 'bg-sage' : 'bg-ink/10'
+                    }`}>
+                      <span className={`block h-4 w-4 rounded-full bg-white transition-transform ${
+                        selectedPreset.use_trial_audio_as_clone ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
+                    </span>
+                  </button>
+                )}
+                {selectedPreset.character_image_path && (
+                  <div>
+                    <span className="font-body text-[12px] font-medium text-ink-soft/70">角色立绘</span>
+                    <PresetCharacterImage
+                      src={selectedPreset.character_image_path}
+                      alt=""
+                      className="mt-2 h-44 w-full rounded-xl border border-card-border bg-white/70"
+                    />
+                  </div>
+                )}
                 {selectedPreset.original_audio_path && (
                   <div>
                     <span className="font-body text-[12px] font-medium text-ink-soft/70">参考音频</span>
@@ -322,7 +460,10 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                 {selectedPreset.trial_audio_path && (
                   <div>
                     <span className="font-body text-[12px] font-medium text-ink-soft/70">试听音频</span>
-                    <div className="mt-2"><MiniAudioPlayer src={selectedPreset.trial_audio_path} /></div>
+                    <div className="mt-2 space-y-2">
+                      <MiniAudioPlayer src={selectedPreset.trial_audio_path} />
+                      <AudioDownloadLink src={selectedPreset.trial_audio_path} filename={`${selectedPreset.name}-trial.wav`} />
+                    </div>
                   </div>
                 )}
                 <div className="flex gap-2 pt-2">

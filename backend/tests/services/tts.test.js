@@ -64,7 +64,7 @@ describe('TTS 服务', () => {
 
       const body = axios.post.mock.calls[0][1];
       expect(body.messages).toEqual([
-        { role: 'user', content: '温柔女声' },
+        { role: 'user', content: '音色设计：温柔女声' },
         { role: 'assistant', content: '这段试听文本必须进入请求' }
       ]);
       expect(body.audio).toEqual({ format: 'wav' });
@@ -94,8 +94,27 @@ describe('TTS 服务', () => {
 
       const body = axios.post.mock.calls[0][1];
       expect(body.messages[0].content).toContain('低柔磁性的成熟女性声线');
-      expect(body.messages[0].content).toContain('风格控制：语速更慢，尾音轻轻下落');
+      expect(body.messages[0].content).toContain('风格提示：语速更慢，尾音轻轻下落');
       expect(body.messages[1].content).toBe('试听文本');
+    });
+
+    test('design 模式忽略旧表演导演配置', async () => {
+      mockTtsResponse();
+      await tts.generateSpeech({
+        text: '今晚的风很安静。',
+        voiceType: 'design',
+        voiceDesign: '低柔冷静的成熟女性声线',
+        performance: {
+          role: '疏离的女性角色',
+          scene: '深夜独白',
+          direction: '语速偏慢，尾音轻收',
+          globalTags: ['冷静', '气声']
+        }
+      });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body.messages[0].content).toBe('音色设计：低柔冷静的成熟女性声线');
+      expect(body.messages[1].content).toBe('今晚的风很安静。');
     });
 
     test('clone 模式使用 voiceclone 模型', async () => {
@@ -273,7 +292,7 @@ describe('TTS 服务', () => {
         stylePrompt: '用温柔的语气播报'
       });
       const body = axios.post.mock.calls[0][1];
-      expect(body.messages[0].content).toBe('用温柔的语气播报');
+      expect(body.messages[0].content).toBe('风格提示：用温柔的语气播报');
     });
 
     test('可自定义输出格式（如 mp3）', async () => {

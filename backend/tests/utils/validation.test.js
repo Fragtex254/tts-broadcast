@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { validateId, cleanAudioFile, audioDir } = require('../../src/utils/validation');
+const { validateId, cleanAudioFile, cleanAssetFile, audioDir, assetDir } = require('../../src/utils/validation');
 
 describe('validation 工具', () => {
   describe('validateId', () => {
@@ -101,6 +101,44 @@ describe('validation 工具', () => {
     test('导出为字符串路径', () => {
       expect(typeof audioDir).toBe('string');
       expect(audioDir).toContain('audio');
+    });
+  });
+
+  describe('cleanAssetFile', () => {
+    const testFiles = [];
+
+    beforeEach(() => {
+      fs.mkdirSync(assetDir, { recursive: true });
+    });
+
+    afterEach(() => {
+      for (const fp of testFiles) {
+        if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      }
+      testFiles.length = 0;
+    });
+
+    test('通过 /assets/ 前缀删除文件', () => {
+      const filename = `_test_asset_${Date.now()}.png`;
+      const fp = path.join(assetDir, filename);
+      fs.writeFileSync(fp, 'data');
+      testFiles.push(fp);
+
+      cleanAssetFile(`/assets/${filename}`);
+
+      expect(fs.existsSync(fp)).toBe(false);
+    });
+
+    test('不删除 assetDir 外的文件（路径安全）', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-asset-safe-'));
+      const fp = path.join(tmpDir, 'outside.png');
+      fs.writeFileSync(fp, 'data');
+
+      cleanAssetFile(fp);
+
+      expect(fs.existsSync(fp)).toBe(true);
+      fs.unlinkSync(fp);
+      fs.rmdirSync(tmpDir);
     });
   });
 });

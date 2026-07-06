@@ -194,6 +194,14 @@ export const voicePresetApi = {
 
   trialDesign: (data: { design_prompt: string; trial_text: string; style_prompt?: string; optimize_text_preview?: boolean }) =>
     api.post('/voice-presets/trial/design', data),
+
+  suggestTrialTextTags: (data: { text: string; voice_design?: string; style_prompt?: string }) =>
+    api.post<{ taggedText: string; stylePrompt?: string }>('/voice-presets/suggest-trial-text-tags', data),
+
+  inferDesignFromImage: (formData: FormData) =>
+    api.post('/voice-presets/infer-design-from-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };
 
 // 转录 API

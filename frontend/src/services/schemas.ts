@@ -103,6 +103,8 @@ export const VoicePresetSchema = z.object({
   trial_audio_path: z.string().nullable(),
   original_audio_path: z.string().nullable(),
   design_prompt: z.string().nullable(),
+  character_image_path: z.string().nullable(),
+  use_trial_audio_as_clone: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
 });

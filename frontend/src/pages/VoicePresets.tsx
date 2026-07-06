@@ -3,6 +3,7 @@ import { Header } from '../components/Layout/Header';
 import { CloneTrialPanel } from '../components/Dashboard/CloneTrialPanel';
 import { DesignTrialPanel } from '../components/Dashboard/DesignTrialPanel';
 import { VoicePresetLibrary } from '../components/Dashboard/VoicePresetLibrary';
+import { PresetCharacterImage } from '../components/Dashboard/PresetCharacterImage';
 import useStore from '../store';
 
 type PresetPageTab = 'saved' | 'design' | 'clone';
@@ -55,6 +56,13 @@ const RecentPresetPanel: React.FC<RecentPresetPanelProps> = ({ onOpenSaved }) =>
                   <span className="px-2.5 py-1 rounded-full bg-sage/45 font-body text-[12px] text-ink">可试听</span>
                 )}
               </div>
+              {preset.character_image_path && (
+                <PresetCharacterImage
+                  src={preset.character_image_path}
+                  alt=""
+                  className="mb-3 h-24 w-full rounded-xl border border-card-border bg-white/70"
+                />
+              )}
               <h4 className="font-display text-[18px] font-medium text-ink truncate">{preset.name}</h4>
               <p className="mt-2 font-body text-[13px] leading-6 text-ink-soft/75 line-clamp-2">
                 {preset.type === 'design'
@@ -78,6 +86,7 @@ export const VoicePresets: React.FC = () => {
   const [designStylePrompt, setDesignStylePrompt] = useState('');
   const [cloneStylePrompt, setCloneStylePrompt] = useState('');
   const [optimizeTextPreview, setOptimizeTextPreview] = useState(false);
+  const [characterImageFile, setCharacterImageFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchPresets();
@@ -131,9 +140,11 @@ export const VoicePresets: React.FC = () => {
                       voiceDesign={voiceDesign}
                       stylePrompt={designStylePrompt}
                       optimizeTextPreview={optimizeTextPreview}
+                      characterImageFile={characterImageFile}
                       onVoiceDesignChange={setVoiceDesign}
                       onStylePromptChange={setDesignStylePrompt}
                       onOptimizeTextPreviewChange={setOptimizeTextPreview}
+                      onCharacterImageChange={setCharacterImageFile}
                     />
                   </div>
                   <RecentPresetPanel onOpenSaved={() => setActiveTab('saved')} />

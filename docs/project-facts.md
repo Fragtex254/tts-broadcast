@@ -78,6 +78,7 @@ tts-broadcast/
 │   │   └── utils/            # 共享工具函数（validation）
 │   ├── tests/                # Jest 测试，镜像 src/ 结构
 │   ├── audio/                # 生成的音频文件（已 gitignore）
+│   ├── assets/               # 上传的预设立绘等图片资产（已 gitignore）
 │   └── data/                 # SQLite 数据库文件（已 gitignore）
 ├── frontend/
 │   ├── src/
@@ -125,6 +126,7 @@ SQLite 数据库包含 6 张表：
 - `voice_presets.trial_audio_path`：试听音频路径
 - `voice_presets.original_audio_path`：克隆原始音频路径（仅 clone 类型）
 - `voice_presets.design_prompt`：音色描述（仅 design 类型）
+- `voice_presets.character_image_path`：设计音色来源角色立绘路径（仅 design 类型使用，存放于 `/assets`）
 - `transcription_results.text`：原始转录文本
 - `transcription_results.formatted_text`：AI 一键排版分段后的文本，空串表示尚未排版
 - `transcription_results.relative_path`：批量转录中保留的文件夹相对路径；单文件转录时等于文件名
@@ -194,9 +196,13 @@ SQLite 数据库包含 6 张表：
 - 批量转录（`POST /api/transcribe/batch`）采用异步模型：multer `upload.array` 接收多文件后立即返回 202，实际转录在后台 `runBatchTranscription` 串行进行，所有进度和最终结果通过 SSE 推送（`phase` 为 `batch-preparing`/`file-start`/`file-progress`/`file-complete`/`file-error`/`completed`）；后台任务开始前 `waitForSseConnection` 等待 SSE 连接建立避免早期事件丢失；前端通过 `relativePaths`（JSON 字符串）保留子目录结构；每个成功文件独立保存一条 `transcription_results` 并在 SSE 中返回 `resultId`；multer/busboy 默认用 latin1 解码 multipart filename 导致中文乱码，`decodeFileName` 重编码为 utf8 修复
 - 分段生成时由 `routes/segments.js` 经 `utils/segmentText.js` 的 `prependStyleTag` 将 `segment.style_tag` 前置到合成文本；`mimo.splitScript` 按语义逻辑切块而非逐句硬切，单块最大 1024 字，模型返回超长块时由本地 `normalizeSegmentTexts` 兜底拆分；`POST /api/broadcast/:id/segments/replace` 支持前端二级页面一次性保存合并、拆分、重排与情绪提示，未变化段保留既有音频，文本或提示变化的段重置为 `pending`；`POST /api/broadcast/:id/segments/suggest-tags` 调 `mimo.suggestStyleTags` 为各段建议风格标签；批量语音生成查询待处理片段时包含 `pending`、`failed` 和可能因中断遗留的 `generating`，单段失败会写入 `segments.error_message` 并通过 SSE progress / HTTP result 返回，前端在对应段落下方展示具体原因，避免只显示泛化“失败”
 - 分段预览倍速只改变浏览器播放速度，不重生成 TTS；`PUT /api/broadcast/:id/segments/:segId` 可更新单段 `playbackRate`，`PATCH /api/broadcast/:id/segments/playback-rate` 可一次性更新所有段。倍速变化会清空旧的 `broadcasts.audio_path`；`POST /api/broadcast/:id/segments/merge` 只校验所有段已生成并把播报标记为 `generated`，不再保存合并文件；`GET /api/broadcast/:id/audio` 与 `GET /api/broadcast/:id/download` 都按段落 `playback_rate` 通过 FFmpeg `atempo` 临时生成不变调音频，响应结束后只保留原始分段 TTS 音频
+- TTS 请求由 `services/speechRequestBuilder.js` 统一编译：音色设计描述与简单风格提示编译到 MiMo `user.content`，实际要合成的正文进入 `assistant.content`；分段 `segments.style_tag` 和正文内联 `[音频标签]` 共同构成文本标签控制。`speed/emotion/pitch` 仍作为预置音色的 provider-specific 精细参数保留，有精细参数时不再额外混入自然语言风格提示，避免控制冲突
 - 路由层通过 DAL 层（`services/*Store.js`）操作数据库，不直接写 SQL
 - 音色配置统一通过 `services/voiceConfig.js` 规范化和转换 TTS 参数，路由不得重复拼装 `voiceType/voiceConfig`
 - voicedesign 模式默认严格使用 assistant 合成文本；只有前端显式开启 `optimizeTextPreview` 时，后端才向 MiMo 传 `optimize_text_preview: true`
+- 角色立绘反推音色通过 `POST /api/voice-presets/infer-design-from-image` 上传 PNG/JPG/WebP，调用当前 LLM 配置的原生视觉能力生成 MiMo voicedesign 可用的 `designPrompt` 与自然语言控制用的 `stylePrompt`；`designPrompt` 必须保持极简，只写“性别年龄 + 音色质感 + 角色感”，语气情绪、语速节奏放入 `stylePrompt`。该能力只做基于画面气质的创作性音色描述，不识别真实声纹。保存设计预设时可把立绘持久化到 `backend/assets/` 并通过 `/assets/...` 静态访问
+- 设计/克隆试听文本支持二级标签编辑面板：所有试听文本标签统一写为 `[标签]`，同一位置的复杂情绪或声音控制合并为 `[标签A，标签B]`；可通过 `POST /api/voice-presets/suggest-trial-text-tags` 调用当前 LLM 配置为试听文本自动插入合法标签，并基于台词情绪返回“语气情绪 + 语速节奏”的 `stylePrompt`。标签只进入合成文本，不写入音色描述
+- 音色预设的试听音频可直接下载；设计预设新增 `use_trial_audio_as_clone` 开关，开启后在播报选择预设时将已保存的 `trial_audio_path` 作为 `voiceClone`，实际走 `voiceclone` 链路，而不是继续走 `voicedesign`。该开关只对 design 预设生效，且必须存在已保存试听音频
 - 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`
 - ID 校验使用 `utils/validation.js` 中的 `validateId()`
 - 前端使用 Zustand store 模式管理全局状态；新增状态优先按领域放入 `store/*Slice.ts`，类型放入 `store/types.ts`
@@ -237,6 +243,7 @@ SQLite 数据库包含 6 张表：
 |---------|---------|---------|
 | 播报记录（标题、稿件、状态） | SQLite `broadcasts` 表 | 永久 |
 | 原始音频文件（整篇/分段 TTS .wav） | `backend/audio/` 目录 | 按需保留（见音频生命周期） |
+| 预设角色立绘图片 | `backend/assets/` 目录 + SQLite `voice_presets.character_image_path` | 随音色预设存在；替换、移除或删除预设时清理文件 |
 | 变速合并音频（分段主播放器/下载） | 请求内内存响应 + 系统临时目录 | 不持久化；请求结束后释放，临时文件由后端清理 |
 | 转录结果（原文、排版文本、来源文件名、provider/model/task） | SQLite `transcription_results` 表 | 永久，用户可在转录页历史面板删除记录 |
 | 应用设置（API Key、音色、开场白等） | SQLite `settings` 表 | 永久 |

@@ -60,6 +60,7 @@ function getVoiceName(voiceConfig: VoiceConfig, presets: VoicePreset[], selected
   if (voiceConfig.voiceType === 'clone') {
     return (
       presets.find((preset) => preset.type === 'clone' && preset.original_audio_path === voiceConfig.voiceClone)?.name ||
+      presets.find((preset) => preset.type === 'design' && preset.use_trial_audio_as_clone === 1 && preset.trial_audio_path === voiceConfig.voiceClone)?.name ||
       selectedPresetName ||
       '克隆音色'
     );
@@ -75,7 +76,7 @@ export const VoiceGenerator: React.FC = () => {
   const fetchPresets = useStore((s) => s.fetchPresets);
   const updateVoiceConfig = useStore((s) => s.updateVoiceConfig);
 
-  const initialPanelType = voiceConfig.voiceType === 'clone' || voiceConfig.voiceType === 'design' ? 'preset' : 'builtin';
+  const initialPanelType = presets.length > 0 || voiceConfig.voiceType === 'clone' || voiceConfig.voiceType === 'design' ? 'preset' : 'builtin';
   const [panelType, setPanelType] = useState<VoicePanelType>(initialPanelType);
   const [selectedVoice, setSelectedVoice] = useState(voiceConfig.voice || '');
   const [voiceClone, setVoiceClone] = useState(voiceConfig.voiceClone || '');
@@ -135,6 +136,24 @@ export const VoiceGenerator: React.FC = () => {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isSelectorOpen]);
 
+  useEffect(() => {
+    if (!isSelectorOpen) return undefined;
+    if (presets.length > 0) {
+      return undefined;
+    }
+
+    let isActive = true;
+    fetchPresets().then(() => {
+      if (!isActive) return;
+      if (useStore.getState().presets.length > 0) {
+        setPanelType('preset');
+      }
+    }).catch(() => {
+      // Store 已记录错误；保留当前页签供用户手动切换。
+    });
+    return () => { isActive = false; };
+  }, [fetchPresets, isSelectorOpen, presets.length]);
+
   const syncToBackend = useCallback(() => {
     if (!currentBroadcast || !localVoiceConfig) return;
     broadcastApi.updateVoiceConfig(currentBroadcast.id, {
@@ -169,15 +188,27 @@ export const VoiceGenerator: React.FC = () => {
     setIsSelectorOpen(false);
   };
 
+  const openVoiceSelector = () => {
+    setIsSelectorOpen(true);
+    if (presets.length > 0) {
+      setPanelType('preset');
+    }
+  };
+
   const handleApplyPreset = (preset: VoicePreset) => {
     setPanelType('preset');
-    setActivePresetType(preset.type);
     setSelectedVoice('');
     setSelectedPresetName(preset.name);
     if (preset.type === 'clone') {
+      setActivePresetType('clone');
       setVoiceClone(preset.original_audio_path || '');
       setVoiceDesign('');
+    } else if (preset.use_trial_audio_as_clone === 1 && preset.trial_audio_path) {
+      setActivePresetType('clone');
+      setVoiceClone(preset.trial_audio_path);
+      setVoiceDesign('');
     } else {
+      setActivePresetType('design');
       setVoiceDesign(preset.design_prompt || '');
       setVoiceClone('');
     }
@@ -367,7 +398,7 @@ export const VoiceGenerator: React.FC = () => {
     <>
       <button
         type="button"
-        onClick={() => setIsSelectorOpen(true)}
+        onClick={openVoiceSelector}
         className={`fixed bottom-8 right-0 z-40 flex h-32 w-24 flex-col items-center justify-between rounded-l-xl border border-r-0 p-2.5 text-center text-ink shadow-card backdrop-blur-sm transition-all duration-200 hover:-translate-x-1 hover:brightness-105 active:translate-x-0 active:shadow-none sm:w-28 xl:w-32 ${
           hasVoice ? 'border-card-border bg-white/90' : 'border-blush/45 bg-white/85'
         }`}

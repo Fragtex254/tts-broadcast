@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS voice_presets (
   trial_audio_path TEXT,
   original_audio_path TEXT,
   design_prompt TEXT,
+  character_image_path TEXT DEFAULT NULL,
+  use_trial_audio_as_clone BOOLEAN DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
