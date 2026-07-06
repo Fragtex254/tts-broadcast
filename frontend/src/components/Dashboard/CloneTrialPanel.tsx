@@ -4,6 +4,8 @@ import { getApiErrorMessage } from '../../services/apiError';
 import { useStore } from '../../store';
 import AudioUploader from './AudioUploader';
 import MiniAudioPlayer from './MiniAudioPlayer';
+import LongTextField from './LongTextField';
+import AudioDownloadLink from './AudioDownloadLink';
 
 // ============ 接口定义 ============
 
@@ -93,6 +95,18 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
     }
   };
 
+  const handleSuggestTrialTags = async (text: string) => {
+    const response = await voicePresetApi.suggestTrialTextTags({
+      text,
+      style_prompt: stylePrompt,
+    });
+    const inferredStylePrompt = String(response.data.stylePrompt || '').trim();
+    if (inferredStylePrompt) {
+      onStylePromptChange(inferredStylePrompt);
+    }
+    return String(response.data.taggedText || text);
+  };
+
   const handleSave = async () => {
     if (!presetName.trim()) {
       setError('请输入预设名称');
@@ -144,32 +158,23 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
       {/* 参考音频上传 */}
       <AudioUploader onFileSelect={handleFileSelect} currentFileName={fileName} />
 
-      {/* 风格提示词 */}
-      <div>
-        <label className="font-body text-[14px] font-medium text-ink-soft mb-2 block">
-          风格提示词（可选）
-        </label>
-        <input
-          type="text"
-          value={stylePrompt}
-          onChange={(e) => onStylePromptChange(e.target.value)}
-          placeholder="语速稍快，情绪饱满..."
-          className="w-full bg-white/80 text-ink rounded-2xl px-4 py-3 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[15px] transition-colors"
-        />
-      </div>
+      <LongTextField
+        label="风格提示词（可选）"
+        value={stylePrompt}
+        onChange={onStylePromptChange}
+        placeholder="语速稍快，情绪饱满..."
+        minHeightClass="min-h-32"
+      />
 
-      {/* 试听文本 */}
-      <div>
-        <label className="font-body text-[14px] font-medium text-ink-soft mb-2 block">
-          试听文本
-        </label>
-        <textarea
-          value={trialText}
-          onChange={(e) => setTrialText(e.target.value)}
-          placeholder="输入要试听的文本内容..."
-          className="w-full h-28 bg-white/80 text-ink rounded-2xl px-4 py-3 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[15px] leading-7 transition-colors"
-        />
-      </div>
+      <LongTextField
+        label="试听文本"
+        value={trialText}
+        onChange={setTrialText}
+        placeholder="输入要试听的文本内容..."
+        minHeightClass="min-h-32"
+        enableAudioTagEditor
+        onSuggestAudioTags={handleSuggestTrialTags}
+      />
 
       {/* 操作按钮 */}
       <div className="flex gap-2">
@@ -200,7 +205,12 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
       </div>
 
       {/* 试听音频播放器 */}
-      <MiniAudioPlayer src={trialAudioUrl} />
+      {trialAudioUrl && (
+        <div className="space-y-2">
+          <MiniAudioPlayer src={trialAudioUrl} />
+          <AudioDownloadLink src={trialAudioUrl} filename="clone-trial.wav" />
+        </div>
+      )}
 
       {/* 保存对话框 */}
       {showSaveDialog && (

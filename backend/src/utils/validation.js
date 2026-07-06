@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 
 const audioDir = path.join(__dirname, '../../audio');
+const assetDir = process.env.NODE_ENV === 'test'
+  ? path.join(__dirname, '../../.test-assets')
+  : path.join(__dirname, '../../assets');
 
 /**
  * 校验 URL 路径中的 ID 参数
@@ -35,4 +38,20 @@ function cleanAudioFile(audioPath) {
   }
 }
 
-module.exports = { validateId, cleanAudioFile, audioDir };
+/**
+ * 安全删除资产文件
+ * @param {string|null|undefined} assetPath - 文件路径（绝对路径或以 /assets/ 开头的相对路径）
+ */
+function cleanAssetFile(assetPath) {
+  if (!assetPath) return;
+  let fp = assetPath;
+  if (assetPath.startsWith('/assets/')) {
+    fp = path.join(assetDir, assetPath.slice('/assets/'.length));
+  }
+  if (!fp.startsWith(assetDir)) return;
+  if (fs.existsSync(fp)) {
+    fs.unlinkSync(fp);
+  }
+}
+
+module.exports = { validateId, cleanAudioFile, cleanAssetFile, audioDir, assetDir };

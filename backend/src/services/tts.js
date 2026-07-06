@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { getApiKey } = require('./mimo');
+const { buildSpeechRequest } = require('./speechRequestBuilder');
 
 const DEFAULT_RATE_LIMIT_RETRY_AFTER_MS = 15000;
 
@@ -32,7 +33,7 @@ function createRateLimitError(err) {
  * @param {string} [params.voiceType='preset'] - 音色类型 (preset/design/clone)
  * @param {string} [params.voiceDesign] - 音色设计描述
  * @param {string} [params.voiceClone] - 音色克隆音频 (base64)
- * @param {string} [params.stylePrompt] - 风格提示（与精细参数互斥）
+ * @param {string} [params.stylePrompt] - 简单风格提示
  * @param {boolean} [params.optimizeTextPreview=false] - 是否允许 voicedesign 优化/扩写试听文本
  * @param {Object} [params.speed] - 速度控制 { speed_ratio: 0.5-2.0, style: '固定'|'随机' }
  * @param {string|Array} [params.emotion] - 情感控制，字符串或 [{ emotion, weight }] 数组
@@ -52,66 +53,25 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
     throw new Error('design 模式需要提供 voiceDesign');
   }
 
-  // 判断是否使用了精细参数（speed/emotion/pitch），若是则清除 stylePrompt 避免冲突
-  const hasFineGrainedParams = speed || emotion || pitch;
-  // 无精细参数且无 stylePrompt 时使用默认风格提示
-  const effectiveStylePrompt = hasFineGrainedParams
-    ? ''
-    : (stylePrompt || '用专业新闻主播的语气，语速适中，沉稳大气');
-
   const ttsApiKey = getApiKey('tts');
-
-  let model, messages, audioConfig;
-
-  switch (voiceType) {
-    case 'design':
-      model = 'mimo-v2.5-tts-voicedesign';
-      messages = [
-        { role: 'user', content: stylePrompt ? `${voiceDesign}\n\n风格控制：${stylePrompt}` : voiceDesign },
-        { role: 'assistant', content: text }
-      ];
-      audioConfig = { format };
-      if (optimizeTextPreview) {
-        audioConfig.optimize_text_preview = true;
-      }
-      break;
-
-    case 'clone':
-      model = 'mimo-v2.5-tts-voiceclone';
-      messages = [
-        { role: 'user', content: effectiveStylePrompt },
-        { role: 'assistant', content: text }
-      ];
-      audioConfig = { format, voice: voiceClone };
-      break;
-
-    default: // preset
-      model = 'mimo-v2.5-tts';
-      messages = [
-        { role: 'user', content: effectiveStylePrompt },
-        { role: 'assistant', content: text }
-      ];
-      audioConfig = { format, voice };
-      // 精细控制参数
-      if (speed) audioConfig.speed = speed;
-      if (emotion) {
-        if (Array.isArray(emotion)) {
-          audioConfig.emotion_weights = emotion;
-        } else {
-          audioConfig.emotion = emotion;
-        }
-      }
-      if (pitch) audioConfig.pitch = pitch;
-  }
+  const speechRequest = buildSpeechRequest({
+    text,
+    voice,
+    voiceType,
+    voiceDesign,
+    voiceClone,
+    stylePrompt,
+    optimizeTextPreview,
+    speed,
+    emotion,
+    pitch,
+    format,
+  });
 
   let response;
 
   try {
-    response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', {
-      model,
-      messages,
-      audio: audioConfig
-    }, {
+    response = await axios.post('https://api.xiaomimimo.com/v1/chat/completions', speechRequest, {
       headers: {
         'api-key': ttsApiKey,
         'Content-Type': 'application/json'

@@ -75,11 +75,27 @@ try {
       trial_audio_path TEXT DEFAULT '',
       original_audio_path TEXT DEFAULT '',
       design_prompt TEXT DEFAULT '',
+      character_image_path TEXT DEFAULT NULL,
+      use_trial_audio_as_clone BOOLEAN DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_voice_presets_type ON voice_presets(type);
   `);
+}
+
+// 迁移：为旧数据库的 voice_presets 添加角色立绘路径
+try {
+  db.prepare('SELECT character_image_path FROM voice_presets LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE voice_presets ADD COLUMN character_image_path TEXT DEFAULT NULL');
+}
+
+// 迁移：为设计预设添加“使用试听音频作为克隆音频”开关
+try {
+  db.prepare('SELECT use_trial_audio_as_clone FROM voice_presets LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE voice_presets ADD COLUMN use_trial_audio_as_clone BOOLEAN DEFAULT 0');
 }
 
 // 迁移：确保 transcription_results 表存在

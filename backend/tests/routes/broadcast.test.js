@@ -268,6 +268,25 @@ describe('播报 API', () => {
       expect(config.optimizeTextPreview).toBe(true);
     });
 
+    test('忽略旧表演导演配置', async () => {
+      const res = await request(app)
+        .patch(`/api/broadcast/${vcTestBroadcastId}/voice-config`)
+        .send({
+          voiceType: 'design',
+          voiceDesign: '温柔女声',
+          performance: {
+            role: '克制的女性角色',
+            scene: '深夜独白',
+            direction: '语速偏慢，尾音轻收',
+            globalTags: ['冷静', '气声'],
+          },
+        });
+
+      expect(res.status).toBe(200);
+      const config = JSON.parse(res.body.broadcast.voice_config);
+      expect(config.performance).toBeUndefined();
+    });
+
     test('支持较大的克隆音频配置', async () => {
       const res = await request(app)
         .patch(`/api/broadcast/${vcTestBroadcastId}/voice-config`)

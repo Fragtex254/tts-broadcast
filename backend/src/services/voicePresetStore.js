@@ -35,19 +35,23 @@ function countAll() {
  * @param {string|null} [params.trialAudioPath] - 试听音频路径
  * @param {string|null} [params.originalAudioPath] - 原始参考音频路径
  * @param {string|null} [params.designPrompt] - 音色设计提示词
+ * @param {string|null} [params.characterImagePath] - 角色立绘路径
+ * @param {boolean|number} [params.useTrialAudioAsClone] - 设计预设是否用试听音频作为克隆音频
  * @returns {Object} 创建后的音色预设
  */
-function create({ type, name, stylePrompt, trialAudioPath, originalAudioPath, designPrompt }) {
+function create({ type, name, stylePrompt, trialAudioPath, originalAudioPath, designPrompt, characterImagePath, useTrialAudioAsClone }) {
   const result = db.prepare(`
-    INSERT INTO voice_presets (type, name, style_prompt, trial_audio_path, original_audio_path, design_prompt)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO voice_presets (type, name, style_prompt, trial_audio_path, original_audio_path, design_prompt, character_image_path, use_trial_audio_as_clone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     type,
     name,
     stylePrompt || '',
     trialAudioPath || null,
     originalAudioPath || null,
-    designPrompt || null
+    designPrompt || null,
+    characterImagePath || null,
+    type === 'design' && useTrialAudioAsClone ? 1 : 0
   );
 
   return getById(result.lastInsertRowid);
@@ -59,19 +63,27 @@ function create({ type, name, stylePrompt, trialAudioPath, originalAudioPath, de
  * @param {Object} params
  * @param {string|null} [params.trialAudioPath] - 试听音频路径
  * @param {string|null} [params.originalAudioPath] - 原始参考音频路径
+ * @param {string|null} [params.characterImagePath] - 角色立绘路径
+ * @param {boolean|number} [params.useTrialAudioAsClone] - 设计预设是否用试听音频作为克隆音频
  * @returns {Object|undefined} 更新后的音色预设
  */
-function updateAudioPaths(id, { trialAudioPath, originalAudioPath }) {
+function updateAudioPaths(id, { trialAudioPath, originalAudioPath, characterImagePath, useTrialAudioAsClone }) {
   const existing = getById(id);
   if (!existing) return undefined;
 
   db.prepare(`
     UPDATE voice_presets
-    SET trial_audio_path = ?, original_audio_path = ?, updated_at = CURRENT_TIMESTAMP
+    SET trial_audio_path = ?,
+        original_audio_path = ?,
+        character_image_path = ?,
+        use_trial_audio_as_clone = ?,
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
     trialAudioPath ?? existing.trial_audio_path,
     originalAudioPath ?? existing.original_audio_path,
+    characterImagePath ?? existing.character_image_path,
+    useTrialAudioAsClone === undefined ? existing.use_trial_audio_as_clone : (useTrialAudioAsClone ? 1 : 0),
     id
   );
 
@@ -87,9 +99,11 @@ function updateAudioPaths(id, { trialAudioPath, originalAudioPath }) {
  * @param {string|null} [params.designPrompt] - 音色设计提示词
  * @param {string|null} [params.trialAudioPath] - 试听音频路径
  * @param {string|null} [params.originalAudioPath] - 原始参考音频路径
+ * @param {string|null} [params.characterImagePath] - 角色立绘路径
+ * @param {boolean|number} [params.useTrialAudioAsClone] - 设计预设是否用试听音频作为克隆音频
  * @returns {Object|undefined} 更新后的音色预设
  */
-function update(id, { name, stylePrompt, designPrompt, trialAudioPath, originalAudioPath }) {
+function update(id, { name, stylePrompt, designPrompt, trialAudioPath, originalAudioPath, characterImagePath, useTrialAudioAsClone }) {
   const existing = getById(id);
   if (!existing) return undefined;
 
@@ -100,6 +114,8 @@ function update(id, { name, stylePrompt, designPrompt, trialAudioPath, originalA
         design_prompt = ?,
         trial_audio_path = ?,
         original_audio_path = ?,
+        character_image_path = ?,
+        use_trial_audio_as_clone = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
@@ -108,6 +124,8 @@ function update(id, { name, stylePrompt, designPrompt, trialAudioPath, originalA
     designPrompt ?? existing.design_prompt,
     trialAudioPath ?? existing.trial_audio_path,
     originalAudioPath ?? existing.original_audio_path,
+    characterImagePath === undefined ? existing.character_image_path : characterImagePath,
+    useTrialAudioAsClone === undefined ? existing.use_trial_audio_as_clone : (useTrialAudioAsClone ? 1 : 0),
     id
   );
 

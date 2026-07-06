@@ -195,6 +195,203 @@ describe('MiMo 服务', () => {
     })).rejects.toThrow('LLM API 返回内容为空');
   });
 
+  test('Anthropic 格式根据图片反推音色描述', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      content: [{
+        type: 'text',
+        text: '{"designPrompt":"青年女性，清亮柔和，温和角色感","stylePrompt":"语气克制温柔，语速适中，短句间轻微停顿","characterSummary":"明亮温和的角色气质"}'
+      }],
+    });
+
+    const result = await mimo.inferVoiceDesignFromImage({
+      imageBuffer: Buffer.from('fake-png'),
+      mimeType: 'image/png',
+    });
+
+    expect(result).toMatchObject({
+      designPrompt: '青年女性，清亮柔和，温和角色感',
+      stylePrompt: '语气克制温柔，语速适中，短句间轻微停顿',
+      characterSummary: '明亮温和的角色气质',
+    });
+    expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'mimo-v2.5',
+      system: expect.stringContaining('不识别真实声纹'),
+      thinking: { type: 'disabled' },
+      messages: [
+        expect.objectContaining({
+          role: 'user',
+          content: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'image',
+              source: expect.objectContaining({
+                type: 'base64',
+                media_type: 'image/png',
+                data: Buffer.from('fake-png').toString('base64'),
+              }),
+            }),
+            expect.objectContaining({ type: 'text' }),
+          ]),
+        }),
+      ],
+    }));
+    const promptText = mockMessagesCreate.mock.calls[0][0].messages[0].content.find((item) => item.type === 'text').text;
+    expect(promptText).toContain('性别年龄 + 音色质感 + 角色感');
+    expect(promptText).toContain('语气情绪 + 语速节奏');
+    expect(promptText).toContain('designPrompt 不要写语速、节奏、咬字、情绪表演、停顿、尾音、距离感');
+  });
+
+  test('OpenAI 格式根据图片反推音色描述', async () => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_base_url', '"https://openai.example/v1"');
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_model', '"gpt-vision"');
+    axios.post.mockResolvedValue({
+      data: {
+        choices: [{
+          message: {
+            content: '```json\n{"designPrompt":"少女，低柔透明，冷静角色感","stylePrompt":"语气疏离冷静，语速偏慢，短句轻停","characterSummary":"冷静克制的角色气质"}\n```'
+          }
+        }]
+      },
+    });
+
+    const result = await mimo.inferVoiceDesignFromImage({
+      imageBuffer: Buffer.from('fake-webp'),
+      mimeType: 'image/webp',
+    });
+
+    expect(result.designPrompt).toBe('少女，低柔透明，冷静角色感');
+    expect(result.stylePrompt).toBe('语气疏离冷静，语速偏慢，短句轻停');
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://openai.example/v1/chat/completions',
+      expect.objectContaining({
+        model: 'gpt-vision',
+        messages: expect.arrayContaining([
+          { role: 'system', content: expect.stringContaining('不识别真实声纹') },
+          expect.objectContaining({
+            role: 'user',
+            content: expect.arrayContaining([
+              expect.objectContaining({ type: 'text' }),
+              expect.objectContaining({
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/webp;base64,${Buffer.from('fake-webp').toString('base64')}`,
+                },
+              }),
+            ]),
+          }),
+        ]),
+      }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-key',
+        }),
+      })
+    );
+  });
+
+  test('图片反推非 JSON 输出时使用纯文本兜底', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '少年，温柔明亮，好奇角色感' }],
+    });
+
+    const result = await mimo.inferVoiceDesignFromImage({
+      imageBuffer: Buffer.from('fake-jpg'),
+      mimeType: 'image/jpeg',
+    });
+
+    expect(result).toMatchObject({
+      designPrompt: '少年，温柔明亮，好奇角色感',
+      stylePrompt: '',
+      characterSummary: '',
+    });
+  });
+
+  test('图片反推不暴露表演导演配置', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          designPrompt: '成熟女性，低柔冷静，疏离角色感',
+          stylePrompt: '语气冷静疏离，语速偏慢，短句尾音轻收',
+          characterSummary: '冷静疏离',
+          performanceRole: '克制疏离的女性角色',
+          performanceScene: '深夜独白',
+          performanceDirection: '语速偏慢，尾音轻收，带一点气声',
+          performanceTags: ['冷静', '气声'],
+        }),
+      }],
+    });
+
+    const result = await mimo.inferVoiceDesignFromImage({
+      imageBuffer: Buffer.from('fake-png'),
+      mimeType: 'image/png',
+    });
+
+    expect(result).toEqual({
+      designPrompt: '成熟女性，低柔冷静，疏离角色感',
+      stylePrompt: '语气冷静疏离，语速偏慢，短句尾音轻收',
+      characterSummary: '冷静疏离',
+    });
+  });
+
+  test('为试听文本建议合法标签', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      content: [{
+        type: 'text',
+        text: '{"taggedText":"[温柔，平静]你好，[轻笑]欢迎收听。","stylePrompt":"语气温柔平静，语速适中，问候后轻停顿"}'
+      }],
+    });
+
+    const result = await mimo.suggestTrialTextTags({
+      text: '你好，欢迎收听。',
+      voiceDesign: '清亮柔和的年轻女性声线',
+      stylePrompt: '语气温柔，语速适中',
+    });
+
+    expect(result).toEqual({
+      taggedText: '[温柔，平静]你好，[轻笑]欢迎收听。',
+      stylePrompt: '语气温柔平静，语速适中，问候后轻停顿',
+    });
+    expect(mockMessagesCreate).toHaveBeenCalledWith(expect.objectContaining({
+      messages: [
+        expect.objectContaining({
+          content: expect.stringContaining('气口、情绪弧线、语速快慢变化、停顿位置和重音落点'),
+        }),
+      ],
+      system: '你是 MiMo TTS 标签编辑助手，只输出 JSON 对象。',
+      thinking: { type: 'disabled' },
+    }));
+  });
+
+  test('试听文本标签建议会把旧圆括号归一为方括号', async () => {
+    mockMessagesCreate.mockResolvedValue({
+      content: [{
+        type: 'text',
+        text: '{"taggedText":"(温柔 平静)你好，[轻笑]欢迎收听。"}'
+      }],
+    });
+
+    const result = await mimo.suggestTrialTextTags({
+      text: '你好，欢迎收听。',
+    });
+
+    expect(result).toEqual({
+      taggedText: '[温柔，平静]你好，[轻笑]欢迎收听。',
+      stylePrompt: '',
+    });
+  });
+
+  test('图片反推遇到不支持视觉的模型时返回可操作错误', async () => {
+    const error = new Error('unsupported image content block');
+    error.status = 400;
+    mockMessagesCreate.mockRejectedValue(error);
+
+    await expect(mimo.inferVoiceDesignFromImage({
+      imageBuffer: Buffer.from('fake-png'),
+      mimeType: 'image/png',
+    })).rejects.toThrow('当前 LLM 模型或接口不支持图片输入');
+  });
+
   test('LLM 401 错误映射为 API Key 提示', async () => {
     mockMessagesCreate.mockRejectedValue(new Error('401 {"error":{"message":"Invalid API Key","code":"401","type":"invalid_key"}}'));
 

@@ -116,6 +116,8 @@ export interface VoicePreset {
   trial_audio_path: string | null;
   original_audio_path: string | null;
   design_prompt: string | null;
+  character_image_path: string | null;
+  use_trial_audio_as_clone: number;
   created_at: string;
   updated_at: string;
 }

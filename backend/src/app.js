@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 require('dotenv').config();
 const { createScopedLogger } = require('./services/logger');
+const { audioDir, assetDir } = require('./utils/validation');
 
 const app = express();
 const logger = createScopedLogger('app');
@@ -25,7 +25,8 @@ app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
 
 // 静态文件（音频存储）
-app.use('/audio', express.static(path.join(__dirname, '../audio')));
+app.use('/audio', express.static(audioDir));
+app.use('/assets', express.static(assetDir));
 
 // API 路由
 app.use('/api/broadcast', require('./routes/broadcast'));

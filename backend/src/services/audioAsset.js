@@ -1,10 +1,13 @@
 // 音频资产写入与清理服务
 const fs = require('fs');
 const path = require('path');
-const { audioDir, cleanAudioFile } = require('../utils/validation');
+const { audioDir, assetDir, cleanAudioFile } = require('../utils/validation');
 
 if (!fs.existsSync(audioDir)) {
   fs.mkdirSync(audioDir, { recursive: true });
+}
+if (!fs.existsSync(assetDir)) {
+  fs.mkdirSync(assetDir, { recursive: true });
 }
 
 /**
@@ -17,6 +20,18 @@ function writeAudioFile(filename, buffer) {
   const filepath = path.join(audioDir, filename);
   fs.writeFileSync(filepath, buffer);
   return `/audio/${filename}`;
+}
+
+/**
+ * 保存资产 Buffer 到 assets 目录
+ * @param {string} filename - 文件名
+ * @param {Buffer} buffer - 资产 Buffer
+ * @returns {string} /assets/ 相对路径
+ */
+function writeAssetFile(filename, buffer) {
+  const filepath = path.join(assetDir, filename);
+  fs.writeFileSync(filepath, buffer);
+  return `/assets/${filename}`;
 }
 
 /**
@@ -76,6 +91,27 @@ function writePresetUpload({ presetId, file, kind }) {
   return writeAudioFile(filename, file.buffer);
 }
 
+function getImageExtension(file) {
+  const byMime = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+  };
+  return byMime[file.mimetype] || path.extname(file.originalname) || '.png';
+}
+
+/**
+ * 保存预设角色立绘
+ * @param {Object} params
+ * @param {number} params.presetId - 预设 ID
+ * @param {Object} params.file - multer 文件对象
+ * @returns {string} /assets/ 相对路径
+ */
+function writePresetCharacterImage({ presetId, file }) {
+  const ext = getImageExtension(file);
+  return writeAssetFile(`preset_character_${presetId}${ext}`, file.buffer);
+}
+
 /**
  * 清理旧的试听音频文件，保留最近 maxKeep 个
  * @param {string} prefix - 文件名前缀
@@ -106,5 +142,7 @@ module.exports = {
   writeSegmentAudio,
   writeTrialAudio,
   writePresetUpload,
+  writeAssetFile,
+  writePresetCharacterImage,
   cleanupOldTrials,
 };

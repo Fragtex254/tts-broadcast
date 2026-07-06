@@ -164,7 +164,11 @@ function getErrorStatus(error) {
 
 function mapLlmError(error) {
   const status = getErrorStatus(error);
-  const message = String(error?.message || '');
+  const message = String(error?.message || error?.response?.data?.error?.message || '');
+  if ((status === 400 || status === '400' || status === 422 || status === '422')
+    && /image|vision|media|multimodal|content block|unsupported|input_image|image_url|图片|图像|视觉/i.test(message)) {
+    return new Error('当前 LLM 模型或接口不支持图片输入，请在设置中切换到原生支持视觉的模型后重试');
+  }
   if (status === 401 || status === '401' || message.includes('401') || message.includes('invalid_key')) {
     return new Error('LLM API Key 无效或已过期，请在设置中重新配置');
   }
@@ -201,6 +205,21 @@ function extractJsonArrayText(text) {
   const arrayEnd = jsonStr.lastIndexOf(']');
   if (arrayStart >= 0 && arrayEnd > arrayStart) {
     return jsonStr.slice(arrayStart, arrayEnd + 1).trim();
+  }
+  return jsonStr.trim();
+}
+
+function extractJsonObjectText(text) {
+  let jsonStr = stripThinkingContent(text);
+  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  }
+
+  const objectStart = jsonStr.indexOf('{');
+  const objectEnd = jsonStr.lastIndexOf('}');
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    return jsonStr.slice(objectStart, objectEnd + 1).trim();
   }
   return jsonStr.trim();
 }
@@ -422,6 +441,70 @@ async function createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, ap
   return extractOpenAiText(response);
 }
 
+async function createAnthropicVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType }) {
+  const client = createClient(undefined, config);
+  const message = await client.messages.create({
+    model: config.model,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mimeType,
+              data: imageBuffer.toString('base64'),
+            },
+          },
+          { type: 'text', text: prompt },
+        ],
+      },
+    ],
+    thinking: createThinkingOption(false),
+  });
+  return extractAnthropicText(message);
+}
+
+async function createOpenAiVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType }) {
+  const apiKey = getApiKey('anthropic');
+  const payload = {
+    model: config.model,
+    max_tokens: maxTokens,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${mimeType};base64,${imageBuffer.toString('base64')}`,
+            },
+          },
+        ],
+      },
+    ],
+  };
+  if (isMiniMaxOpenAiConfig(config)) {
+    payload.thinking = createThinkingOption(false);
+  }
+
+  const response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), payload, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'api-key': apiKey,
+      'Content-Type': 'application/json'
+    },
+    timeout: LLM_REQUEST_TIMEOUT_MS
+  });
+
+  return extractOpenAiText(response);
+}
+
 /**
  * 调用当前配置的 LLM
  * @param {Object} params
@@ -440,6 +523,18 @@ async function createLlmMessage({ prompt, systemPrompt, maxTokens, thinkingEnabl
       return await createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, apiKeyOverride });
     }
     return await createAnthropicMessage({ prompt, systemPrompt, maxTokens, thinkingEnabled, config, apiKeyOverride });
+  } catch (error) {
+    throw mapLlmError(error);
+  }
+}
+
+async function createVisionMessage({ prompt, systemPrompt, maxTokens, imageBuffer, mimeType }) {
+  try {
+    const config = getLlmConfig();
+    if (config.apiFormat === 'openai') {
+      return await createOpenAiVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType });
+    }
+    return await createAnthropicVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType });
   } catch (error) {
     throw mapLlmError(error);
   }
@@ -656,6 +751,228 @@ async function suggestStyleTags(texts, allowedTags) {
   return allTags;
 }
 
+function parseVoiceDesignInference(rawText) {
+  const cleaned = stripThinkingContent(rawText);
+  try {
+    const json = JSON.parse(extractJsonObjectText(cleaned));
+    const designPrompt = typeof json.designPrompt === 'string'
+      ? json.designPrompt.trim()
+      : (typeof json.design_prompt === 'string' ? json.design_prompt.trim() : '');
+    const stylePrompt = typeof json.stylePrompt === 'string'
+      ? json.stylePrompt.trim()
+      : (typeof json.style_prompt === 'string' ? json.style_prompt.trim() : '');
+    const characterSummary = typeof json.characterSummary === 'string'
+      ? json.characterSummary.trim()
+      : (typeof json.character_summary === 'string' ? json.character_summary.trim() : '');
+    if (designPrompt) {
+      return { designPrompt, stylePrompt, characterSummary };
+    }
+  } catch {
+    // 非 JSON 输出走纯文本兜底。
+  }
+
+  const fallback = cleaned.trim();
+  if (!fallback) {
+    throw new Error('角色立绘反推结果为空');
+  }
+  return {
+    designPrompt: fallback,
+    stylePrompt: '',
+    characterSummary: '',
+  };
+}
+
+/**
+ * 根据角色立绘反推 MiMo voicedesign 可用的音色描述
+ * @param {Object} params
+ * @param {Buffer} params.imageBuffer - 角色立绘图片
+ * @param {string} params.mimeType - 图片 MIME 类型
+ * @returns {Promise<{designPrompt: string, stylePrompt: string, characterSummary: string}>}
+ */
+async function inferVoiceDesignFromImage({ imageBuffer, mimeType }) {
+  if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
+    throw new Error('请上传角色立绘图片');
+  }
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(mimeType)) {
+    throw new Error('仅支持 PNG、JPG 或 WebP 角色立绘');
+  }
+
+  const prompt = `请观察这张角色立绘，仅基于画面中可见的外貌、表情、姿态、服装风格、年龄感与整体气质，创作一组适合 MiMo TTS 的中文提示词。
+
+你不是在识别角色真实声音，也不要模仿任何真人、演员、声优或公众人物。
+请只做“视觉印象下的原创音色设计”。
+
+MiMo TTS 的关键规则：
+- voicedesign 模型的 user.content 用来描述“音色本体”，assistant.content 才是要合成的文本。
+- 自然语言控制放在 user.content；音频标签控制放在 assistant.content 的文本中。
+- designPrompt 会保存为可复用的音色资产，只能写“性别年龄 + 音色质感 + 角色感”，不要复杂堆词。
+- stylePrompt 只描述“语气情绪 + 语速节奏”，不要混入音色身份、角色背景、场景或导演模式。
+
+分析时请重点考虑：
+1. designPrompt：性别年龄（如 少女 / 青年女性 / 成熟女性 / 少年 / 青年男性）+ 音色质感（如 清亮 / 柔和 / 低柔 / 透明 / 磁性）+ 角色感（如 温顺 / 冷静 / 活泼 / 疏离 / 自信）。
+2. stylePrompt：语气情绪（如 温柔、克制、好奇、冷静）+ 语速节奏（如 语速适中、节奏轻快、短句稍停、尾音轻收）。
+
+输出要求：
+- 不要写长篇角色背景
+- 不要提到“我看到图片中”
+- 不要使用真实人物或声优名字
+- 不要判断敏感身份属性
+- designPrompt 要极简，控制在 35 字以内，推荐格式：“青年女性，清亮柔和，带冷静角色感”
+- designPrompt 不要写语速、节奏、咬字、情绪表演、停顿、尾音、距离感
+- stylePrompt 要能直接作为自然语言风格控制，控制在 80 字以内
+- stylePrompt 必须承接语气情绪 + 语速节奏，例如：“语气克制温柔，语速适中，短句间轻微停顿”
+- characterSummary 控制在 100 字以内
+- 不要生成具体场景、台词表演、导演模式或分镜化指导
+
+请只输出 JSON 对象：
+{
+  "designPrompt": "35 字以内，性别年龄 + 音色质感 + 角色感",
+  "stylePrompt": "80 字以内，语气情绪 + 语速节奏",
+  "characterSummary": "100 字以内，概括角色视觉气质"
+}`;
+
+  const rawText = await createVisionMessage({
+    prompt,
+    systemPrompt: '你是一个角色视觉分析与 TTS 音色设计助手。只基于画面可见特征生成创作性音色描述，不识别真实声纹。',
+    maxTokens: 800,
+    imageBuffer,
+    mimeType,
+  });
+  return parseVoiceDesignInference(rawText);
+}
+
+const TRIAL_TEXT_ALLOWED_STYLE_TAGS = [
+  '开心', '悲伤', '愤怒', '恐惧', '惊讶', '兴奋', '委屈', '平静', '冷漠',
+  '怅然', '欣慰', '无奈', '愧疚', '释然', '嫉妒', '厌倦', '忐忑', '动情',
+  '温柔', '高冷', '活泼', '严肃', '慵懒', '俏皮', '深沉', '干练', '凌厉',
+  '磁性', '醇厚', '清亮', '空灵', '稚嫩', '苍老', '甜美', '沙哑', '醇雅',
+  '夹子音', '御姐音', '正太音', '大叔音', '台湾腔',
+  '东北话', '四川话', '河南话', '粤语',
+];
+
+const TRIAL_TEXT_ALLOWED_AUDIO_TAGS = [
+  '吸气', '深呼吸', '叹气', '长叹一口气', '喘息', '屏息',
+  '紧张', '害怕', '激动', '疲惫', '委屈', '撒娇', '心虚', '震惊', '不耐烦',
+  '颤抖', '声音颤抖', '变调', '破音', '鼻音', '气声', '沙哑',
+  '笑', '轻笑', '大笑', '冷笑', '抽泣', '呜咽', '哽咽', '嚎啕大哭',
+  '语速加快', '语速放慢', '停顿片刻', '沉默片刻', '小声', '提高音量喊话',
+];
+
+function parseTaggedTrialTextSuggestion(rawText, fallbackText) {
+  const cleaned = stripThinkingContent(rawText).trim();
+  if (!cleaned) {
+    return { taggedText: fallbackText, stylePrompt: '' };
+  }
+  try {
+    const json = JSON.parse(extractJsonObjectText(cleaned));
+    const stylePrompt = typeof json.stylePrompt === 'string'
+      ? json.stylePrompt.trim()
+      : (typeof json.style_prompt === 'string' ? json.style_prompt.trim() : '');
+    if (typeof json.taggedText === 'string' && json.taggedText.trim()) {
+      return {
+        taggedText: normalizeTrialTextTagSyntax(json.taggedText.trim()),
+        stylePrompt,
+      };
+    }
+    if (typeof json.tagged_text === 'string' && json.tagged_text.trim()) {
+      return {
+        taggedText: normalizeTrialTextTagSyntax(json.tagged_text.trim()),
+        stylePrompt,
+      };
+    }
+  } catch {
+    // 非 JSON 输出走纯文本兜底。
+  }
+  return {
+    taggedText: normalizeTrialTextTagSyntax(cleaned),
+    stylePrompt: '',
+  };
+}
+
+function normalizeTrialTextTagSyntax(text) {
+  return String(text || '')
+    .replace(/（([^（）]+)）/g, (_, content) => `[${normalizeTagContent(content)}]`)
+    .replace(/\(([^()]+)\)/g, (_, content) => `[${normalizeTagContent(content)}]`)
+    .replace(/\[([^\]]+)\]/g, (_, content) => `[${normalizeTagContent(content)}]`);
+}
+
+function normalizeTagContent(content) {
+  return String(content || '')
+    .split(/[，,、\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join('，');
+}
+
+/**
+ * 为试听文本建议 MiMo 音频标签，只返回可放入 assistant.content 的文本
+ * @param {Object} params
+ * @param {string} params.text - 原始试听文本
+ * @param {string} [params.voiceDesign] - 音色描述
+ * @param {string} [params.stylePrompt] - 自然语言风格提示
+ * @returns {Promise<{taggedText:string, stylePrompt:string}>}
+ */
+async function suggestTrialTextTags({ text, voiceDesign = '', stylePrompt = '' }) {
+  const sourceText = String(text || '').trim();
+  if (!sourceText) {
+    throw new Error('请提供试听文本');
+  }
+
+  const prompt = `你是 MiMo TTS 台词表演标签导演。你的任务不是简单补标签，而是根据台词本身的气口、情绪弧线、语速快慢变化、停顿位置和重音落点，使用合法标签优化这句试听文本，让情绪能被 TTS 明确表达。
+
+你会收到两类输入：
+1. 没有任何标签的原始台词：你需要从 0 到 1 设计标签。
+2. 已经带有标签的草稿：你需要评估已有标签是否准确，保留有用标签，删除冲突或多余标签，并补充更合适的标签。
+
+MiMo TTS 标签规则：
+- 所有标签都必须使用方括号，格式如：[温柔]、[轻笑]、[停顿片刻]。
+- 如果同一位置需要多个情绪或声音控制，必须合并成一个标签，例如：[温柔，平静]正文，不要写成 [温柔][平静] 或 (温柔 平静)。
+- 风格标签通常放在目标文本最开头；音频标签可以放在 assistant.content 的正文任意位置。
+- 不要把标签写进音色描述；你只处理要合成的试听文本。
+- 不要添加角色背景、场景说明或导演模式字段。
+
+优化原则：
+- 先判断台词的核心情绪和说话意图，再决定开头整体标签。
+- 在逗号、顿号、转折词、感叹号、疑问句、情绪突变处考虑插入 [停顿片刻]、[吸气]、[语速加快]、[语速放慢] 等节奏标签。
+- 对需要强调的短语，用现有标签表达表现方式，例如 [提高音量喊话]、[小声]、[语速放慢]、[激动]、[震惊]，不要创造“重音”这类列表外标签。
+- 如果原文已有标签但过弱，应更换或补强；如果已有标签与台词矛盾，应删除。
+- 标签应明显改变表演效果，但不能密到破坏朗读。短句 2-4 个标签，中长句 3-7 个标签。
+
+允许使用的开头风格标签：
+${TRIAL_TEXT_ALLOWED_STYLE_TAGS.join('、')}
+
+允许使用的正文音频标签：
+${TRIAL_TEXT_ALLOWED_AUDIO_TAGS.join('、')}
+
+参考音色描述：
+${voiceDesign || '无'}
+
+参考风格提示：
+${stylePrompt || '无'}
+
+原始试听文本：
+${sourceText}
+
+输出要求：
+- 保留原文主要文字，不要扩写成长段
+- 标签总数控制在 2 到 7 个；极短句可以少于 2 个
+- 不要使用上述列表外的标签
+- 禁止输出圆括号标签
+- 如果输入已有标签，输出应体现你对已有标签的优化结果，而不是原样返回
+- 同时根据最终台词情绪生成 stylePrompt，只写“语气情绪 + 语速节奏”，不要写音色身份、角色背景或场景
+- stylePrompt 控制在 80 字以内，例如：“语气先平静后惊喜，语速前半适中，转折后略加快，关键短语前轻停顿”
+- 只输出 JSON 对象：{"taggedText":"带标签的试听文本","stylePrompt":"语气情绪 + 语速节奏"}`;
+
+  const rawText = await createLlmMessage({
+    prompt,
+    systemPrompt: '你是 MiMo TTS 标签编辑助手，只输出 JSON 对象。',
+    maxTokens: 800,
+    thinkingEnabled: false,
+  });
+
+  return parseTaggedTrialTextSuggestion(rawText, sourceText);
+}
+
 /**
  * 测试 API Key 是否有效
  * @param {string} type - Key 类型: 'anthropic' 或 'tts'
@@ -707,7 +1024,9 @@ module.exports = {
   getApiKey,
   getLlmConfig,
   formatTranscriptionText,
+  inferVoiceDesignFromImage,
   rewriteToScript,
+  suggestTrialTextTags,
   splitScript,
   suggestStyleTags,
   testApiKey,
