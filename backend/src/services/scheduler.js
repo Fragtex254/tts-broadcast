@@ -1,6 +1,6 @@
 // backend/src/services/scheduler.js
 const cron = require('node-cron');
-const db = require('../db');
+const scheduleStore = require('./scheduleStore');
 const { createScopedLogger } = require('./logger');
 
 const logger = createScopedLogger('scheduler');
@@ -17,7 +17,7 @@ function init(onTrigger) {
   if (onTrigger) {
     onTriggerCallback = onTrigger;
   }
-  const schedules = db.prepare('SELECT * FROM schedules WHERE is_active = 1').all();
+  const schedules = scheduleStore.getActive();
   schedules.forEach(schedule => {
     startJob(schedule);
   });
@@ -64,7 +64,7 @@ function startJob(schedule) {
         await onTriggerCallback(schedule);
       }
       // 任务成功后更新时间
-      db.prepare('UPDATE schedules SET last_run_at = CURRENT_TIMESTAMP WHERE id = ?').run(schedule.id);
+      scheduleStore.markLastRun(schedule.id);
     } catch (error) {
       logger.error({
         err: error,
@@ -110,11 +110,7 @@ function addSchedule({ name, cron_expression, content_types }) {
     }
   }
 
-  const result = db.prepare(`
-    INSERT INTO schedules (name, cron_expression, content_types) VALUES (?, ?, ?)
-  `).run(name, cron_expression, content_types);
-
-  const task = db.prepare('SELECT * FROM schedules WHERE id = ?').get(result.lastInsertRowid);
+  const task = scheduleStore.create({ name, cron_expression, content_types });
   startJob(task);
   return task;
 }
@@ -130,20 +126,15 @@ function updateSchedule(id, { name, cron_expression, content_types }) {
     throw new Error('无效的 cron 表达式');
   }
 
-  const existing = db.prepare('SELECT * FROM schedules WHERE id = ?').get(id);
+  const existing = scheduleStore.getById(id);
   if (!existing) throw new Error('任务不存在');
 
-  db.prepare(`
-    UPDATE schedules SET name = ?, cron_expression = ?, content_types = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `).run(
-    name || existing.name,
-    cron_expression || existing.cron_expression,
-    content_types || existing.content_types,
-    id
-  );
-
   stopJob(id);
-  const updated = db.prepare('SELECT * FROM schedules WHERE id = ?').get(id);
+  const updated = scheduleStore.update(id, {
+    name: name || existing.name,
+    cron_expression: cron_expression || existing.cron_expression,
+    content_types: content_types || existing.content_types
+  });
   if (updated.is_active) {
     startJob(updated);
   }
@@ -157,20 +148,19 @@ function updateSchedule(id, { name, cron_expression, content_types }) {
  * @returns {Object} 更新后的任务
  */
 function toggleSchedule(id) {
-  const task = db.prepare('SELECT * FROM schedules WHERE id = ?').get(id);
+  const task = scheduleStore.getById(id);
   if (!task) throw new Error('任务不存在');
 
   const newStatus = task.is_active ? 0 : 1;
-  db.prepare('UPDATE schedules SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newStatus, id);
+  const updated = scheduleStore.updateActive(id, newStatus);
 
   if (newStatus) {
-    const updated = db.prepare('SELECT * FROM schedules WHERE id = ?').get(id);
     startJob(updated);
   } else {
     stopJob(id);
   }
 
-  return db.prepare('SELECT * FROM schedules WHERE id = ?').get(id);
+  return updated;
 }
 
 /**
@@ -179,7 +169,7 @@ function toggleSchedule(id) {
  */
 function removeSchedule(id) {
   stopJob(id);
-  db.prepare('DELETE FROM schedules WHERE id = ?').run(id);
+  scheduleStore.remove(id);
 }
 
 /**
@@ -187,7 +177,7 @@ function removeSchedule(id) {
  * @returns {Array} 任务列表
  */
 function getSchedules() {
-  return db.prepare('SELECT * FROM schedules ORDER BY created_at DESC').all();
+  return scheduleStore.getAll();
 }
 
 module.exports = {

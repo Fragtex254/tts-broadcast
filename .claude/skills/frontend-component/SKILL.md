@@ -18,8 +18,11 @@ description: 新增或修改 React 组件、页面时使用。涵盖组件文件
 3. 组件单一职责，超 **300 行**考虑拆分；props 下传、events 上抛；**不在组件内直接调 API**（走 store action）。
 4. 同时提供 `export const` 具名导出和 `export default`；props 用 `interface {Component}Props`。
 5. 不用 `any`、不用 `as`（除非充分理由 + 注释）；不在组件文件定义全局共享 interface（放 `store/types.ts`）。
-6. 非首屏页面用 `React.lazy()` + `Suspense`；新增页面三步：建组件 → `App.tsx` 加 `<Route>` → `Sidebar` 加导航项，并确认 `NotFound` 兜底仍在。
-7. 新增/改完跑 `npm run lint && npm run build && npm run test`。
+6. 二级界面、确认弹窗、全屏编辑面板统一用 `components/ModalShell.tsx`；不要在业务组件里重复写 `fixed inset-0`、`role="dialog"`、Esc 关闭和 backdrop 关闭逻辑。
+7. 音频播放条统一用 `components/Dashboard/AudioPlaybackBar.tsx`，整篇/历史播放器走 `AudioPlayer`，试听小播放器走 `MiniAudioPlayer`；不要在业务组件里重复维护 `<audio>`、播放状态、时长、seek 或倍速逻辑。
+8. MiMo 方括号标签编辑统一用 `components/Dashboard/AudioTagTextEditor.tsx`；设计/克隆试听和口播分段编辑都走这个复杂标签面板，不再新增只覆盖少量标签的局部插入器。
+9. 非首屏页面用 `React.lazy()` + `Suspense`；新增页面三步：建组件 → `App.tsx` 加 `<Route>` → `Sidebar` 加导航项，并确认 `NotFound` 兜底仍在。
+10. 新增/改完跑 `npm run lint && npm run build && npm run test`。
 
 ## 模式与模板
 
@@ -68,7 +71,8 @@ export default MyComponent;
 1. **单一职责** — 一个组件做一件事。如果一个组件超过 300 行，考虑拆分。
 2. **Props 下传，Events 上抛** — 子组件通过 props 接收数据，通过回调函数通知父组件。
 3. **不要在组件内直接调 API** — 通过 store action 间接调用。
-4. **导出方式** — 同时提供具名导出和默认导出：
+4. **共享交互模块优先** — 弹窗用 `ModalShell`，播放条用 `AudioPlaybackBar` / `AudioPlayer` / `MiniAudioPlayer`，MiMo 方括号标签编辑用 `AudioTagTextEditor`；需要新增变体时先扩展共享模块的清晰 props，而不是在调用处复制实现。
+5. **导出方式** — 同时提供具名导出和默认导出：
    ```tsx
    export const MyComponent: React.FC<Props> = (props) => { ... };
    export default MyComponent;
@@ -269,6 +273,8 @@ npm run test
 - [ ] 添加入场动画 `style={{ animation: 'fade-in-up ...' }}`
 - [ ] 加载状态使用骨架屏，错误状态使用 `animate-shake`
 - [ ] 按钮使用语义色（lemon/sage/lilac/pink）
+- [ ] 二级界面使用 `ModalShell`，未手写固定遮罩/对话框基础逻辑
+- [ ] 音频播放条使用 `AudioPlaybackBar` / `AudioPlayer` / `MiniAudioPlayer`，未手写 `<audio>` 播放控制逻辑
 - [ ] Store 读取使用 selector，不写无 selector 的 `useStore()`
 - [ ] 新增 API 响应字段时同步 `store/types.ts` 与 `services/schemas.ts`
 - [ ] 运行 `npm run lint`

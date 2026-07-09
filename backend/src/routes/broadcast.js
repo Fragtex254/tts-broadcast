@@ -177,7 +177,7 @@ router.post('/generate', async (req, res) => {
 
 /**
  * GET /api/broadcast/history
- * 获取历史播报列表
+ * 获取已保存播报列表
  */
 router.get('/history', (req, res) => {
   try {
@@ -186,7 +186,7 @@ router.get('/history', (req, res) => {
     const offset = (page - 1) * limit;
 
     const broadcasts = broadcastStore.getHistory({ limit, offset });
-    const total = broadcastStore.countAll();
+    const total = broadcastStore.countSaved();
 
     res.json({
       broadcasts,

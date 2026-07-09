@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ModalShell } from '../ModalShell';
 
 interface TranscriptionResultModalProps {
   isOpen: boolean;
@@ -57,71 +58,22 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 backdrop-blur-sm px-4 py-6"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-5xl max-h-[90vh] overflow-hidden bg-paper rounded-card shadow-card border border-card-border flex flex-col animate-fade-in"
-        role="dialog"
-        aria-modal="true"
-        aria-label="转录结果"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4 p-5 border-b border-card-border">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-lilac" />
-              <h3 className="font-display italic text-[16px] font-medium text-ink-soft">转录结果</h3>
-            </div>
-            <p className="font-body text-[13px] text-ink truncate" title={title}>
-              {title}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-ink-soft hover:text-ink font-body text-[12px] transition-colors shrink-0"
-          >
-            关闭
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {error && (
-            <div className="bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">原文</span>
-                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftText.length} 字</span>
-              </div>
-              <textarea
-                value={draftText}
-                onChange={(e) => setDraftText(e.target.value)}
-                className="w-full h-[48vh] min-h-72 bg-white/70 text-ink rounded-2xl p-4 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[13px] leading-[1.9] transition-colors"
-              />
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">AI 排版</span>
-                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftFormattedText.length} 字</span>
-              </div>
-              <textarea
-                value={draftFormattedText}
-                onChange={(e) => setDraftFormattedText(e.target.value)}
-                placeholder="AI 排版结果"
-                className="w-full h-[48vh] min-h-72 bg-white/70 text-ink rounded-2xl p-4 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[13px] leading-[1.9] transition-colors placeholder-ink-soft/35"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-5 border-t border-card-border bg-white/30">
+    <ModalShell
+      isOpen={isOpen}
+      title="转录结果"
+      subtitle={(
+        <p className="font-body text-[13px] text-ink truncate" title={title}>
+          {title}
+        </p>
+      )}
+      onClose={onClose}
+      size="xl"
+      accent="lilac"
+      ariaLabel="转录结果"
+      contentClassName="p-5 space-y-4"
+      footerClassName="p-5"
+      footer={(
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <button
             onClick={handleFormat}
             disabled={!draftText.trim() || !canFormat || isFormatting}
@@ -155,8 +107,41 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
             </button>
           </div>
         </div>
+      )}
+    >
+      {error && (
+        <div className="bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">原文</span>
+            <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftText.length} 字</span>
+          </div>
+          <textarea
+            value={draftText}
+            onChange={(e) => setDraftText(e.target.value)}
+            className="w-full h-[48vh] min-h-72 bg-white/70 text-ink rounded-2xl p-4 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[13px] leading-[1.9] transition-colors"
+          />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">AI 排版</span>
+            <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftFormattedText.length} 字</span>
+          </div>
+          <textarea
+            value={draftFormattedText}
+            onChange={(e) => setDraftFormattedText(e.target.value)}
+            placeholder="AI 排版结果"
+            className="w-full h-[48vh] min-h-72 bg-white/70 text-ink rounded-2xl p-4 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[13px] leading-[1.9] transition-colors placeholder-ink-soft/35"
+          />
+        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };
 

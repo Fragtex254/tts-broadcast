@@ -15,11 +15,17 @@ jest.mock('axios', () => ({
 
 const db = require('../../src/db');
 const mimo = require('../../src/services/mimo');
+const llmQueue = require('../../src/services/llmQueue');
+const { AUTO_SEGMENT_MAX_LENGTH, AUTO_SEGMENT_MIN_LENGTH } = require('../../src/utils/segmentText');
 const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
 
 describe('MiMo 服务', () => {
   beforeEach(() => {
+    llmQueue.clear();
+    llmQueue.minIntervalMs = 0;
+    llmQueue.maxConcurrent = 100;
+    llmQueue.lastStartAt = 0;
     mockMessagesCreate.mockReset();
     Anthropic.mockClear();
     axios.post.mockReset();
@@ -32,6 +38,10 @@ describe('MiMo 服务', () => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_split_system_prompt', '"你是一个文本切分助手，只输出 JSON 数组格式。"');
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_rewrite_thinking_enabled', 'true');
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_split_thinking_enabled', 'false');
+  });
+
+  afterEach(() => {
+    llmQueue.clear();
   });
 
   test('生成口播稿', async () => {
@@ -170,7 +180,7 @@ describe('MiMo 服务', () => {
 
     const segments = await mimo.splitScript('第一句。第二句。');
 
-    expect(segments).toEqual(['第一句。', '第二句。']);
+    expect(segments).toEqual(['第一句。第二句。']);
     expect(axios.post).toHaveBeenCalledWith(
       'https://api.minimaxi.com/v1/chat/completions',
       expect.objectContaining({
@@ -411,23 +421,21 @@ describe('MiMo 服务', () => {
     expect(typeof mimo.formatTranscriptionText).toBe('function');
   });
 
-  test('splitScript 切分口播稿', async () => {
-    const script = `大家好，欢迎收听今日AI简讯。今天我们来聊聊几个重要的AI动态。首先是OpenAI发布了最新的GPT-5模型，这款模型在推理能力上有了显著提升。其次是谷歌推出了新的Gemini版本，在多模态理解方面表现出色。以上就是今天的AI简讯，感谢收听，我们明天再见。`;
+  test('splitScript 将模型碎句规整为 100-200 字文段', async () => {
+    const rawSegments = Array.from({ length: 10 }, (_, index) =>
+      `第${index + 1}条消息说明了一个连续的AI进展，包含背景、变化和适合口播承接的细节。`
+    );
+    const script = rawSegments.join('');
     mockMessagesCreate.mockResolvedValue({
-      content: [{ type: 'text', text: JSON.stringify([
-        '大家好，欢迎收听今日AI简讯。今天我们来聊聊几个重要的AI动态。',
-        '首先是OpenAI发布了最新的GPT-5模型，这款模型在推理能力上有了显著提升。其次是谷歌推出了新的Gemini版本，在多模态理解方面表现出色。',
-        '以上就是今天的AI简讯，感谢收听，我们明天再见。'
-      ]) }],
+      content: [{ type: 'text', text: JSON.stringify(rawSegments) }],
     });
 
     const segments = await mimo.splitScript(script);
     expect(Array.isArray(segments)).toBe(true);
     expect(segments.length).toBeGreaterThan(1);
-    segments.forEach(seg => {
-      expect(typeof seg).toBe('string');
-      expect(seg.length).toBeGreaterThan(0);
-    });
+    expect(segments.every((seg) => seg.length >= AUTO_SEGMENT_MIN_LENGTH)).toBe(true);
+    expect(segments.every((seg) => seg.length <= AUTO_SEGMENT_MAX_LENGTH)).toBe(true);
+    expect(segments.join('')).toBe(script);
   });
 
   test('splitScript 剥离模型输出中的 think 内容后解析 JSON', async () => {
@@ -440,10 +448,10 @@ describe('MiMo 服务', () => {
 
     const segments = await mimo.splitScript('第一句。第二句。');
 
-    expect(segments).toEqual(['第一句。', '第二句。']);
+    expect(segments).toEqual(['第一句。第二句。']);
   });
 
-  test('splitScript 对超过 1024 字的 AI 结果做本地兜底切分', async () => {
+  test('splitScript 对超过 200 字的 AI 结果做本地兜底切分', async () => {
     const longText = '一'.repeat(1100);
     mockMessagesCreate.mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify([longText]) }],
@@ -451,8 +459,10 @@ describe('MiMo 服务', () => {
 
     const segments = await mimo.splitScript(longText);
 
-    expect(segments.length).toBe(2);
-    expect(segments.every((seg) => seg.length <= 1024)).toBe(true);
+    expect(segments.length).toBeGreaterThan(1);
+    expect(segments.every((seg) => seg.length >= AUTO_SEGMENT_MIN_LENGTH)).toBe(true);
+    expect(segments.every((seg) => seg.length <= AUTO_SEGMENT_MAX_LENGTH)).toBe(true);
+    expect(segments.join('')).toBe(longText);
   });
 
   test('splitScript 遇到 AI JSON 截断时使用本地切分兜底', async () => {
@@ -469,7 +479,8 @@ describe('MiMo 服务', () => {
 
     expect(mockMessagesCreate.mock.calls.length).toBeGreaterThan(1);
     expect(segments.length).toBeGreaterThan(1);
-    expect(segments.every((seg) => seg.length <= 1024)).toBe(true);
+    expect(segments.every((seg) => seg.length >= AUTO_SEGMENT_MIN_LENGTH)).toBe(true);
+    expect(segments.every((seg) => seg.length <= AUTO_SEGMENT_MAX_LENGTH)).toBe(true);
     expect(combined).toContain('第一段开头');
     expect(combined).toContain('第二段结尾');
   });
@@ -637,6 +648,65 @@ describe('MiMo 服务', () => {
       expect(tags).toHaveLength(12);
       expect(tags.slice(0, 10)).toEqual(Array(10).fill('平静'));
       expect(tags.slice(10)).toEqual(['严肃', '深沉']);
+      expect(mockMessagesCreate).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('suggestSegmentAudioTags', () => {
+    test('为口播分段返回复杂方括号标签文本', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify([
+            {
+              taggedText: '(平静 温柔)第一句，[停顿片刻]继续。',
+              stylePrompt: '语气平静温柔，语速适中，转折前轻停顿',
+            },
+            {
+              tagged_text: '[严肃]第二句，[语速放慢]收尾。',
+              style_prompt: '语气严肃，语速放慢',
+            },
+          ]),
+        }],
+      });
+
+      const result = await mimo.suggestSegmentAudioTags({
+        texts: ['第一句，继续。', '第二句，收尾。'],
+        voiceDesign: '青年女性，清亮柔和',
+        stylePrompt: '语气温柔，语速适中',
+      });
+
+      expect(result).toEqual([
+        {
+          taggedText: '[平静，温柔]第一句，[停顿片刻]继续。',
+          stylePrompt: '语气平静温柔，语速适中，转折前轻停顿',
+        },
+        {
+          taggedText: '[严肃]第二句，[语速放慢]收尾。',
+          stylePrompt: '语气严肃，语速放慢',
+        },
+      ]);
+      const prompt = mockMessagesCreate.mock.calls[0][0].messages[0].content;
+      expect(prompt).toContain('气口、情绪弧线、语速快慢变化、停顿位置和强调点');
+      expect(prompt).toContain('允许使用的开头风格标签');
+      expect(prompt).toContain('参考音色描述：\n青年女性，清亮柔和');
+    });
+
+    test('批次结构化输出数量不一致时保留该批原文标签并继续后续批次', async () => {
+      mockMessagesCreate
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: '[{"taggedText":"[平静]数量不够"}]' }],
+        })
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: '[{"taggedText":"[严肃]第七句。"}]' }],
+        });
+      const texts = Array.from({ length: 7 }, (_, index) => `第${index + 1}句。`);
+
+      const result = await mimo.suggestSegmentAudioTags({ texts });
+
+      expect(result).toHaveLength(7);
+      expect(result.slice(0, 6).map((item) => item.taggedText)).toEqual(texts.slice(0, 6));
+      expect(result[6].taggedText).toBe('[严肃]第七句。');
       expect(mockMessagesCreate).toHaveBeenCalledTimes(2);
     });
   });

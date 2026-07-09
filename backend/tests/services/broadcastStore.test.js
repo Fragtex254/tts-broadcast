@@ -46,15 +46,23 @@ describe('broadcastStore', () => {
   });
 
   describe('getHistory', () => {
-    test('返回分页列表', () => {
-      insertBroadcast({ title: '第一条' });
-      insertBroadcast({ title: '第二条' });
+    test('只返回已保存分页列表', () => {
+      insertBroadcast({ title: '未保存' });
+      const saved = insertBroadcast({ title: '已保存' });
+      broadcastStore.toggleSaved(saved.id);
+
       const result = broadcastStore.getHistory({ limit: 10, offset: 0 });
-      expect(result.length).toBe(2);
+
+      expect(result.length).toBe(1);
+      expect(result[0].title).toBe('已保存');
+      expect(result[0].saved).toBe(1);
     });
 
     test('支持分页偏移', () => {
-      for (let i = 0; i < 5; i++) insertBroadcast({ title: `第${i}条` });
+      for (let i = 0; i < 5; i++) {
+        const broadcast = insertBroadcast({ title: `第${i}条` });
+        broadcastStore.toggleSaved(broadcast.id);
+      }
       const page2 = broadcastStore.getHistory({ limit: 2, offset: 2 });
       expect(page2.length).toBe(2);
     });

@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import useStore from '../../store';
 import type { Segment, SegmentDraftInput } from '../../store';
 import { getApiErrorMessage } from '../../services/apiError';
 import { STYLE_TAGS, sanitizeStyleTag } from '../../constants/toneTags';
+import { ModalShell } from '../ModalShell';
 
 const MAX_SEGMENT_TEXT_LENGTH = 1024;
 
@@ -59,14 +60,6 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
   const [drafts, setDrafts] = useState<SegmentDraft[]>(() => segments.map(createDraft));
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   const hasInvalidDraft = useMemo(() => (
     drafts.some((draft) => !draft.text.trim() || draft.text.trim().length > MAX_SEGMENT_TEXT_LENGTH)
@@ -150,32 +143,41 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-paper flex flex-col animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-label="切分精修"
-    >
-      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-card-border bg-white/45 backdrop-blur-sm">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-2 h-2 rounded-full bg-lilac" />
-            <h3 className="font-display italic text-[18px] font-medium text-ink-soft">切分精修</h3>
+    <ModalShell
+      variant="fullscreen"
+      title="切分精修"
+      subtitle={`${drafts.length} 段 · 单段最多 ${MAX_SEGMENT_TEXT_LENGTH} 字`}
+      onClose={onClose}
+      accent="lilac"
+      ariaLabel="切分精修"
+      contentClassName="px-5 py-5"
+      footer={(
+        <div className="max-w-6xl mx-auto">
+          {error && (
+            <div className="mb-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
+              {error}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-ink-soft hover:text-ink font-body text-[12px] transition-colors px-3 py-2"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || hasInvalidDraft}
+              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+            >
+              {isSaving ? '保存中...' : '保存整理'}
+            </button>
           </div>
-          <p className="font-body text-[12px] text-ink-soft/55 mt-1">
-            {drafts.length} 段 · 单段最多 {MAX_SEGMENT_TEXT_LENGTH} 字
-          </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-ink-soft hover:text-ink font-body text-[12px] transition-colors shrink-0"
-        >
-          关闭
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-5 py-5">
+      )}
+    >
         <div className="max-w-6xl mx-auto space-y-3">
           {drafts.map((draft, index) => {
               const textLength = draft.text.trim().length;
@@ -256,35 +258,7 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
               );
             })}
         </div>
-      </div>
-
-      <div className="border-t border-card-border bg-white/35 px-5 py-4">
-        <div className="max-w-6xl mx-auto">
-          {error && (
-            <div className="mb-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
-              {error}
-            </div>
-          )}
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-ink-soft hover:text-ink font-body text-[12px] transition-colors px-3 py-2"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || hasInvalidDraft}
-              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
-            >
-              {isSaving ? '保存中...' : '保存整理'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ModalShell } from '../ModalShell';
 import AudioTagTextEditor from './AudioTagTextEditor';
 
 interface LongTextFieldProps {
@@ -59,52 +60,33 @@ export const LongTextField: React.FC<LongTextFieldProps> = ({
         className={textareaClassName}
       />
 
-      {isExpanded && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/20 px-4 py-6 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-label={label}
-          onClick={() => setIsExpanded(false)}
-        >
-          <div
-            className="flex max-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col rounded-2xl border border-card-border bg-paper p-5 shadow-card"
-            onClick={(event) => event.stopPropagation()}
+      <ModalShell
+        isOpen={isExpanded}
+        title={label}
+        subtitle={`${count} 字`}
+        onClose={() => setIsExpanded(false)}
+        size="lg"
+        accent="sage"
+        closeLabel="完成"
+        headerActions={value ? (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="rounded-xl border border-card-border bg-white/60 px-3 py-2 font-body text-[13px] text-ink-soft transition-colors hover:text-ink"
           >
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="font-body text-[18px] font-semibold text-ink">{label}</h2>
-                <span className="mt-1 block font-body text-[12px] text-ink-soft/60">{count} 字</span>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                {value && (
-                  <button
-                    type="button"
-                    onClick={() => onChange('')}
-                    className="rounded-xl border border-card-border bg-white/60 px-3 py-2 font-body text-[13px] text-ink-soft transition-colors hover:text-ink"
-                  >
-                    清空
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setIsExpanded(false)}
-                  className="rounded-xl bg-sage px-4 py-2 font-body text-[13px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105"
-                >
-                  完成
-                </button>
-              </div>
-            </div>
-            <textarea
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-              placeholder={placeholder}
-              autoFocus
-              className="min-h-[55vh] w-full flex-1 resize-none rounded-2xl border border-card-border bg-white/80 px-4 py-3 font-body text-[15px] leading-7 text-ink transition-colors focus:border-ink/20 focus:outline-none"
-            />
-          </div>
-        </div>
-      )}
+            清空
+          </button>
+        ) : null}
+        contentClassName="p-5"
+      >
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          autoFocus
+          className="min-h-[55vh] w-full resize-none rounded-2xl border border-card-border bg-white/80 px-4 py-3 font-body text-[15px] leading-7 text-ink transition-colors focus:border-ink/20 focus:outline-none"
+        />
+      </ModalShell>
 
       {isTagEditorOpen && (
         <AudioTagTextEditor

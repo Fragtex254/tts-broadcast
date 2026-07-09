@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { getApiErrorMessage } from '../../services/apiError';
+import { ModalShell } from '../ModalShell';
 
 type AudioTagKind = 'style' | 'audio';
 type TokenKind = 'word' | 'space' | 'punctuation' | 'style-tag' | 'audio-tag';
@@ -385,23 +386,16 @@ export const AudioTagTextEditor: React.FC<AudioTagTextEditorProps> = ({
   const hasTags = tokens.some(isTagToken);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/20 px-4 py-6 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${label}标签编辑`}
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[calc(100vh-3rem)] w-full max-w-6xl flex-col rounded-2xl border border-card-border bg-paper p-5 shadow-card"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-body text-[18px] font-semibold text-ink">{label}标签编辑</h2>
-            <span className="mt-1 block font-body text-[12px] text-ink-soft/60">{value.trim().length} 字</span>
-          </div>
-          <div className="flex shrink-0 gap-2">
+    <ModalShell
+      title={`${label}标签编辑`}
+      subtitle={`${value.trim().length} 字`}
+      onClose={onClose}
+      size="xl"
+      accent="lilac"
+      showCloseButton={false}
+      contentClassName="p-5"
+      headerActions={(
+        <div className="flex shrink-0 gap-2">
             {hasTags && (
               <button
                 type="button"
@@ -428,8 +422,9 @@ export const AudioTagTextEditor: React.FC<AudioTagTextEditorProps> = ({
             >
               完成
             </button>
-          </div>
         </div>
+      )}
+    >
 
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="flex min-h-0 flex-col gap-3">
@@ -499,8 +494,7 @@ export const AudioTagTextEditor: React.FC<AudioTagTextEditorProps> = ({
             {error}
           </div>
         )}
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

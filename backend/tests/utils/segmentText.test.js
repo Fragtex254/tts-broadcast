@@ -1,9 +1,12 @@
 const {
+  AUTO_SEGMENT_MAX_LENGTH,
+  AUTO_SEGMENT_MIN_LENGTH,
   MAX_SEGMENT_TEXT_LENGTH,
   prependStyleTag,
   sanitizeStyleTag,
   splitLongTextByLimit,
-  normalizeSegmentTexts
+  normalizeSegmentTexts,
+  normalizeAutoSegmentTexts
 } = require('../../src/utils/segmentText');
 
 describe('segmentText', () => {
@@ -52,6 +55,31 @@ describe('segmentText', () => {
     test('优先按标点边界拆分', () => {
       const text = '第一句。第二句。第三句。';
       expect(splitLongTextByLimit(text, 6)).toEqual(['第一句。', '第二句。', '第三句。']);
+    });
+  });
+
+  describe('normalizeAutoSegmentTexts', () => {
+    test('把模型返回的碎句稳定合并为 100-200 字文段', () => {
+      const sentence = '这是一个用于口播切分测试的自然句，内容保持连续并且适合朗读。';
+      const segments = normalizeAutoSegmentTexts(Array.from({ length: 8 }, () => sentence));
+
+      expect(segments.length).toBeGreaterThan(1);
+      expect(segments.every((segment) => segment.length >= AUTO_SEGMENT_MIN_LENGTH)).toBe(true);
+      expect(segments.every((segment) => segment.length <= AUTO_SEGMENT_MAX_LENGTH)).toBe(true);
+      expect(segments.join('')).toBe(sentence.repeat(8));
+    });
+
+    test('把没有自然标点的长文本硬切并重平衡到 100-200 字', () => {
+      const text = '一'.repeat(450);
+      const segments = normalizeAutoSegmentTexts([text]);
+
+      expect(segments.map((segment) => segment.length)).toEqual([200, 125, 125]);
+      expect(segments.join('')).toBe(text);
+    });
+
+    test('总文本不足 100 字时保留一个短文段', () => {
+      const text = '短稿不足一百字，但仍然应该可以切分并生成语音。';
+      expect(normalizeAutoSegmentTexts([text])).toEqual([text]);
     });
   });
 });

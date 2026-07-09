@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import useStore from '../../store';
 import type { Segment } from '../../store';
 import { getApiErrorMessage } from '../../services/apiError';
 import { hasSelectedVoice, VOICE_REQUIRED_MESSAGE } from '../../store/voiceConfigModel';
 import { useBatchGenerateSSE } from '../../hooks/useSSE';
 import { TagPicker } from './TagPicker';
-import { AudioTagInserter } from './AudioTagInserter';
 import { SegmentRefineModal } from './SegmentRefineModal';
+import { AudioPlaybackBar } from './AudioPlaybackBar';
+import { AudioTagTextEditor } from './AudioTagTextEditor';
 
 const PLAYBACK_RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -33,130 +34,6 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     <span className={`inline-flex items-center gap-1 text-[9px] px-2.5 py-1 rounded-full font-body font-medium uppercase tracking-wider ${styles[status] || ''}`}>
       {labels[status] || status}
     </span>
-  );
-};
-
-// ============ SegmentAudio ============
-
-interface SegmentAudioProps {
-  audioUrl: string;
-  playbackRate: number;
-}
-
-interface PitchSafeAudioElement extends HTMLAudioElement {
-  mozPreservesPitch?: boolean;
-  webkitPreservesPitch?: boolean;
-}
-
-const SegmentAudio: React.FC<SegmentAudioProps> = ({ audioUrl, playbackRate }) => {
-  const audioRef = useRef<PitchSafeAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleLoadedMetadata = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-    };
-  }, [audioUrl]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.preservesPitch = true;
-    audio.mozPreservesPitch = true;
-    audio.webkitPreservesPitch = true;
-    audio.playbackRate = playbackRate;
-  }, [audioUrl, playbackRate]);
-
-  const togglePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
-    } else {
-      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-    }
-  }, [isPlaying]);
-
-  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current;
-    const nextTime = Number(e.target.value);
-    setCurrentTime(nextTime);
-    if (audio) {
-      audio.currentTime = nextTime;
-    }
-  }, []);
-
-  const formatTime = (s: number) => {
-    if (isNaN(s)) return '0:00';
-    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  };
-
-  const progress = duration > 0 ? Math.min(currentTime / duration, 1) : 0;
-
-  return (
-    <div className="w-44 sm:w-52 animate-fade-in">
-      <audio ref={audioRef} src={audioUrl} preload="metadata" />
-      <div className="bg-white/80 rounded-full px-2.5 py-1.5 border border-card-border">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={togglePlay}
-            className="w-7 h-7 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border"
-            title={isPlaying ? '暂停段落音频' : '播放段落音频'}
-          >
-            {isPlaying ? (
-              <svg className="w-3 h-3 text-ink" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
-            ) : (
-              <svg className="w-3 h-3 text-ink ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            )}
-          </button>
-
-          <div className="flex-1 min-w-0">
-            <div className="relative h-5 flex items-center">
-              <div className="absolute left-0 right-0 h-1.5 rounded-full bg-ink/10 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-pink transition-[width] duration-100"
-                  style={{ width: `${progress * 100}%` }}
-                />
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step="0.01"
-                value={currentTime}
-                onChange={handleSeek}
-                className="relative z-10 w-full h-5 opacity-0 cursor-pointer"
-                title="拖动调整播放进度"
-              />
-            </div>
-            <div className="flex justify-between font-body text-[9px] text-ink-soft/70 tabular-nums leading-none">
-              <span>{formatTime(currentTime)}</span>
-              <span>{playbackRate.toFixed(2).replace(/\.00$/, '')}x · {formatTime(duration)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 };
 
@@ -189,8 +66,10 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const [error, setError] = useState<string | null>(null);
   const [openTagPickerId, setOpenTagPickerId] = useState<number | null>(null);
   const [isRefineOpen, setIsRefineOpen] = useState(false);
+  const [tagEditorSegmentId, setTagEditorSegmentId] = useState<number | null>(null);
   const [updatingPlaybackRateId, setUpdatingPlaybackRateId] = useState<number | 'all' | null>(null);
-  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false);
+  const [regeneratingSegmentIds, setRegeneratingSegmentIds] = useState<Set<number>>(() => new Set());
 
   // SSE 监听批量生成进度（始终启用）
   useBatchGenerateSSE(broadcastId, {
@@ -221,7 +100,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   });
 
   useEffect(() => {
-    fetchSegments(broadcastId).catch(() => setError('加载句子列表失败'));
+    fetchSegments(broadcastId).catch(() => setError('加载文段列表失败'));
   }, [broadcastId, fetchSegments]);
 
   // popover 打开时按 Esc 关闭
@@ -236,19 +115,22 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
   if (!segments.length && !isSplitting) return null;
 
-  const hasPendingOrFailed = segments.some((s) => s.status === 'pending' || s.status === 'failed' || s.status === 'generating');
+  const hasPendingOrFailed = segments.some((s) => s.status !== 'generated');
   const allGenerated = segments.length > 0 && segments.every((s) => s.status === 'generated');
   const canGenerateVoice = hasSelectedVoice(voiceConfig);
+  const hasLocalGenerating = isBatchGenerating || regeneratingSegmentIds.size > 0;
   const commonPlaybackRate = segments.every((segment) => segment.playback_rate === segments[0]?.playback_rate)
     ? segments[0]?.playback_rate || 1
     : null;
+  const isSegmentBusy = (segment: Segment) =>
+    regeneratingSegmentIds.has(segment.id) || (isBatchGenerating && segment.status === 'generating');
 
-  const handleStartEdit = (seg: Segment) => { setEditingId(seg.id); setEditText(seg.text); };
-  const handleCancelEdit = () => { setEditingId(null); setEditText(''); };
+  const handleStartEdit = (seg: Segment) => { setEditingId(seg.id); setEditText(seg.text); setTagEditorSegmentId(null); };
+  const handleCancelEdit = () => { setEditingId(null); setEditText(''); setTagEditorSegmentId(null); };
   const handleSaveEdit = async (segId: number) => {
     if (!editText.trim()) return;
     setError(null);
-    try { await updateSegmentText(broadcastId, segId, editText.trim()); setEditingId(null); setEditText(''); }
+    try { await updateSegmentText(broadcastId, segId, editText.trim()); setEditingId(null); setEditText(''); setTagEditorSegmentId(null); }
     catch { setError('保存编辑失败'); }
   };
   const handleRegenerate = async (segId: number) => {
@@ -257,8 +139,16 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
       setError(VOICE_REQUIRED_MESSAGE);
       return;
     }
+    setRegeneratingSegmentIds((ids) => new Set(ids).add(segId));
     try { await regenerateSegment(broadcastId, segId); }
     catch (err) { setError(getApiErrorMessage(err, '重新生成失败')); }
+    finally {
+      setRegeneratingSegmentIds((ids) => {
+        const next = new Set(ids);
+        next.delete(segId);
+        return next;
+      });
+    }
   };
   const handleDelete = async (segId: number) => { setError(null); try { await deleteSegment(broadcastId, segId); } catch { setError('删除失败'); } };
   const handleBatchGenerate = async () => {
@@ -267,6 +157,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
       setError(VOICE_REQUIRED_MESSAGE);
       return;
     }
+    setIsBatchGenerating(true);
     try {
       const { results } = await batchGenerateSegments(broadcastId);
       const failed = results.filter((result) => result.status === 'failed');
@@ -276,6 +167,8 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
     } catch (err) {
       // 优先展示后端返回的错误文案（如 429 限流、请求体过大、clone 解析失败等）
       setError(getApiErrorMessage(err, '批量生成失败'));
+    } finally {
+      setIsBatchGenerating(false);
     }
   };
   const handleMerge = async () => { setError(null); try { await mergeSegments(broadcastId); onMerged?.(); } catch { setError('合并失败'); } };
@@ -303,7 +196,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const handleSuggestTags = async () => {
     setError(null);
     try { await suggestTags(broadcastId); }
-    catch (err) { setError(getApiErrorMessage(err, 'AI 建议风格失败')); }
+    catch (err) { setError(getApiErrorMessage(err, 'AI 标签优化失败')); }
   };
 
   if (isSplitting) {
@@ -313,7 +206,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
           <div className="w-4 h-1 bg-ink/10 rounded-full overflow-hidden">
             <div className="h-full bg-lilac rounded-full animate-pulse" style={{ width: '60%' }} />
           </div>
-          <span className="font-body text-[12px] text-ink-soft">正在切分句子...</span>
+          <span className="font-body text-[12px] text-ink-soft">正在切分文段...</span>
         </div>
       </div>
     );
@@ -344,7 +237,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
           <button
             type="button"
             onClick={() => setIsRefineOpen(true)}
-            disabled={segments.some((s) => s.status === 'generating')}
+            disabled={hasLocalGenerating}
             className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
           >
             切分精修
@@ -353,7 +246,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
       </div>
 
       {/* 生成进度指示器 */}
-      {segments.some(s => s.status === 'generating') && (
+      {hasLocalGenerating && (
         <div className="mb-3 bg-lilac/10 rounded-xl p-3 border border-lilac/20">
           <div className="flex items-center justify-between mb-2">
             <span className="font-body text-[11px] text-ink-soft">正在生成语音...</span>
@@ -374,10 +267,14 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
 
       <div className="space-y-2 mb-4">
         {segments.map((seg, index) => (
+          (() => {
+            const segmentBusy = isSegmentBusy(seg);
+            const displayStatus: Segment['status'] = seg.status === 'generating' && !segmentBusy ? 'pending' : seg.status;
+            return (
           <div
             key={seg.id}
             className={`bg-white/45 rounded-2xl p-3 border transition-all duration-300 ${
-              seg.status === 'generating'
+              segmentBusy
                 ? 'border-lilac/40 bg-lilac/5 animate-pulse'
                 : seg.status === 'generated'
                 ? 'border-sage/30'
@@ -397,17 +294,25 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                 {editingId === seg.id ? (
                   <div className="animate-fade-in">
                     <textarea
-                      ref={editTextareaRef}
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
                       className="w-full min-h-28 bg-white/60 text-ink rounded-xl px-3 py-2 border border-ink/15 focus:border-ink/25 focus:outline-none resize-y font-body text-[12px] leading-relaxed"
                       autoFocus
                     />
-                    <AudioTagInserter textareaRef={editTextareaRef} value={editText} onChange={setEditText} />
                     <div className="flex gap-2 mt-1.5">
                       <button onClick={() => handleSaveEdit(seg.id)} className="px-3 py-1 bg-sage text-ink text-[11px] font-body rounded-lg shadow-btn">保存</button>
+                      <button type="button" onClick={() => setTagEditorSegmentId(seg.id)} className="px-3 py-1 bg-lilac/35 text-ink text-[11px] font-body rounded-lg shadow-btn">标签编辑</button>
                       <button onClick={handleCancelEdit} className="px-3 py-1 text-ink-soft text-[11px] font-body">取消</button>
                     </div>
+                    {tagEditorSegmentId === seg.id && (
+                      <AudioTagTextEditor
+                        label={`段落 ${String(seg.index + 1).padStart(2, '0')}`}
+                        value={editText}
+                        onChange={setEditText}
+                        placeholder="输入段落文本并插入 MiMo 方括号标签"
+                        onClose={() => setTagEditorSegmentId(null)}
+                      />
+                    )}
                   </div>
                 ) : (
                   <p className="font-body text-[12px] text-ink leading-relaxed whitespace-pre-wrap break-words">
@@ -417,20 +322,29 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
               </div>
 
               <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                <StatusBadge status={seg.status} />
+                <StatusBadge status={displayStatus} />
                 {seg.status === 'generated' && seg.audio_path && (
-                  <SegmentAudio audioUrl={`${seg.audio_path}?t=${seg.updated_at}`} playbackRate={seg.playback_rate || 1} />
+                  <AudioPlaybackBar
+                    src={`${seg.audio_path}?t=${seg.updated_at}`}
+                    variant="segment"
+                    visual="progress"
+                    playbackRate={seg.playback_rate || 1}
+                    showPlaybackRate
+                    resetOnEnded
+                    playLabel="段落音频"
+                    className="w-44 sm:w-52"
+                  />
                 )}
               </div>
 
               <div className="flex items-center gap-0.5 flex-shrink-0">
-                <button onClick={() => handleStartEdit(seg)} disabled={seg.status === 'generating' || editingId === seg.id} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title="编辑">
+                <button onClick={() => handleStartEdit(seg)} disabled={segmentBusy || editingId === seg.id} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title="编辑">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                 </button>
-                <button onClick={() => handleRegenerate(seg.id)} disabled={seg.status === 'generating' || !canGenerateVoice} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title={canGenerateVoice ? '重新生成' : VOICE_REQUIRED_MESSAGE}>
+                <button onClick={() => handleRegenerate(seg.id)} disabled={segmentBusy || !canGenerateVoice} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-ink hover:bg-white/50 transition-colors disabled:opacity-30" title={canGenerateVoice ? '重新生成' : VOICE_REQUIRED_MESSAGE}>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
-                <button onClick={() => handleDelete(seg.id)} disabled={seg.status === 'generating'} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-pink hover:bg-white/50 transition-colors disabled:opacity-30" title="删除">
+                <button onClick={() => handleDelete(seg.id)} disabled={segmentBusy} className="p-1.5 rounded-lg text-ink-soft/70 hover:text-pink hover:bg-white/50 transition-colors disabled:opacity-30" title="删除">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
               </div>
@@ -477,6 +391,8 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
               </div>
             )}
           </div>
+            );
+          })()
         ))}
       </div>
 
@@ -495,14 +411,14 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
           disabled={isSuggestingTags || segments.length === 0}
           className="flex-1 bg-lemon/30 hover:bg-lemon/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
         >
-          {isSuggestingTags ? '建议中...' : '✨ AI 建议风格'}
+          {isSuggestingTags ? '优化中...' : 'AI 标签优化'}
         </button>
         <button
           onClick={handleBatchGenerate}
-          disabled={!hasPendingOrFailed || isSuggestingTags || !canGenerateVoice}
+          disabled={!hasPendingOrFailed || isSuggestingTags || !canGenerateVoice || isBatchGenerating}
           className="flex-1 bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
         >
-          {canGenerateVoice ? '全部生成' : '先选音色'}
+          {isBatchGenerating ? '生成中...' : canGenerateVoice ? '全部生成' : '先选音色'}
         </button>
         <button
           onClick={handleMerge}

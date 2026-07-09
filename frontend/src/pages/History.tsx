@@ -181,12 +181,13 @@ export const History: React.FC = () => {
       : null
   ), []);
   const totalPages = Math.ceil(total / limit);
+  const selectedBroadcast = broadcasts.find((broadcast) => broadcast.id === currentBroadcast?.id) || null;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header
         title="播报历史"
-        subtitle={`共 ${total} 条播报记录`}
+        subtitle={`共 ${total} 条已保存播报`}
         actions={
           isMultiSelectMode ? (
             <div className="flex items-center gap-3">
@@ -252,13 +253,13 @@ export const History: React.FC = () => {
 
             {!isLoading && !error && broadcasts.length === 0 && (
               <div className="p-12 text-center animate-fade-in">
-                <p className="font-display italic text-[16px] text-ink-soft/70 mb-1">暂无播报记录</p>
-                <p className="font-body text-[12px] text-ink-soft/30">前往信源收集生成第一条播报</p>
+                <p className="font-display italic text-[16px] text-ink-soft/70 mb-1">暂无已保存播报</p>
+                <p className="font-body text-[12px] text-ink-soft/30">在播放器点击保存后，播报才会出现在这里</p>
               </div>
             )}
 
             {!isLoading && !error && broadcasts.map((broadcast, index) => {
-              const isSelected = currentBroadcast?.id === broadcast.id;
+              const isSelected = selectedBroadcast?.id === broadcast.id;
               const isChecked = selectedIds.has(broadcast.id);
               return (
                 <div
@@ -316,26 +317,26 @@ export const History: React.FC = () => {
             </div>
           )}
 
-          {currentBroadcast?.content && (
+          {selectedBroadcast?.content && (
             <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in">
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 rounded-full bg-pink" />
                 <h3 className="font-display italic text-[14px] font-medium text-ink-soft">口播稿预览</h3>
                 <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 ml-auto">
-                  {currentBroadcast.content.length} 字 · ≈ {Math.ceil(currentBroadcast.content.length / 4)} 秒
+                  {selectedBroadcast.content.length} 字 · ≈ {Math.ceil(selectedBroadcast.content.length / 4)} 秒
                 </span>
               </div>
               <div className="bg-white/60 rounded-2xl p-4 border border-card-border">
-                <pre className="text-ink font-body text-[13px] leading-[1.9] whitespace-pre-wrap">{currentBroadcast.content}</pre>
+                <pre className="text-ink font-body text-[13px] leading-[1.9] whitespace-pre-wrap">{selectedBroadcast.content}</pre>
               </div>
             </div>
           )}
 
           <AudioPlayer
-            audioUrl={currentBroadcast ? getAudioUrl(currentBroadcast) : null}
-            title={currentBroadcast?.title || '选择一条播报记录播放'}
-            broadcastId={currentBroadcast?.id}
-            isSaved={currentBroadcast?.saved === 1}
+            audioUrl={selectedBroadcast ? getAudioUrl(selectedBroadcast) : null}
+            title={selectedBroadcast?.title || '选择一条已保存播报播放'}
+            broadcastId={selectedBroadcast?.id}
+            isSaved={selectedBroadcast?.saved === 1}
             onSave={saveBroadcast}
           />
         </div>

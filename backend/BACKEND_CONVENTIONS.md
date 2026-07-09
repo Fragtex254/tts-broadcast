@@ -50,14 +50,20 @@ backend/src/
 │   ├── audio.js            # WAV 文件操作 + resolveVoiceClone
 │   ├── asr.js              # MiMo ASR 转录服务
 │   ├── media.js            # 上传媒体转 ASR data URL
-│   ├── mimo.js             # LLM 服务（双协议调用、rewriteToScript、splitScript、风格建议、testApiKey、模型发现）
+│   ├── mimo.js             # LLM 服务（双协议调用、rewriteToScript、splitScript、复杂标签优化、testApiKey、模型发现）
+│   ├── llmQueue.js         # MiniMax-M3 LLM 全局 RPM/TPM 队列限速
 │   ├── llmModels.js        # OpenAI-compatible 模型列表候选 URL 生成与探测
 │   ├── mimoApiClient.js    # MiMo 标准 API HTTP client
 │   ├── tts.js              # MiMo TTS 服务（generateSpeech）
+│   ├── ttsQueue.js         # MiMo TTS 全局 RPM/TPM/payload/短突发队列限速
+│   ├── rateLimitedQueue.js # 通用 RPM/TPM/payload/短突发队列实现
+│   ├── rateLimitStore.js   # DAL：外部模型限速窗口与 backoff 账本
+│   ├── generationJobStore.js # DAL：长生成任务 lease，避免重复入队
 │   ├── broadcastStore.js   # DAL：broadcasts 表的 CRUD
 │   ├── segmentStore.js     # DAL：segments 表的 CRUD，待生成查询包含 stale generating 恢复
 │   ├── transcriptionResultStore.js # DAL：transcription_results 表的 CRUD 与删除
-│   └── scheduler.js        # 定时任务调度
+│   ├── scheduleStore.js    # DAL：schedules 表的 CRUD 与运行时间更新
+│   └── scheduler.js        # 定时任务 cron 编排、业务校验与任务启停
 └── utils/                  # 共享工具函数
     └── validation.js       # validateId, cleanAudioFile, audioDir
 ```

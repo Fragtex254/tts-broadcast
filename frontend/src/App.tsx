@@ -15,10 +15,21 @@ const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.N
 
 /** 路由加载占位 */
 const PageLoader: React.FC = () => (
-  <div className="flex-1 flex items-center justify-center bg-paper">
-    <div className="flex flex-col items-center gap-3">
-      <div className="w-6 h-6 border-2 border-ink/10 border-t-pink rounded-full animate-spin" />
-      <span className="font-body text-[12px] text-ink-soft/70">加载中...</span>
+  <div className="flex-1 bg-paper p-6">
+    <div className="mx-auto max-w-5xl space-y-4 animate-pulse">
+      <div className="h-12 w-56 rounded-2xl bg-ink/5" />
+      <div className="rounded-card border border-card-border bg-white/70 p-5 shadow-card">
+        <div className="mb-5 h-4 w-32 rounded bg-ink/5" />
+        <div className="space-y-3">
+          <div className="h-4 w-full rounded bg-ink/5" />
+          <div className="h-4 w-4/5 rounded bg-ink/5" />
+          <div className="h-4 w-2/3 rounded bg-ink/5" />
+        </div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="h-36 rounded-card border border-card-border bg-white/60 shadow-card" />
+        <div className="h-36 rounded-card border border-card-border bg-white/60 shadow-card" />
+      </div>
     </div>
   </div>
 )

@@ -1,6 +1,5 @@
 import { broadcastApi } from '../services/api';
 import { createScopedLogger, toLogError } from '../services/logger';
-import { STYLE_TAGS } from '../constants/toneTags';
 import { buildVoicePayload } from './voiceConfigModel';
 import type { AppState } from './types';
 import type { StoreGet, StoreSet } from './storeTypes';
@@ -131,13 +130,6 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     },
 
     batchGenerateSegments: async (broadcastId) => {
-      set((state) => ({
-        segments: state.segments.map((s) =>
-          s.status === 'pending' || s.status === 'failed' || s.status === 'generating'
-            ? { ...s, status: 'generating' as const, error_message: '' }
-            : s
-        ),
-      }));
       try {
         await broadcastApi.updateVoiceConfig(broadcastId, buildVoicePayload(get().voiceConfig));
         const response = await broadcastApi.batchGenerateSegments(broadcastId);
@@ -223,13 +215,20 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     suggestTags: async (broadcastId) => {
       set({ isSuggestingTags: true });
       try {
-        const response = await broadcastApi.suggestSegmentTags(broadcastId, STYLE_TAGS);
+        const response = await broadcastApi.suggestSegmentAudioTags(broadcastId);
         const segments = response.data.segments;
-        set({ segments, isSuggestingTags: false });
+        set((state) => ({
+          segments,
+          isSuggestingTags: false,
+          currentBroadcast: state.currentBroadcast?.id === broadcastId
+            ? { ...state.currentBroadcast, audio_path: null }
+            : state.currentBroadcast,
+          broadcasts: state.broadcasts.map((b) => (b.id === broadcastId ? { ...b, audio_path: null } : b)),
+        }));
         return segments;
       } catch (error) {
         set({ isSuggestingTags: false });
-        logger.error({ err: toLogError(error), broadcastId }, 'AI 建议风格失败');
+        logger.error({ err: toLogError(error), broadcastId }, 'AI 标签优化失败');
         throw error;
       }
     },

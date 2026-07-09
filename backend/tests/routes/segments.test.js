@@ -12,6 +12,7 @@ const audioAsset = require('../../src/services/audioAsset');
 const mimo = require('../../src/services/mimo');
 const segmentStore = require('../../src/services/segmentStore');
 const ttsQueue = require('../../src/services/ttsQueue');
+const generationJobStore = require('../../src/services/generationJobStore');
 
 describe('Segments API', () => {
   let broadcastId;
@@ -20,7 +21,9 @@ describe('Segments API', () => {
     ttsQueue.clear();
     ttsQueue.minIntervalMs = 0;
     ttsQueue.maxConcurrent = 10;
+    ttsQueue.startBurstLimit = 10;
     ttsQueue.lastStartAt = 0;
+    generationJobStore.clear();
 
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
@@ -41,6 +44,7 @@ describe('Segments API', () => {
 
   afterEach(() => {
     ttsQueue.clear();
+    generationJobStore.clear();
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
   });
@@ -543,6 +547,74 @@ describe('Segments API', () => {
     });
   });
 
+  describe('POST /api/broadcast/:id/segments/suggest-audio-tags', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    test('写回复杂方括号标签并清空旧 style_tag', async () => {
+      db.prepare('UPDATE broadcasts SET voice_type = ?, voice_config = ?, audio_path = ? WHERE id = ?')
+        .run(
+          'design',
+          JSON.stringify({
+            voiceDesign: '青年女性，清亮柔和',
+            stylePrompt: '语气温柔，语速适中',
+          }),
+          '/audio/old_merged.wav',
+          broadcastId
+        );
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, style_tag) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句。', 'generated', '/audio/old_0.wav', '温柔');
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, style_tag) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 1, '第二句。', 'generated', '/audio/old_1.wav', '');
+      jest.spyOn(mimo, 'suggestSegmentAudioTags').mockResolvedValue([
+        { taggedText: '[温柔，平静]第一句。', stylePrompt: '语气温柔平静，语速适中' },
+        { taggedText: '[严肃]第二句。[停顿片刻]', stylePrompt: '语气严肃，结尾轻停顿' },
+      ]);
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-audio-tags`)
+        .send();
+
+      expect(res.status).toBe(200);
+      expect(mimo.suggestSegmentAudioTags).toHaveBeenCalledWith({
+        texts: ['[温柔]第一句。', '第二句。'],
+        voiceDesign: '青年女性，清亮柔和',
+        stylePrompt: '语气温柔，语速适中',
+      });
+      expect(res.body.segments.map((s) => s.text)).toEqual([
+        '[温柔，平静]第一句。',
+        '[严肃]第二句。[停顿片刻]',
+      ]);
+      expect(res.body.segments.map((s) => s.style_tag)).toEqual(['', '']);
+      expect(res.body.segments.map((s) => s.status)).toEqual(['pending', 'pending']);
+      expect(res.body.segments.map((s) => s.audio_path)).toEqual([null, null]);
+      const broadcast = db.prepare('SELECT audio_path FROM broadcasts WHERE id = ?').get(broadcastId);
+      expect(broadcast.audio_path).toBeNull();
+    });
+
+    test('AI 调用抛错时不覆盖段落文本', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '原始文本。', 'pending', '原风格');
+      jest.spyOn(mimo, 'suggestSegmentAudioTags').mockRejectedValue(new Error('LLM 超时'));
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-audio-tags`)
+        .send();
+
+      expect(res.status).toBe(500);
+      const after = segmentStore.getByBroadcastId(broadcastId);
+      expect(after[0].text).toBe('原始文本。');
+      expect(after[0].style_tag).toBe('原风格');
+    });
+
+    test('空 segments 返回 400', async () => {
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/suggest-audio-tags`)
+        .send();
+
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('POST /api/broadcast/:id/segments/batch-generate', () => {
     let cloneBroadcastId;
 
@@ -587,9 +659,61 @@ describe('Segments API', () => {
       expect(res.status).toBe(200);
       // 3 段只解析 1 次 clone 音色
       expect(audio.resolveVoiceClone).toHaveBeenCalledTimes(1);
-      // 仍逐段调用 TTS（保持限速串行）
+      // 仍逐段调用 TTS（由队列统一限速）
       expect(tts.generateSpeech).toHaveBeenCalledTimes(3);
       expect(res.body.segments.every((s) => s.status === 'generated')).toBe(true);
+    }, 15000);
+
+    test('批量生成会并发启动多个 TTS 请求，不等待上一段完成', async () => {
+      const completions = [];
+      tts.generateSpeech.mockImplementation(() => new Promise((resolve) => {
+        completions.push(resolve);
+      }));
+
+      const requestPromise = request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send()
+        .then((res) => res);
+
+      for (let i = 0; i < 20 && completions.length < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      expect(tts.generateSpeech).toHaveBeenCalledTimes(3);
+      completions.forEach((resolve) => resolve(Buffer.from('fake-wav')));
+
+      const res = await requestPromise;
+      expect(res.status).toBe(200);
+      expect(res.body.segments.every((s) => s.status === 'generated')).toBe(true);
+    }, 15000);
+
+    test('同一播报已有批量生成任务时不会重复入队', async () => {
+      const completions = [];
+      tts.generateSpeech.mockImplementation(() => new Promise((resolve) => {
+        completions.push(resolve);
+      }));
+
+      const firstRequest = request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send()
+        .then((res) => res);
+
+      for (let i = 0; i < 20 && completions.length < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(tts.generateSpeech).toHaveBeenCalledTimes(3);
+
+      const duplicate = await request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send();
+
+      expect(duplicate.status).toBe(409);
+      expect(duplicate.body.error).toContain('正在生成');
+      expect(tts.generateSpeech).toHaveBeenCalledTimes(3);
+
+      completions.forEach((resolve) => resolve(Buffer.from('fake-wav')));
+      const first = await firstRequest;
+      expect(first.status).toBe(200);
     }, 15000);
 
     test('clone 音色解析失败时各段落到可重试的 failed 状态而非中断整批', async () => {

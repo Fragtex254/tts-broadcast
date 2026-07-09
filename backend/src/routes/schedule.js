@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const scheduler = require('../services/scheduler');
 const { createScopedLogger } = require('../services/logger');
+const { validateId } = require('../utils/validation');
 
 const logger = createScopedLogger('schedule-route');
 
@@ -50,10 +51,8 @@ router.post('/', (req, res) => {
  */
 router.put('/:id', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的任务 ID' });
-    }
+    const idCheck = validateId(req.params.id, '任务 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     const { name, cron_expression, content_types } = req.body;
 
@@ -66,7 +65,7 @@ router.put('/:id', (req, res) => {
       }
     }
 
-    const schedule = scheduler.updateSchedule(id, {
+    const schedule = scheduler.updateSchedule(idCheck.id, {
       name,
       cron_expression,
       content_types
@@ -93,19 +92,17 @@ router.put('/:id', (req, res) => {
  */
 router.delete('/:id', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的任务 ID' });
-    }
+    const idCheck = validateId(req.params.id, '任务 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     // 检查任务是否存在
     const schedules = scheduler.getSchedules();
-    const exists = schedules.some(s => s.id === id);
+    const exists = schedules.some(s => s.id === idCheck.id);
     if (!exists) {
       return res.status(404).json({ error: '任务不存在' });
     }
 
-    scheduler.removeSchedule(id);
+    scheduler.removeSchedule(idCheck.id);
     res.json({ message: '任务已删除' });
   } catch (error) {
     logger.error({
@@ -123,12 +120,10 @@ router.delete('/:id', (req, res) => {
  */
 router.post('/:id/toggle', (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: '无效的任务 ID' });
-    }
+    const idCheck = validateId(req.params.id, '任务 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const schedule = scheduler.toggleSchedule(id);
+    const schedule = scheduler.toggleSchedule(idCheck.id);
     res.json({ schedule });
   } catch (error) {
     logger.error({

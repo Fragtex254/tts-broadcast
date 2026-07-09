@@ -19,5 +19,6 @@
 - `2026-06-06-segment-tts`：被 `2026-06-07-segment-tts` 覆盖。
 - `2026-06-10-asr-litellm`：被 `2026-06-11-asr-transcribe` 的聚焦实现路径取代。
 - `2026-06-13-conventions-to-skills`：已落地为 `AGENTS.md`、`CLAUDE.md -> AGENTS.md` 与 `.claude/skills/`。
+- `docs/ui-audit/`：一次性 UI 审查报告，包含旧行号和旧组件状态；已由当前代码、前端 conventions 与本目录历史 specs 取代。
 
 以上已删除，避免历史计划被误认为当前执行入口。不要删除 Superpowers 核心入口：`AGENTS.md`、`CLAUDE.md` symlink、`.claude/skills/`、`docs/project-facts.md` 与前后端 conventions。

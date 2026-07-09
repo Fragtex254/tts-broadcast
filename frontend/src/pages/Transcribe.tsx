@@ -5,59 +5,31 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Header } from '../components/Layout/Header';
 import { TranscriptionHistoryPanel } from '../components/Transcribe/TranscriptionHistoryPanel';
 import { TranscriptionResultModal } from '../components/Transcribe/TranscriptionResultModal';
+import { TranscriptionStatsCenter } from '../components/Transcribe/TranscriptionStatsCenter';
+import { TranscribeProviderControls } from '../components/Transcribe/TranscribeProviderControls';
 import useStore, {
   type AsrProvider,
   type AsrLanguage,
   type BatchTranscriptionItem,
   type TranscriptionRecord,
-  type TranscriptionStats,
 } from '../store';
-
-const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
-  { value: 'auto', label: '自动检测' },
-  { value: 'zh', label: '中文' },
-  { value: 'en', label: '英文' },
-];
-
-const ASR_PROVIDER_OPTIONS: { value: AsrProvider; label: string }[] = [
-  { value: 'wsl_asr', label: 'WSL 局域网' },
-  { value: 'mimo', label: 'MiMo 云端' },
-  { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）' },
-];
-
-const WSL_MODEL_OPTIONS = [
-  { value: 'qwen3-asr-1.7b', label: 'Qwen3-ASR 1.7B' },
-  { value: 'qwen3-asr-0.6b', label: 'Qwen3-ASR 0.6B' },
-];
-
-const PHASE_LABELS: Record<string, string> = {
-  idle: '待开始',
-  uploading: '上传中',
-  preparing: '准备中',
-  transcribing: '转录中',
-  completed: '已完成',
-  failed: '失败',
-};
-
-const SUPPORTED_BATCH_EXTS = ['.mp3', '.mp4', '.m4a', '.wav', '.mpeg', '.mov', '.webm'];
-
-const BATCH_STATUS_LABELS: Record<BatchTranscriptionItem['status'], string> = {
-  pending: '待转录',
-  transcribing: '转录中',
-  completed: '已完成',
-  failed: '失败',
-};
-
-const BATCH_STATUS_DOTS: Record<BatchTranscriptionItem['status'], string> = {
-  pending: 'bg-ink-soft/30',
-  transcribing: 'bg-lilac',
-  completed: 'bg-sage',
-  failed: 'bg-pink',
-};
-
-const ACTION_BUTTON_NEUTRAL = 'px-3.5 py-2 font-body text-[12px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150';
-const ACTION_BUTTON_FORMAT = 'px-3.5 py-2 font-body text-[12px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150';
-const ACTION_BUTTON_IMPORT = 'px-3.5 py-2 font-body text-[12px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150';
+import {
+  ACTION_BUTTON_FORMAT,
+  ACTION_BUTTON_IMPORT,
+  ACTION_BUTTON_NEUTRAL,
+  BATCH_STATUS_DOTS,
+  BATCH_STATUS_LABELS,
+  PHASE_LABELS,
+  formatBytes,
+  formatTimestamp,
+  getErrorMessage,
+  getRelativePath,
+  isSupportedMedia,
+  relativePathToTxtName,
+  relativePathToZipEntry,
+  sanitizeFileName,
+  stripExtension,
+} from './transcribeUtils';
 
 // webkitdirectory 不是标准 React 属性，需通过 cast 透传
 const FOLDER_INPUT_PROPS = {
@@ -67,120 +39,6 @@ const FOLDER_INPUT_PROPS = {
 
 type TranscribeMode = 'single' | 'batch';
 type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number } | { type: 'history'; id: number };
-
-function getErrorMessage(error: unknown): string {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { error?: string } } }).response;
-    if (response?.data?.error) return response.data.error;
-  }
-  if (error instanceof Error) return error.message;
-  return '转录失败，请稍后重试';
-}
-
-function isSupportedMedia(file: File): boolean {
-  const name = file.name.toLowerCase();
-  return SUPPORTED_BATCH_EXTS.some((ext) => name.endsWith(ext));
-}
-
-function getRelativePath(file: File): string {
-  const withPath = file as File & { webkitRelativePath?: string };
-  return withPath.webkitRelativePath || file.name;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-function formatDuration(seconds: number): string {
-  const totalSeconds = Math.max(0, Math.round(seconds));
-  if (totalSeconds < 60) return `${totalSeconds} 秒`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const restSeconds = totalSeconds % 60;
-  if (minutes < 60) return restSeconds > 0 ? `${minutes} 分 ${restSeconds} 秒` : `${minutes} 分`;
-  const hours = Math.floor(minutes / 60);
-  const restMinutes = minutes % 60;
-  return restMinutes > 0 ? `${hours} 小时 ${restMinutes} 分` : `${hours} 小时`;
-}
-
-function formatInteger(value: number): string {
-  return Math.round(value).toLocaleString('zh-CN');
-}
-
-function formatSeconds(value: number): string {
-  return value.toLocaleString('zh-CN', { maximumFractionDigits: 1 });
-}
-
-function TranscriptionStatsCenter({
-  stats,
-  isLoading,
-  onRefresh,
-}: {
-  stats: TranscriptionStats;
-  isLoading: boolean;
-  onRefresh: () => void;
-}) {
-  const items = [
-    { label: '文件总量', value: formatBytes(stats.total_file_size_bytes) },
-    { label: '音频总时长', value: formatDuration(stats.total_audio_duration_seconds) },
-    { label: '累计字数', value: `${formatInteger(stats.total_text_chars)} 字` },
-    { label: 'GPU 累计耗时', value: `${formatSeconds(stats.total_processing_seconds)} 秒` },
-  ];
-
-  return (
-    <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-blush" />
-          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录统计中心</h3>
-          <span className="px-2 py-1 rounded-full bg-white/70 border border-card-border font-body text-[10px] text-ink-soft">
-            {formatInteger(stats.total_count)} 条记录
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={isLoading}
-          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
-        >
-          {isLoading ? '刷新中...' : '刷新'}
-        </button>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {items.map((item) => (
-          <div key={item.label} className="bg-white/65 rounded-2xl border border-card-border p-3 min-h-20">
-            <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-2">
-              {item.label}
-            </p>
-            <p className="font-display italic text-[20px] leading-tight text-ink break-words">
-              {item.value}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function sanitizeFileName(name: string): string {
-  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
-  return cleaned || '转录结果';
-}
-
-function stripExtension(name: string): string {
-  return name.replace(/\.[^./\\]+$/, '');
-}
-
-function relativePathToTxtName(relativePath: string): string {
-  return `${sanitizeFileName(stripExtension(relativePath))}.txt`;
-}
-
-function formatTimestamp(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-}
 
 function downloadTextFile(filename: string, content: string) {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -203,15 +61,6 @@ function downloadBlob(filename: string, blob: Blob) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-/**
- * 将相对路径转为 zip 内的 txt 路径，保留子目录结构。
- * 如「子目录/a.mp3」→「子目录/a.txt」
- */
-function relativePathToZipEntry(relativePath: string): string {
-  const noExt = relativePath.replace(/\.[^./\\]+$/, '');
-  return `${noExt}.txt`;
 }
 
 export const Transcribe: React.FC = () => {
@@ -591,25 +440,19 @@ export const Transcribe: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value as AsrLanguage)}
-                    className="bg-white/70 text-ink rounded-full px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
-                  >
-                    {LANGUAGE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={asrProvider}
-                    onChange={(e) => setSelectedAsrProvider(e.target.value as AsrProvider)}
-                    className="bg-white/70 text-ink rounded-full px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
-                  >
-                    {ASR_PROVIDER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                <TranscribeProviderControls
+                  language={language}
+                  provider={asrProvider}
+                  wslModel={wslModel}
+                  wslContext={wslContext}
+                  isDisabled={isTranscribing}
+                  qwenBaseUrl={settings.qwen_asr_base_url}
+                  wslBaseUrl={settings.wsl_asr_base_url}
+                  onLanguageChange={setLanguage}
+                  onProviderChange={setSelectedAsrProvider}
+                  onWslModelChange={setSelectedWslModel}
+                  onWslContextChange={setWslContext}
+                >
                   <button
                     onClick={handleSubmit}
                     disabled={isTranscribing}
@@ -620,37 +463,7 @@ export const Transcribe: React.FC = () => {
                     )}
                     <span className="relative">{isTranscribing ? '转录中...' : '开始转录'}</span>
                   </button>
-                </div>
-                {asrProvider === 'qwen_mlx' && (
-                  <p className="mt-2 font-body text-[11px] text-ink-soft/70 animate-fade-in">
-                    将连接 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，请先在 Mac 上启动 mlx-qwen3-asr serve。
-                  </p>
-                )}
-                {asrProvider === 'wsl_asr' && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
-                    <select
-                      value={wslModel}
-                      onChange={(e) => setSelectedWslModel(e.target.value)}
-                      disabled={isTranscribing}
-                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
-                    >
-                      {WSL_MODEL_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={wslContext}
-                      onChange={(e) => setWslContext(e.target.value)}
-                      disabled={isTranscribing}
-                      placeholder="上下文：人名、术语、产品名"
-                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
-                    />
-                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
-                      将提交到 {settings.wsl_asr_base_url || 'http://192.168.31.137:18080/v1'} 的 WSL job 队列。
-                    </p>
-                  </div>
-                )}
+                </TranscribeProviderControls>
 
                 {error && (
                   <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
@@ -777,27 +590,20 @@ export const Transcribe: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value as AsrLanguage)}
-                    disabled={isBatchTranscribing}
-                    className="bg-white/70 text-ink rounded-full px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
-                  >
-                    {LANGUAGE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={asrProvider}
-                    onChange={(e) => setSelectedAsrProvider(e.target.value as AsrProvider)}
-                    disabled={isBatchTranscribing}
-                    className="bg-white/70 text-ink rounded-full px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
-                  >
-                    {ASR_PROVIDER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                <TranscribeProviderControls
+                  language={language}
+                  provider={asrProvider}
+                  wslModel={wslModel}
+                  wslContext={wslContext}
+                  isDisabled={isBatchTranscribing}
+                  isBatch
+                  qwenBaseUrl={settings.qwen_asr_base_url}
+                  wslBaseUrl={settings.wsl_asr_base_url}
+                  onLanguageChange={setLanguage}
+                  onProviderChange={setSelectedAsrProvider}
+                  onWslModelChange={setSelectedWslModel}
+                  onWslContextChange={setWslContext}
+                >
                   <button
                     onClick={handleBatchSubmit}
                     disabled={isBatchTranscribing || selectedIndexes.size === 0}
@@ -812,37 +618,7 @@ export const Transcribe: React.FC = () => {
                         : `开始批量转录（已选 ${selectedIndexes.size}/${batchFiles.length}）`}
                     </span>
                   </button>
-                </div>
-                {asrProvider === 'qwen_mlx' && (
-                  <p className="mt-2 font-body text-[11px] text-ink-soft/70 animate-fade-in">
-                    批量文件会串行发送到 {settings.qwen_asr_base_url || 'http://localhost:8765/v1'}，建议 Mac 先用 1 个任务验证负载。
-                  </p>
-                )}
-                {asrProvider === 'wsl_asr' && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
-                    <select
-                      value={wslModel}
-                      onChange={(e) => setSelectedWslModel(e.target.value)}
-                      disabled={isBatchTranscribing}
-                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
-                    >
-                      {WSL_MODEL_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={wslContext}
-                      onChange={(e) => setWslContext(e.target.value)}
-                      disabled={isBatchTranscribing}
-                      placeholder="上下文：人名、术语、产品名"
-                      className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
-                    />
-                    <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
-                      批量文件会逐个提交到 {settings.wsl_asr_base_url || 'http://192.168.31.137:18080/v1'} 的 WSL job 队列。
-                    </p>
-                  </div>
-                )}
+                </TranscribeProviderControls>
 
                 {error && (
                   <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">

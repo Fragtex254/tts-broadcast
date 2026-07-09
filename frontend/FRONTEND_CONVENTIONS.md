@@ -41,14 +41,17 @@ frontend/src/
 ├── pages/                      # 路由页面（一个文件一个页面）
 │   ├── SourceCollection.tsx
 │   ├── ScriptEditor.tsx
+│   ├── VoicePresets.tsx
 │   ├── Transcribe.tsx
 │   ├── History.tsx
 │   ├── Settings.tsx
-│   └── settingsDraft.ts            # Settings 页纯逻辑 helper（需配测试）
+│   ├── settingsDraft.ts            # Settings 页纯逻辑 helper（需配测试）
+│   └── transcribeUtils.ts          # Transcribe 页纯逻辑 helper（需配测试）
 ├── components/
+│   ├── ModalShell.tsx             # 统一二级界面/弹窗/全屏编辑面板外壳
 │   ├── Layout/                 # 布局组件（Sidebar, Header）
-│   ├── Dashboard/              # Dashboard 子组件
-│   └── Transcribe/             # 转录页子组件（历史结果查看、导入、下载、删除）
+│   ├── Dashboard/              # Dashboard 子组件（含统一音频播放条 AudioPlaybackBar）
+│   └── Transcribe/             # 转录页子组件（统计、Provider 控件、历史结果查看、导入、下载、删除）
 ├── hooks/                       # 可复用 hooks（useDebounce, useSSE）
 ├── services/
 │   ├── api.ts                  # Axios API 封装
@@ -73,6 +76,12 @@ frontend/src/
 | `services/schemas.ts` | API 响应运行时 schema | UI 展示逻辑 |
 
 > 组件文件内部组织顺序（导入 → 接口 → 子组件 → 常量 → 主组件 → 默认导出）见 skill：`frontend-component`。
+
+### 共享 UI 模块约定
+
+- `components/ModalShell.tsx` 是二级界面、确认弹窗、全屏编辑面板的统一外壳，集中处理 `role="dialog"`、Esc 关闭、backdrop 关闭、标题区、footer 和尺寸变体。业务组件不得重复手写固定遮罩与对话框基础逻辑。
+- `components/Dashboard/AudioPlaybackBar.tsx` 是音频播放条唯一底层实现，集中处理 `<audio>` 生命周期、播放/暂停、时长、seek、波形、进度条、播放失败和倍速保音高。整篇/历史播放器通过 `AudioPlayer`，试听小播放器通过 `MiniAudioPlayer` 接入；业务组件不得重新实现播放控制。
+- 与播放条相关的纯函数放在 `components/Dashboard/audioPlaybackUtils.ts`，保持组件文件只导出 React 组件，符合 Vite Fast Refresh 规则。
 
 ---
 
