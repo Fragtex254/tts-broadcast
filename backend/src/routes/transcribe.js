@@ -16,6 +16,7 @@ const logger = createScopedLogger('transcribe-route');
 const TRANSCRIBE_UPLOAD_LIMIT_BYTES = Number(process.env.TRANSCRIBE_UPLOAD_LIMIT_BYTES || 500 * 1024 * 1024);
 const BATCH_MAX_FILES = Number(process.env.TRANSCRIBE_BATCH_MAX_FILES || 50);
 const uploadDir = path.join(os.tmpdir(), 'tts-broadcast-transcribe');
+const resolvedUploadDir = path.resolve(uploadDir);
 
 fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -44,8 +45,25 @@ function decodeFileName(originalname) {
 }
 
 function cleanUploadedFile(file) {
-  if (file && file.path) {
-    fs.rmSync(file.path, { force: true });
+  if (!file || !file.path) return;
+
+  const resolvedPath = path.resolve(file.path);
+  const isInUploadDir = resolvedPath === resolvedUploadDir || resolvedPath.startsWith(`${resolvedUploadDir}${path.sep}`);
+  if (!isInUploadDir) {
+    logger.warn({
+      hasPath: Boolean(file.path),
+      pathLength: typeof file.path === 'string' ? file.path.length : undefined,
+    }, '跳过非转录临时目录文件清理');
+    return;
+  }
+
+  try {
+    fs.rmSync(resolvedPath, { force: true });
+  } catch (error) {
+    logger.warn({
+      err: error,
+      pathLength: resolvedPath.length,
+    }, '清理转录临时文件失败');
   }
 }
 
