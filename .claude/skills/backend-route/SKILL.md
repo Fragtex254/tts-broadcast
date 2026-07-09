@@ -120,10 +120,11 @@ router.post('/generate', async (req, res) => {
 每个接收 `:id` 参数的路由**必须**做正整数校验：
 
 ```js
-const id = parseInt(req.params.id, 10);
-if (!Number.isInteger(id) || id <= 0) {
-  return res.status(400).json({ error: '无效的播报 ID' });
+const idCheck = validateId(req.params.id, '播报 ID');
+if (!idCheck.valid) {
+  return res.status(400).json({ error: idCheck.error });
 }
+const { id } = idCheck;
 ```
 
 > 实际开发使用 `utils/validation.js` 的 `validateId(idStr, label)`，返回 `{ valid, id }` 或 `{ valid, error }`，不要内联 parseInt。

@@ -11,6 +11,8 @@ tags:
 
 ## 模型与限速
 
+> 本文是 2026-06-08 的历史摘录，用于保留 MiMo/TTS/ASR 背景。当前生产 LLM 模型按 MiniMax-M3 管理，文本模型限额以 MiniMax 官方 Rate Limits 文档为准：付费账号 200 RPM / 10,000,000 TPM；本项目默认使用 75% 安全预算，即 150 RPM / 7,500,000 TPM，见 `services/llmQueue.js`。
+
 本页列出 Xiaomi MiMo API 开放平台当前支持的所有模型，包含模型能力、长度限制和限流配额，帮助您根据使用场景选择合适的模型。
 
 ### 限流说明
