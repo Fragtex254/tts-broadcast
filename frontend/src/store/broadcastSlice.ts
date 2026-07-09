@@ -64,11 +64,10 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         const response = await broadcastApi.generate(data);
         const broadcast = safeParseStrict(BroadcastSchema, response.data.broadcast);
         const audioUrl = response.data.audioUrl as string;
-        set((state) => ({
-          broadcasts: [broadcast, ...state.broadcasts],
+        set({
           currentBroadcast: broadcast,
           isGenerating: false,
-        }));
+        });
         return { broadcast, audioUrl };
       } catch (error) {
         set({ isGenerating: false });
@@ -99,7 +98,11 @@ export function createBroadcastSlice(set: StoreSet): Pick<
         const response = await broadcastApi.save(id);
         const updated = safeParseStrict(BroadcastSchema, response.data.broadcast);
         set((state) => ({
-          broadcasts: state.broadcasts.map((b) => (b.id === id ? updated : b)),
+          broadcasts: updated.saved === 1
+            ? state.broadcasts.some((b) => b.id === id)
+              ? state.broadcasts.map((b) => (b.id === id ? updated : b))
+              : [updated, ...state.broadcasts]
+            : state.broadcasts.filter((b) => b.id !== id),
           currentBroadcast: state.currentBroadcast?.id === id ? updated : state.currentBroadcast,
         }));
         return updated;

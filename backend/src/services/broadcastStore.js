@@ -41,14 +41,14 @@ function getById(id) {
 }
 
 /**
- * 获取播报历史列表（按创建时间倒序）
+ * 获取已保存播报历史列表（按创建时间倒序）
  * @param {Object} params
  * @param {number} params.limit - 每页数量
  * @param {number} params.offset - 偏移量
  * @returns {Array} 播报记录列表
  */
 function getHistory({ limit, offset }) {
-  return db.prepare('SELECT * FROM broadcasts ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
+  return db.prepare('SELECT * FROM broadcasts WHERE saved = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
 }
 
 /**
