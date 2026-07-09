@@ -114,6 +114,9 @@ export const broadcastApi = {
   suggestSegmentTags: (broadcastId: number, allowedTags: string[]) =>
     api.post(`/broadcast/${broadcastId}/segments/suggest-tags`, { allowedTags }),
 
+  suggestSegmentAudioTags: (broadcastId: number) =>
+    api.post(`/broadcast/${broadcastId}/segments/suggest-audio-tags`),
+
   updateVoiceConfig: (broadcastId: number, data: {
     voiceType: VoiceConfig['voiceType'];
     voice?: string;

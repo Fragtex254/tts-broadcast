@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { voicePresetApi } from '../../services/api';
 import { getApiErrorMessage } from '../../services/apiError';
 import { useStore } from '../../store';
+import { ModalShell } from '../ModalShell';
 import MiniAudioPlayer from './MiniAudioPlayer';
 import LongTextField from './LongTextField';
 import AudioDownloadLink from './AudioDownloadLink';
@@ -342,28 +343,14 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
       )}
 
       {isCharacterPanelOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/20 px-4 py-6 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="character-panel-title"
+        <ModalShell
+          title="角色立绘反推"
+          onClose={() => setIsCharacterPanelOpen(false)}
+          size="md"
+          accent="blush"
+          closeOnBackdrop={false}
+          contentClassName="p-5"
         >
-          <div className="max-h-[calc(100vh-3rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-card-border bg-paper p-5 shadow-card">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 id="character-panel-title" className="font-body text-[18px] font-semibold text-ink">
-                  角色立绘反推
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCharacterPanelOpen(false)}
-                className="rounded-xl border border-card-border bg-white/70 px-3 py-2 font-body text-[13px] text-ink-soft transition-colors hover:text-ink"
-              >
-                关闭
-              </button>
-            </div>
-
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <div className="flex h-48 w-full items-center justify-center overflow-hidden rounded-2xl border border-card-border bg-white/70 sm:w-40">
                 {characterImagePreviewUrl ? (
@@ -422,8 +409,7 @@ export const DesignTrialPanel: React.FC<DesignTrialPanelProps> = ({
                 )}
               </div>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );

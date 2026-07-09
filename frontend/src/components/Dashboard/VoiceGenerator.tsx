@@ -4,6 +4,7 @@ import { broadcastApi } from '../../services/api';
 import { useDebounce } from '../../hooks/useDebounce';
 import { hasSelectedVoice } from '../../store/voiceConfigModel';
 import type { VoiceConfig } from '../../store/types';
+import { ModalShell } from '../ModalShell';
 import { VoicePresetTab } from './VoicePresetTab';
 
 type VoicePanelType = 'builtin' | 'preset';
@@ -330,39 +331,19 @@ export const VoiceGenerator: React.FC = () => {
     );
   };
 
-  const selector = isSelectorOpen ? (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 p-4 backdrop-blur-sm animate-fade-in"
-      onClick={() => setIsSelectorOpen(false)}
+  const selector = (
+    <ModalShell
+      isOpen={isSelectorOpen}
+      title="选择音色"
+      subtitle="选择后才会用于切分和生成语音。当前没有显式选择时，系统不会自动套用默认音色。"
+      onClose={() => setIsSelectorOpen(false)}
+      size="xl"
+      accent="blush"
+      ariaLabel="选择音色"
+      contentClassName="p-5"
+      panelClassName="origin-bottom-right"
+      panelStyle={{ animation: 'voice-selector-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both' }}
     >
-      <div
-        className="flex max-h-[88vh] w-full max-w-5xl origin-bottom-right flex-col overflow-hidden rounded-card border border-card-border bg-paper shadow-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label="选择音色"
-        onClick={(event) => event.stopPropagation()}
-        style={{ animation: 'voice-selector-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both' }}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-card-border p-5">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-blush" />
-              <h3 className="font-display text-[18px] font-medium italic text-ink">选择音色</h3>
-            </div>
-            <p className="mt-2 font-body text-[12px] leading-relaxed text-ink-soft">
-              选择后才会用于切分和生成语音。当前没有显式选择时，系统不会自动套用默认音色。
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsSelectorOpen(false)}
-            className="rounded-xl border border-card-border bg-white/60 px-3 py-2 font-body text-[12px] text-ink-soft transition-colors hover:text-ink"
-          >
-            关闭
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5">
           <div className="mb-4 inline-flex rounded-xl border border-card-border bg-white/55 p-1">
             {VOICE_TYPES.map((type) => (
               <button
@@ -388,10 +369,8 @@ export const VoiceGenerator: React.FC = () => {
             </div>
           )}
           {renderFineControls()}
-        </div>
-      </div>
-    </div>
-  ) : null;
+    </ModalShell>
+  );
   const currentVoiceName = getVoiceName(voiceConfig, presets, selectedPresetName);
 
   return (

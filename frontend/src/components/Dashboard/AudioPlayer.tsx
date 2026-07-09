@@ -1,10 +1,8 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { createScopedLogger, toLogError } from '../../services/logger';
+import { AudioPlaybackBar } from './AudioPlaybackBar';
 
 const logger = createScopedLogger('audio-player');
-const WAVEFORM_BAR_WIDTH = 3;
-const WAVEFORM_BAR_GAP = 2;
-const DEFAULT_WAVEFORM_BAR_COUNT = 64;
 
 interface AudioPlayerProps {
   audioUrl: string | null;
@@ -15,23 +13,6 @@ interface AudioPlayerProps {
   mode?: string | null;
 }
 
-const generateWaveformBars = (count: number, seed: string) => {
-  // 基于 seed 生成确定性伪随机序列
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    const char = seed.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  const bars: number[] = [];
-  for (let i = 0; i < count; i++) {
-    // 简单的 LCG 伪随机
-    hash = (hash * 1103515245 + 12345) & 0x7fffffff;
-    bars.push(8 + (hash % 2000) / 100);
-  }
-  return bars;
-};
-
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   audioUrl,
   title = '语音播报',
@@ -40,73 +21,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   onSave,
   mode,
 }) => {
-  const waveformRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const [waveformBarCount, setWaveformBarCount] = useState(DEFAULT_WAVEFORM_BAR_COUNT);
-  const waveformBars = React.useMemo(
-    () => generateWaveformBars(waveformBarCount, audioUrl || title),
-    [waveformBarCount, audioUrl, title]
-  );
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleLoadedMetadata = () => setDuration(audio.duration);
-    const handleEnded = () => setIsPlaying(false);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-    };
-  }, [audioUrl]);
-
-  useEffect(() => {
-    const waveform = waveformRef.current;
-    if (!waveform) return;
-
-    const updateBarCount = () => {
-      const width = waveform.clientWidth;
-      if (width <= 0) return;
-      const nextCount = Math.max(12, Math.floor(width / (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)));
-      setWaveformBarCount((current) => (current === nextCount ? current : nextCount));
-    };
-
-    updateBarCount();
-    const observer = new ResizeObserver(updateBarCount);
-    observer.observe(waveform);
-    return () => observer.disconnect();
-  }, []);
-
-  const togglePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio || !audioUrl) return;
-    if (isPlaying) { audio.pause(); } else { audio.play(); }
-    setIsPlaying(!isPlaying);
-  }, [isPlaying, audioUrl]);
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const time = Number(e.target.value);
-    audio.currentTime = time;
-    setCurrentTime(time);
-  };
-
-  const formatTime = (seconds: number): string => {
-    if (isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const handleDownload = () => {
     if (!audioUrl) return;
@@ -134,8 +50,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   }, [onSave, broadcastId, audioUrl]);
 
-  const progress = duration > 0 ? currentTime / duration : 0;
-
   if (!audioUrl) {
     return (
       <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
@@ -162,6 +76,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         <div className="flex items-center gap-3">
           {broadcastId && onSave && (
             <button
+              type="button"
               onClick={handleSave}
               disabled={isSaving}
               className={`font-body text-[11px] transition-colors flex items-center gap-1 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ${saveError ? 'text-pink animate-shake' : isSaved ? 'text-lemon' : 'text-ink-soft/70 hover:text-lemon'}`}
@@ -172,7 +87,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
               </svg>
             </button>
           )}
-          <button onClick={handleDownload} className="font-body text-[11px] text-ink-soft/70 hover:text-ink transition-colors flex items-center gap-1 uppercase tracking-wider">
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="font-body text-[11px] text-ink-soft/70 hover:text-ink transition-colors flex items-center gap-1 uppercase tracking-wider"
+            title="下载音频"
+          >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -180,57 +100,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         </div>
       </div>
 
-      <audio ref={audioRef} src={audioUrl} preload="metadata" />
-
-      {/* pill 形播放器主体 */}
-      <div className="bg-white/50 rounded-full px-4 py-3 flex items-center gap-3 border border-card-border">
-        <button
-          onClick={togglePlay}
-          className="w-9 h-9 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border"
-        >
-          {isPlaying ? (
-            <svg className="w-4 h-4 text-ink" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
-          ) : (
-            <svg className="w-4 h-4 text-ink ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-          )}
-        </button>
-
-        {/* 波形可视化 + 可拖动进度热区 */}
-        <div ref={waveformRef} className="relative flex-1 h-7 overflow-hidden">
-          <div className="absolute inset-0 flex items-center gap-[2px] pointer-events-none">
-            {waveformBars.map((height, i) => {
-              const barProgress = i / waveformBars.length;
-              const isPlayed = barProgress <= progress;
-              return (
-                <div
-                  key={i}
-                  data-waveform-bar="true"
-                  className={`w-[3px] rounded-full transition-all duration-100 ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
-                  style={{
-                    height: `${height}px`,
-                    ...(isPlaying && isPlayed ? { animation: `waveform-pulse 1.5s ease-in-out ${i * 0.05}s infinite` } : {}),
-                  }}
-                />
-              );
-            })}
-          </div>
-          <input
-            type="range"
-            aria-label="拖动调整播放进度"
-            min={0}
-            max={duration || 0}
-            step="0.01"
-            value={currentTime}
-            onChange={handleSeek}
-            disabled={duration <= 0}
-            className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-          />
-        </div>
-
-        <span className="font-body text-[11px] text-ink-soft/70 min-w-[72px] text-right tabular-nums">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
-      </div>
+      <AudioPlaybackBar
+        src={audioUrl}
+        variant="regular"
+        visual="waveform"
+        waveformSeed={audioUrl || title}
+        playLabel={title}
+      />
     </div>
   );
 };
