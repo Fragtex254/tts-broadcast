@@ -144,8 +144,10 @@ describe('TTS 服务', () => {
     test('429 不在 TTS 服务内快速重试，避免绕过全局队列', async () => {
       axios.post.mockRejectedValue({ response: { status: 429 } });
 
-      await expect(tts.generateSpeech({ text: '测试' }))
-        .rejects.toThrow('MiMo API 请求过于频繁，请稍后再试');
+      await expect(tts.generateSpeech({ text: '测试' })).rejects.toMatchObject({
+        message: 'MiMo API 请求过于频繁，请稍后再试',
+        retryAfterMs: 15000,
+      });
       expect(axios.post).toHaveBeenCalledTimes(1);
     });
 

@@ -2,8 +2,13 @@ const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
 const db = require('../db');
 const llmModels = require('./llmModels');
+const llmQueue = require('./llmQueue');
 const { createScopedLogger } = require('./logger');
-const { MAX_SEGMENT_TEXT_LENGTH, normalizeSegmentTexts } = require('../utils/segmentText');
+const {
+  AUTO_SEGMENT_MIN_LENGTH,
+  AUTO_SEGMENT_MAX_LENGTH,
+  normalizeAutoSegmentTexts
+} = require('../utils/segmentText');
 
 const logger = createScopedLogger('mimo-service');
 
@@ -19,6 +24,7 @@ const DEFAULT_LLM_SETTINGS = {
 
 const LLM_REQUEST_TIMEOUT_MS = 60000;
 const STYLE_TAG_SUGGEST_BATCH_SIZE = 10;
+const SEGMENT_AUDIO_TAG_SUGGEST_BATCH_SIZE = 6;
 const SPLIT_SCRIPT_CHUNK_LENGTH = 2500;
 const FORMAT_TRANSCRIPTION_CHUNK_LENGTH = 1200;
 const FORMAT_TRANSCRIPTION_MIN_RETRY_LENGTH = 260;
@@ -373,6 +379,7 @@ function isRecoverableStructuredOutputError(error) {
   const message = String(error?.message || error?.response?.data?.error?.message || '');
   return status === 422 || status === '422'
     || message.includes('数量与句子数量不一致')
+    || message.includes('数量与段落数量不一致')
     || message.includes('解析失败')
     || message.includes('格式不正确');
 }
@@ -519,10 +526,12 @@ async function createOpenAiVisionMessage({ prompt, systemPrompt, maxTokens, conf
 async function createLlmMessage({ prompt, systemPrompt, maxTokens, thinkingEnabled, apiKeyOverride, configOverride }) {
   try {
     const config = getLlmConfig(configOverride);
-    if (config.apiFormat === 'openai') {
-      return await createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, apiKeyOverride });
-    }
-    return await createAnthropicMessage({ prompt, systemPrompt, maxTokens, thinkingEnabled, config, apiKeyOverride });
+    return await llmQueue.enqueueLlm({ prompt, systemPrompt, maxTokens }, async () => {
+      if (config.apiFormat === 'openai') {
+        return createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, apiKeyOverride });
+      }
+      return createAnthropicMessage({ prompt, systemPrompt, maxTokens, thinkingEnabled, config, apiKeyOverride });
+    });
   } catch (error) {
     throw mapLlmError(error);
   }
@@ -531,10 +540,12 @@ async function createLlmMessage({ prompt, systemPrompt, maxTokens, thinkingEnabl
 async function createVisionMessage({ prompt, systemPrompt, maxTokens, imageBuffer, mimeType }) {
   try {
     const config = getLlmConfig();
-    if (config.apiFormat === 'openai') {
-      return await createOpenAiVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType });
-    }
-    return await createAnthropicVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType });
+    return await llmQueue.enqueueLlm({ prompt, systemPrompt, maxTokens, imageBuffer }, async () => {
+      if (config.apiFormat === 'openai') {
+        return createOpenAiVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType });
+      }
+      return createAnthropicVisionMessage({ prompt, systemPrompt, maxTokens, config, imageBuffer, mimeType });
+    });
   } catch (error) {
     throw mapLlmError(error);
   }
@@ -591,7 +602,7 @@ function buildSplitScriptPrompt(text) {
 切分原则：
 1. 以播报语义、话题推进、情绪承接为边界切分，不要简单按标点符号或单句话拆分
 2. 尽量让连续铺垫、同一新闻点、同一转折保留在同一块中，减少 TTS 分段后情绪跳变
-3. 每个块最大文本长度不超过 ${MAX_SEGMENT_TEXT_LENGTH} 个中文字符；明显短于 120 字的块应尽量与相邻同主题内容合并
+3. 每个块目标长度为 ${AUTO_SEGMENT_MIN_LENGTH}-${AUTO_SEGMENT_MAX_LENGTH} 个中文字符；明显短于 ${AUTO_SEGMENT_MIN_LENGTH} 字的块应尽量与相邻同主题内容合并，超过 ${AUTO_SEGMENT_MAX_LENGTH} 字的块必须继续拆分
 4. 开场白和结束语可独立成块，但不要把普通自然句拆成零碎短句
 5. 不要修改、概括、增删原文内容，只做切分
 6. 保持原文顺序
@@ -614,7 +625,7 @@ function parseSplitSegments(rawText, sourceText) {
     if (segments.some((seg) => typeof seg !== 'string' || seg.trim().length === 0)) {
       return null;
     }
-    const normalized = normalizeSegmentTexts(segments);
+    const normalized = normalizeAutoSegmentTexts(segments);
     if (!isTextTailCovered(sourceText, normalized.join(''))) {
       return null;
     }
@@ -632,7 +643,7 @@ async function splitScriptChunk(text, config) {
     thinkingEnabled: config.splitThinkingEnabled
   });
 
-  return parseSplitSegments(rawText, text) || normalizeSegmentTexts([text]);
+  return parseSplitSegments(rawText, text) || normalizeAutoSegmentTexts([text]);
 }
 
 /**
@@ -651,7 +662,7 @@ async function splitScript(text) {
   for (const chunk of chunks) {
     allSegments.push(...await splitScriptChunk(chunk, config));
   }
-  return normalizeSegmentTexts(allSegments);
+  return normalizeAutoSegmentTexts(allSegments);
 }
 
 /**
@@ -848,6 +859,7 @@ const TRIAL_TEXT_ALLOWED_STYLE_TAGS = [
   '磁性', '醇厚', '清亮', '空灵', '稚嫩', '苍老', '甜美', '沙哑', '醇雅',
   '夹子音', '御姐音', '正太音', '大叔音', '台湾腔',
   '东北话', '四川话', '河南话', '粤语',
+  '孙悟空', '林黛玉',
 ];
 
 const TRIAL_TEXT_ALLOWED_AUDIO_TAGS = [
@@ -973,6 +985,146 @@ ${sourceText}
   return parseTaggedTrialTextSuggestion(rawText, sourceText);
 }
 
+function parseTaggedSegmentSuggestions(rawText, fallbackTexts) {
+  const jsonStr = extractJsonArrayText(rawText);
+  let suggestions;
+  try {
+    suggestions = JSON.parse(jsonStr);
+  } catch (e) {
+    throw new Error(`AI 标签优化结果解析失败: ${e.message}`);
+  }
+
+  if (!Array.isArray(suggestions) || suggestions.length !== fallbackTexts.length) {
+    throw new Error('AI 标签优化结果数量与段落数量不一致');
+  }
+
+  return suggestions.map((item, index) => {
+    const fallbackText = fallbackTexts[index];
+    if (typeof item === 'string') {
+      return {
+        taggedText: normalizeTrialTextTagSyntax(item.trim() || fallbackText),
+        stylePrompt: '',
+      };
+    }
+    if (!item || typeof item !== 'object') {
+      return {
+        taggedText: normalizeTrialTextTagSyntax(fallbackText),
+        stylePrompt: '',
+      };
+    }
+
+    const taggedText = typeof item.taggedText === 'string'
+      ? item.taggedText.trim()
+      : (typeof item.tagged_text === 'string' ? item.tagged_text.trim() : '');
+    const stylePrompt = typeof item.stylePrompt === 'string'
+      ? item.stylePrompt.trim()
+      : (typeof item.style_prompt === 'string' ? item.style_prompt.trim() : '');
+
+    return {
+      taggedText: normalizeTrialTextTagSyntax(taggedText || fallbackText),
+      stylePrompt,
+    };
+  });
+}
+
+function fallbackTaggedSegmentSuggestion(text) {
+  return {
+    taggedText: normalizeTrialTextTagSyntax(text),
+    stylePrompt: '',
+  };
+}
+
+async function suggestSegmentAudioTagsBatch({ texts, voiceDesign, stylePrompt, config }) {
+  const numbered = texts.map((text, index) => `${index + 1}. ${text}`).join('\n');
+  const maxTokens = Math.min(
+    6000,
+    1200 + texts.reduce((sum, text) => sum + Math.ceil(String(text || '').length * 1.4), 0)
+  );
+
+  const prompt = `你是 MiMo TTS 口播段落标签导演。请把下面每个口播段落优化成“方括号内联标签 + 原文正文”的形式，用于 assistant.content 直接合成。
+
+目标不是给一个单独风格分类，而是根据每段文本的气口、情绪弧线、语速快慢变化、停顿位置和强调点，插入合法标签。
+
+MiMo TTS 标签规则：
+- 所有标签都必须使用方括号，格式如：[温柔]、[轻笑]、[停顿片刻]。
+- 如果同一位置需要多个控制，必须合并为一个标签，例如：[温柔，平静]正文。
+- 风格标签通常放在段落开头；音频标签可以放在正文任意位置。
+- 输入里可能已有旧标签或旧整体风格，你需要保留有效控制、删除冲突或多余控制，并统一为方括号。
+- 不要输出圆括号标签，不要把标签写进音色描述，不要添加角色背景、场景说明或导演模式。
+
+允许使用的开头风格标签：
+${TRIAL_TEXT_ALLOWED_STYLE_TAGS.join('、')}
+
+允许使用的正文音频标签：
+${TRIAL_TEXT_ALLOWED_AUDIO_TAGS.join('、')}
+
+参考音色描述：
+${voiceDesign || '无'}
+
+参考风格提示：
+${stylePrompt || '无'}
+
+段落列表：
+${numbered}
+
+输出要求：
+1. 只输出 JSON 数组，数组长度必须等于段落数量（${texts.length}）
+2. 每个元素是对象：{"taggedText":"带标签的段落文本","stylePrompt":"语气情绪 + 语速节奏"}
+3. 保留每段原文主要文字、事实和顺序，不要扩写成长段，不要合并或拆分段落
+4. 每段标签数量控制在 2 到 7 个；极短段可以少于 2 个
+5. 不要使用上述列表外的标签
+6. stylePrompt 控制在 80 字以内，不要写音色身份、角色背景或场景`;
+
+  const rawText = await createLlmMessage({
+    prompt,
+    systemPrompt: '你是 MiMo TTS 标签编辑助手，只输出 JSON 数组。',
+    maxTokens,
+    thinkingEnabled: config.splitThinkingEnabled,
+  });
+
+  return parseTaggedSegmentSuggestions(rawText, texts);
+}
+
+/**
+ * 为口播编辑器的分段文本批量建议 MiMo 内联音频标签。
+ * @param {Object} params
+ * @param {string[]} params.texts - 各段文本（按 index）
+ * @param {string} [params.voiceDesign] - 音色设计描述
+ * @param {string} [params.stylePrompt] - 当前自然语言风格提示
+ * @returns {Promise<Array<{taggedText:string, stylePrompt:string}>>}
+ */
+async function suggestSegmentAudioTags({ texts, voiceDesign = '', stylePrompt = '' }) {
+  if (!Array.isArray(texts) || texts.length === 0) {
+    throw new Error('请提供有效的段落列表');
+  }
+  if (!texts.every((text) => typeof text === 'string' && text.trim().length > 0)) {
+    throw new Error('段落列表中包含空文本');
+  }
+
+  const config = getLlmConfig();
+  const suggestions = [];
+  for (let start = 0; start < texts.length; start += SEGMENT_AUDIO_TAG_SUGGEST_BATCH_SIZE) {
+    const batch = texts.slice(start, start + SEGMENT_AUDIO_TAG_SUGGEST_BATCH_SIZE);
+    try {
+      suggestions.push(...await suggestSegmentAudioTagsBatch({
+        texts: batch,
+        voiceDesign,
+        stylePrompt,
+        config,
+      }));
+    } catch (error) {
+      if (!isRecoverableStructuredOutputError(error)) throw error;
+      logger.warn({
+        err: error,
+        start,
+        batchSize: batch.length,
+      }, 'AI 段落标签优化批次失败，保留原文标签');
+      suggestions.push(...batch.map(fallbackTaggedSegmentSuggestion));
+    }
+  }
+  return suggestions;
+}
+
 /**
  * 测试 API Key 是否有效
  * @param {string} type - Key 类型: 'anthropic' 或 'tts'
@@ -1026,6 +1178,7 @@ module.exports = {
   formatTranscriptionText,
   inferVoiceDesignFromImage,
   rewriteToScript,
+  suggestSegmentAudioTags,
   suggestTrialTextTags,
   splitScript,
   suggestStyleTags,
