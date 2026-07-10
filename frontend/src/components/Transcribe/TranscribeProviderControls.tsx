@@ -1,20 +1,27 @@
 import React from 'react';
-import type { AsrLanguage, AsrProvider } from '../../store';
+import type { AsrLanguage, AsrModelOption, AsrProvider } from '../../store';
 import { ASR_PROVIDER_OPTIONS, LANGUAGE_OPTIONS, WSL_MODEL_OPTIONS } from '../../pages/transcribeUtils';
 
 interface TranscribeProviderControlsProps {
   language: AsrLanguage;
   provider: AsrProvider;
   wslModel: string;
-  wslContext: string;
+  asrContext: string;
+  mossModel: string;
+  mossModelOptions: AsrModelOption[];
+  isFetchingMossModels: boolean;
+  mossModelFetchResult: { error?: string; resolvedUrl?: string } | null;
   isDisabled?: boolean;
   isBatch?: boolean;
   qwenBaseUrl: string;
   wslBaseUrl: string;
+  mossBaseUrl: string;
   onLanguageChange: (language: AsrLanguage) => void;
   onProviderChange: (provider: AsrProvider) => void;
   onWslModelChange: (model: string) => void;
-  onWslContextChange: (context: string) => void;
+  onAsrContextChange: (context: string) => void;
+  onMossModelChange: (model: string) => void;
+  onRefreshMossModels: () => void;
   children: React.ReactNode;
 }
 
@@ -22,18 +29,29 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
   language,
   provider,
   wslModel,
-  wslContext,
+  asrContext,
+  mossModel,
+  mossModelOptions,
+  isFetchingMossModels,
+  mossModelFetchResult,
   isDisabled = false,
   isBatch = false,
   qwenBaseUrl,
   wslBaseUrl,
+  mossBaseUrl,
   onLanguageChange,
   onProviderChange,
   onWslModelChange,
-  onWslContextChange,
+  onAsrContextChange,
+  onMossModelChange,
+  onRefreshMossModels,
   children,
-}) => (
-  <>
+}) => {
+  const hasCurrentMossModel = Boolean(mossModel)
+    && !mossModelOptions.some((option) => option.id === mossModel);
+
+  return (
+    <>
     <div className="flex flex-col sm:flex-row gap-3 mt-4">
       <select
         value={language}
@@ -80,8 +98,8 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
         </select>
         <input
           type="text"
-          value={wslContext}
-          onChange={(e) => onWslContextChange(e.target.value)}
+          value={asrContext}
+          onChange={(e) => onAsrContextChange(e.target.value)}
           disabled={isDisabled}
           placeholder="上下文：人名、术语、产品名"
           className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
@@ -93,7 +111,60 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
         </p>
       </div>
     )}
+
+    {provider === 'moss_asr' && (
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-3 animate-fade-in">
+        <select
+          value={mossModel}
+          onChange={(e) => onMossModelChange(e.target.value)}
+          disabled={isDisabled || mossModelOptions.length === 0}
+          className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
+        >
+          {hasCurrentMossModel && (
+            <option value={mossModel}>{mossModel}</option>
+          )}
+          {mossModelOptions.length === 0 && (
+            <option value="">等待获取模型列表</option>
+          )}
+          {mossModelOptions.map((option) => (
+            <option key={option.id} value={option.id}>{option.id}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onRefreshMossModels}
+          disabled={isDisabled || isFetchingMossModels || !mossBaseUrl}
+          className="px-3.5 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn font-body text-[12px] transition-all duration-150 whitespace-nowrap"
+        >
+          {isFetchingMossModels ? '获取中...' : '刷新模型'}
+        </button>
+        <input
+          type="text"
+          value={asrContext}
+          onChange={(e) => onAsrContextChange(e.target.value)}
+          disabled={isDisabled}
+          placeholder="提示词：人名、术语、产品名"
+          className="md:col-span-2 bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40 placeholder-ink-soft/35"
+        />
+        <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
+          {isBatch
+            ? `批量文件会逐个提交到 ${mossBaseUrl || 'http://192.168.31.137:18080/v1'} 的 MOSS ASR。`
+            : `将连接 ${mossBaseUrl || 'http://192.168.31.137:18080/v1'} 并使用所选模型转录。`}
+        </p>
+        {mossModelFetchResult?.resolvedUrl && (
+          <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70 animate-fade-in">
+            已从 {mossModelFetchResult.resolvedUrl} 获取模型
+          </p>
+        )}
+        {mossModelFetchResult?.error && (
+          <div className="md:col-span-2 bg-pink/10 border border-pink/30 rounded-xl p-2.5 text-ink text-[12px] font-body animate-shake">
+            {mossModelFetchResult.error}
+          </div>
+        )}
+      </div>
+    )}
   </>
-);
+  );
+};
 
 export default TranscribeProviderControls;

@@ -234,7 +234,7 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-blush" />
-            <h3 className="font-display italic text-[18px] font-medium text-ink">已保存预设</h3>
+            <h3 className="font-display italic text-[18px] font-medium text-ink">已保存音色</h3>
             <span className="font-body text-[13px] text-ink-soft/70">{presets.length}/20</span>
           </div>
           <div className="flex gap-1 bg-white/70 rounded-xl border border-card-border p-1">

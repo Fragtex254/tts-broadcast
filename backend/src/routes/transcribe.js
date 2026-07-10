@@ -99,9 +99,11 @@ function buildAsrProvider(req) {
 
 function buildTranscribeOptions(req) {
   const wslModel = req.body.wslModel;
+  const asrModel = req.body.asrModel;
   const context = req.body.context;
   return {
     wslModel: typeof wslModel === 'string' && wslModel.trim() ? wslModel.trim() : undefined,
+    asrModel: typeof asrModel === 'string' && asrModel.trim() ? asrModel.trim() : undefined,
     context: typeof context === 'string' && context.trim() ? context.trim() : undefined
   };
 }
@@ -116,6 +118,11 @@ function resolveTranscribeMetadata({ provider, language, options }) {
     model = typeof options.wslModel === 'string' && options.wslModel.trim()
       ? options.wslModel.trim()
       : config.wslModel;
+  }
+  if (config.provider === 'moss_asr') {
+    model = typeof options.asrModel === 'string' && options.asrModel.trim()
+      ? options.asrModel.trim()
+      : config.mossModel;
   }
   return {
     language: language || 'auto',
@@ -242,6 +249,20 @@ router.post('/', (req, res) => {
       cleanUploadedFile(req.file);
     }
   });
+});
+
+/**
+ * POST /api/transcribe/models
+ * 探测 ASR provider 可用模型列表
+ */
+router.post('/models', async (req, res) => {
+  try {
+    const { provider, baseUrl, apiKey } = req.body || {};
+    const result = await asr.fetchAsrModels({ provider, baseUrl, apiKey });
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message || '获取 ASR 模型列表失败' });
+  }
 });
 
 function parseRelativePaths(raw) {

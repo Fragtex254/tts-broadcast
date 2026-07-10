@@ -48,7 +48,9 @@ backend/src/
 ├── services/               # 服务层：外部 API 调用、业务逻辑、数据访问
 │   ├── aihot.js            # AI HOT API 客户端
 │   ├── audio.js            # WAV 文件操作 + resolveVoiceClone
-│   ├── asr.js              # MiMo ASR 转录服务
+│   ├── asr.js              # ASR provider 分发服务
+│   ├── asrModels.js        # OpenAI-compatible ASR 模型列表候选 URL 生成与探测
+│   ├── mossAsr.js          # MOSS OpenAI-compatible ASR 转录服务
 │   ├── media.js            # 上传媒体转 ASR data URL
 │   ├── mimo.js             # LLM 服务（双协议调用、rewriteToScript、splitScript、复杂标签优化、testApiKey、模型发现）
 │   ├── llmQueue.js         # MiniMax-M3 LLM 全局 RPM/TPM 队列限速

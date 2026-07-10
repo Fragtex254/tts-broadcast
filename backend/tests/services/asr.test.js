@@ -28,11 +28,27 @@ jest.mock('../../src/services/wslAsr', () => ({
   })
 }));
 
+jest.mock('../../src/services/mossAsr', () => ({
+  transcribeFile: jest.fn().mockResolvedValue({
+    text: 'MOSS 转录文本',
+    usage: { audio_seconds: 6 }
+  })
+}));
+
+jest.mock('../../src/services/asrModels', () => ({
+  fetchAsrModelsForConfig: jest.fn().mockResolvedValue({
+    models: [{ id: 'moss-asr-large' }],
+    resolvedUrl: 'http://192.168.31.137:18080/v1/models'
+  })
+}));
+
 const mimo = require('../../src/services/mimo');
 const media = require('../../src/services/media');
 const mimoApiClient = require('../../src/services/mimoApiClient');
 const qwenAsr = require('../../src/services/qwenAsr');
 const wslAsr = require('../../src/services/wslAsr');
+const mossAsr = require('../../src/services/mossAsr');
+const asrModels = require('../../src/services/asrModels');
 const asr = require('../../src/services/asr');
 
 describe('ASR 服务', () => {
@@ -52,6 +68,14 @@ describe('ASR 服务', () => {
     wslAsr.transcribeFile.mockResolvedValue({
       text: 'WSL 转录文本',
       usage: { audio_seconds: 8 }
+    });
+    mossAsr.transcribeFile.mockResolvedValue({
+      text: 'MOSS 转录文本',
+      usage: { audio_seconds: 6 }
+    });
+    asrModels.fetchAsrModelsForConfig.mockResolvedValue({
+      models: [{ id: 'moss-asr-large' }],
+      resolvedUrl: 'http://192.168.31.137:18080/v1/models'
     });
   });
 
@@ -160,6 +184,49 @@ describe('ASR 服务', () => {
       model: 'qwen3-asr-1.7b'
     }));
     expect(media.fileToAsrDataUrls).not.toHaveBeenCalled();
+  });
+
+  test('选择 MOSS ASR provider 时直接提交文件并使用通用模型参数', async () => {
+    const file = { originalname: 'moss.wav', buffer: Buffer.from('a') };
+    const onProgress = jest.fn();
+
+    const result = await asr.transcribeMedia({
+      file,
+      language: 'zh',
+      provider: 'moss_asr',
+      asrModel: 'moss-asr-large',
+      context: '术语A, 术语B',
+      onProgress
+    });
+
+    expect(result).toEqual({ text: 'MOSS 转录文本', usage: { audio_seconds: 6 } });
+    expect(mimo.getApiKey).not.toHaveBeenCalled();
+    expect(media.fileToAsrDataUrls).not.toHaveBeenCalled();
+    expect(mimoApiClient.postChatCompletions).not.toHaveBeenCalled();
+    expect(qwenAsr.transcribeDataUrl).not.toHaveBeenCalled();
+    expect(wslAsr.transcribeFile).not.toHaveBeenCalled();
+    expect(mossAsr.transcribeFile).toHaveBeenCalledWith({
+      file,
+      language: 'zh',
+      baseUrl: 'http://192.168.31.137:18080/v1',
+      model: 'moss-asr-large',
+      apiKey: '',
+      context: '术语A, 术语B',
+      onProgress
+    });
+  });
+
+  test('探测 MOSS ASR 模型列表时使用默认配置', async () => {
+    const result = await asr.fetchAsrModels({ provider: 'moss_asr' });
+
+    expect(result).toEqual({
+      models: [{ id: 'moss-asr-large' }],
+      resolvedUrl: 'http://192.168.31.137:18080/v1/models'
+    });
+    expect(asrModels.fetchAsrModelsForConfig).toHaveBeenCalledWith({
+      baseUrl: 'http://192.168.31.137:18080/v1',
+      apiKey: ''
+    });
   });
 
   test('自动转录多个音频切片并按顺序合并文本', async () => {

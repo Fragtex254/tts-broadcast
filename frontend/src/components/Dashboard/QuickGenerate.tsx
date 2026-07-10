@@ -74,7 +74,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
       {/* 标题 */}
       <div className="flex items-center gap-2 mb-4">
         <span className="w-2 h-2 rounded-full bg-lemon" />
-        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">资讯获取</h3>
+        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">AI 资讯采集</h3>
       </div>
 
       {/* 配置区 */}

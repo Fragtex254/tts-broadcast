@@ -22,10 +22,6 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
           {actions}
-          <div className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-sage/45 text-[11px] font-body font-medium text-ink-soft uppercase tracking-wider">
-            <span className="w-1.5 h-1.5 bg-sage rounded-full animate-breathe" />
-            系统在线
-          </div>
         </div>
       </div>
     </header>

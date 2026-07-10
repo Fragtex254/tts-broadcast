@@ -79,7 +79,6 @@ const RecentPresetPanel: React.FC<RecentPresetPanelProps> = ({ onOpenSaved }) =>
 
 export const VoicePresets: React.FC = () => {
   const fetchPresets = useStore((s) => s.fetchPresets);
-  const presets = useStore((s) => s.presets);
   const [activeTab, setActiveTab] = useState<PresetPageTab>('saved');
   const [voiceDesign, setVoiceDesign] = useState('');
   const [voiceClone, setVoiceClone] = useState('');
@@ -94,7 +93,7 @@ export const VoicePresets: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header title="音色预设" subtitle="管理克隆、设计和已保存音色" />
+      <Header title="音色库" subtitle="创建、试听并管理可复用音色" />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto space-y-5">
@@ -105,8 +104,7 @@ export const VoicePresets: React.FC = () => {
             <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blush" />
-                <h3 className="font-display italic text-[18px] font-medium text-ink">音色工作台</h3>
-                <span className="font-body text-[13px] text-ink-soft/70">{presets.length}/20</span>
+                <h3 className="font-display italic text-[18px] font-medium text-ink">音色资产</h3>
               </div>
               <div className="flex gap-1 bg-white/60 rounded-2xl border border-card-border p-1.5">
                 {PAGE_TABS.map((tab) => (

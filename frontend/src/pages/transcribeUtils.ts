@@ -1,4 +1,4 @@
-import type { AsrLanguage, AsrProvider, BatchTranscriptionItem } from '../store';
+import type { AsrLanguage, AsrProvider, BatchTranscriptionItem, TranscriptionRecord } from '../store';
 
 export const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
   { value: 'auto', label: '自动检测' },
@@ -8,6 +8,7 @@ export const LANGUAGE_OPTIONS: { value: AsrLanguage; label: string }[] = [
 
 export const ASR_PROVIDER_OPTIONS: { value: AsrProvider; label: string }[] = [
   { value: 'wsl_asr', label: 'WSL 局域网' },
+  { value: 'moss_asr', label: 'MOSS' },
   { value: 'mimo', label: 'MiMo 云端' },
   { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）' },
 ];
@@ -128,4 +129,20 @@ export function formatTimestamp(d: Date): string {
 export function relativePathToZipEntry(relativePath: string): string {
   const noExt = relativePath.replace(/\.[^./\\]+$/, '');
   return `${noExt}.txt`;
+}
+
+export function preferredTranscriptionText(record: TranscriptionRecord): string {
+  return record.formatted_text.trim() || record.text.trim();
+}
+
+export function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }

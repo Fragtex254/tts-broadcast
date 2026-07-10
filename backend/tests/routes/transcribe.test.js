@@ -5,7 +5,12 @@ jest.mock('../../src/services/asr', () => ({
   getAsrConfig: jest.fn().mockReturnValue({
     provider: 'mimo',
     qwenModel: 'Qwen/Qwen3-ASR-1.7B',
-    wslModel: 'qwen3-asr-1.7b'
+    wslModel: 'qwen3-asr-1.7b',
+    mossModel: ''
+  }),
+  fetchAsrModels: jest.fn().mockResolvedValue({
+    models: [{ id: 'moss-asr-large' }],
+    resolvedUrl: 'http://192.168.31.137:18080/v1/models'
   }),
   transcribeMedia: jest.fn().mockResolvedValue({
     text: '转录文本',
@@ -51,7 +56,12 @@ describe('转录 API', () => {
     asr.getAsrConfig.mockReturnValue({
       provider: 'mimo',
       qwenModel: 'Qwen/Qwen3-ASR-1.7B',
-      wslModel: 'qwen3-asr-1.7b'
+      wslModel: 'qwen3-asr-1.7b',
+      mossModel: ''
+    });
+    asr.fetchAsrModels.mockResolvedValue({
+      models: [{ id: 'moss-asr-large' }],
+      resolvedUrl: 'http://192.168.31.137:18080/v1/models'
     });
     asr.transcribeMedia.mockResolvedValue({
       text: '转录文本',
@@ -123,6 +133,57 @@ describe('转录 API', () => {
       wslModel: 'qwen3-asr-0.6b',
       context: '包青天, 福尔摩斯'
     }));
+  });
+
+  test('POST /api/transcribe 透传 MOSS 模型与 context 并写入元数据', async () => {
+    asr.getAsrConfig.mockReturnValue({
+      provider: 'moss_asr',
+      qwenModel: 'Qwen/Qwen3-ASR-1.7B',
+      wslModel: 'qwen3-asr-1.7b',
+      mossModel: ''
+    });
+
+    const res = await request(app)
+      .post('/api/transcribe')
+      .field('language', 'zh')
+      .field('provider', 'moss_asr')
+      .field('asrModel', 'moss-asr-large')
+      .field('context', '术语A, 术语B')
+      .attach('media', Buffer.from('fake-wav'), 'sample.wav');
+
+    expect(res.status).toBe(200);
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'zh',
+      provider: 'moss_asr',
+      asrModel: 'moss-asr-large',
+      context: '术语A, 术语B'
+    }));
+    expect(res.body.transcriptionResult).toMatchObject({
+      provider: 'moss_asr',
+      model: 'moss-asr-large',
+      context: '术语A, 术语B'
+    });
+  });
+
+  test('POST /api/transcribe/models 探测 ASR 模型列表', async () => {
+    const res = await request(app)
+      .post('/api/transcribe/models')
+      .send({
+        provider: 'moss_asr',
+        baseUrl: 'http://192.168.31.137:18080/v1',
+        apiKey: 'local-key'
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      models: [{ id: 'moss-asr-large' }],
+      resolvedUrl: 'http://192.168.31.137:18080/v1/models'
+    });
+    expect(asr.fetchAsrModels).toHaveBeenCalledWith({
+      provider: 'moss_asr',
+      baseUrl: 'http://192.168.31.137:18080/v1',
+      apiKey: 'local-key'
+    });
   });
 
   test('POST /api/transcribe 支持超过 50MB 的长音频上传', async () => {
@@ -296,7 +357,8 @@ describe('批量转录 API', () => {
     asr.getAsrConfig.mockReturnValue({
       provider: 'mimo',
       qwenModel: 'Qwen/Qwen3-ASR-1.7B',
-      wslModel: 'qwen3-asr-1.7b'
+      wslModel: 'qwen3-asr-1.7b',
+      mossModel: ''
     });
     sseManager.getTaskConnectionCount.mockReturnValue(1);
   });

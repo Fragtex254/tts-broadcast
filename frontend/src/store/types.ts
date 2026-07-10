@@ -61,14 +61,17 @@ export interface TodayItem {
 
 /** 应用设置 */
 export type LlmApiFormat = 'openai' | 'anthropic';
-export type AsrProvider = 'mimo' | 'qwen_mlx' | 'wsl_asr';
+export type AsrProvider = 'mimo' | 'qwen_mlx' | 'wsl_asr' | 'moss_asr';
 export type UiFontPreset = 'modern' | 'system' | 'editorial';
 export type UiFontScale = 'compact' | 'comfortable' | 'large' | 'extra_large';
 
-export interface LlmModelOption {
+export interface ModelOption {
   id: string;
   owned_by?: string;
 }
+
+export type LlmModelOption = ModelOption;
+export type AsrModelOption = ModelOption;
 
 export interface Settings {
   mimo_api_key: string;
@@ -87,6 +90,9 @@ export interface Settings {
   wsl_asr_base_url: string;
   wsl_asr_model: string;
   wsl_asr_api_key: string;
+  moss_asr_base_url: string;
+  moss_asr_model: string;
+  moss_asr_api_key: string;
   default_voice: string;
   ui_font_preset: UiFontPreset;
   ui_font_scale: UiFontScale;
@@ -144,6 +150,7 @@ export type AsrLanguage = 'auto' | 'zh' | 'en';
 
 export interface TranscribeOptions {
   wslModel?: string;
+  asrModel?: string;
   context?: string;
 }
 
@@ -266,6 +273,7 @@ export interface AppState {
 
   voiceConfig: VoiceConfig;
   updateVoiceConfig: (config: Partial<VoiceConfig>) => void;
+  syncVoiceConfig: (broadcastId: number, config: VoiceConfig) => Promise<void>;
 
   settings: Settings;
   isLoadingSettings: boolean;
@@ -346,6 +354,11 @@ export interface AppState {
     apiKey?: string;
     apiFormat?: LlmApiFormat;
   }) => Promise<{ models: LlmModelOption[]; resolvedUrl?: string }>;
+  fetchAsrModels: (data: {
+    provider: AsrProvider;
+    baseUrl?: string;
+    apiKey?: string;
+  }) => Promise<{ models: AsrModelOption[]; resolvedUrl?: string }>;
 
   fetchSchedules: () => Promise<void>;
 

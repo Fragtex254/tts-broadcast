@@ -9,7 +9,8 @@ import useStore from './store'
 const ScriptEditor = lazy(() => import('./pages/ScriptEditor').then(m => ({ default: m.ScriptEditor })))
 const VoicePresets = lazy(() => import('./pages/VoicePresets').then(m => ({ default: m.VoicePresets })))
 const Transcribe = lazy(() => import('./pages/Transcribe').then(m => ({ default: m.Transcribe })))
-const History = lazy(() => import('./pages/History').then(m => ({ default: m.History })))
+const ContentLibrary = lazy(() => import('./pages/ContentLibrary').then(m => ({ default: m.ContentLibrary })))
+const Automation = lazy(() => import('./pages/Automation').then(m => ({ default: m.Automation })))
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })))
 
@@ -62,7 +63,8 @@ function App() {
               <Route path="/editor" element={<ScriptEditor />} />
               <Route path="/voice-presets" element={<VoicePresets />} />
               <Route path="/transcribe" element={<Transcribe />} />
-              <Route path="/history" element={<History />} />
+              <Route path="/history" element={<ContentLibrary />} />
+              <Route path="/automation" element={<Automation />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

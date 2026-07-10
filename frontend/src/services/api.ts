@@ -1,5 +1,5 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
-import type { NewsItem, Settings, VoiceConfig } from '../store/types';
+import type { AsrProvider, NewsItem, Settings, VoiceConfig } from '../store/types';
 import { createScopedLogger, toLogError } from './logger';
 
 const logger = createScopedLogger('api-client');
@@ -227,6 +227,8 @@ export const transcribeApi = {
     api.get('/transcribe/stats'),
   deleteResult: (id: number) =>
     api.delete(`/transcribe/results/${id}`),
+  fetchModels: (data: { provider: AsrProvider; baseUrl?: string; apiKey?: string }) =>
+    api.post('/transcribe/models', data),
 };
 
 export type { NewsItem, Settings };

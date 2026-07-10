@@ -6,6 +6,7 @@ import {
   getErrorMessage,
   getRelativePath,
   isSupportedMedia,
+  preferredTranscriptionText,
   relativePathToTxtName,
   relativePathToZipEntry,
   sanitizeFileName,
@@ -54,5 +55,27 @@ describe('transcribeUtils', () => {
 
   test('formatTimestamp 输出稳定时间戳', () => {
     expect(formatTimestamp(new Date(2026, 6, 9, 8, 5))).toBe('20260709_0805');
+  });
+
+  test('转录文稿优先使用已排版文本', () => {
+    const record = {
+      id: 1,
+      file_name: 'demo.mp3',
+      relative_path: 'demo.mp3',
+      text: ' 原始文本 ',
+      formatted_text: ' 排版文本 ',
+      language: 'auto',
+      provider: 'mimo',
+      model: 'mimo-v2.5-asr',
+      context: '',
+      task_id: 'task-1',
+      file_size_bytes: 0,
+      audio_duration_seconds: 0,
+      processing_seconds: 0,
+      created_at: '2026-07-10T00:00:00.000Z',
+      updated_at: '2026-07-10T00:00:00.000Z',
+    } satisfies Parameters<typeof preferredTranscriptionText>[0];
+    expect(preferredTranscriptionText(record)).toBe('排版文本');
+    expect(preferredTranscriptionText({ ...record, formatted_text: '  ' })).toBe('原始文本');
   });
 });

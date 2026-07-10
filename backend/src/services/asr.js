@@ -3,6 +3,8 @@ const { fileToAsrDataUrls } = require('./media');
 const { postChatCompletions } = require('./mimoApiClient');
 const qwenAsr = require('./qwenAsr');
 const wslAsr = require('./wslAsr');
+const mossAsr = require('./mossAsr');
+const asrModels = require('./asrModels');
 const db = require('../db');
 
 const ASR_MODEL = 'mimo-v2.5-asr';
@@ -15,7 +17,7 @@ const QWEN_CHUNK_OPTIONS = {
   tooLargeMessage: '音频内容过大，转换后超过 Qwen 本地 ASR 单片限制'
 };
 const SUPPORTED_LANGUAGES = new Set(['auto', 'zh', 'en']);
-const SUPPORTED_ASR_PROVIDERS = new Set(['mimo', 'qwen_mlx', 'wsl_asr']);
+const SUPPORTED_ASR_PROVIDERS = new Set(['mimo', 'qwen_mlx', 'wsl_asr', 'moss_asr']);
 const DEFAULT_ASR_SETTINGS = {
   asr_provider: 'wsl_asr',
   qwen_asr_base_url: 'http://localhost:8765/v1',
@@ -23,7 +25,10 @@ const DEFAULT_ASR_SETTINGS = {
   qwen_asr_api_key: '',
   wsl_asr_base_url: 'http://192.168.31.137:18080/v1',
   wsl_asr_model: 'qwen3-asr-1.7b',
-  wsl_asr_api_key: ''
+  wsl_asr_api_key: '',
+  moss_asr_base_url: 'http://192.168.31.137:18080/v1',
+  moss_asr_model: '',
+  moss_asr_api_key: ''
 };
 
 function getSettingValue(key, fallback) {
@@ -46,7 +51,10 @@ function getAsrConfig(providerOverride) {
     qwenApiKey: getSettingValue('qwen_asr_api_key', DEFAULT_ASR_SETTINGS.qwen_asr_api_key),
     wslBaseUrl: getSettingValue('wsl_asr_base_url', DEFAULT_ASR_SETTINGS.wsl_asr_base_url),
     wslModel: getSettingValue('wsl_asr_model', DEFAULT_ASR_SETTINGS.wsl_asr_model),
-    wslApiKey: getSettingValue('wsl_asr_api_key', DEFAULT_ASR_SETTINGS.wsl_asr_api_key)
+    wslApiKey: getSettingValue('wsl_asr_api_key', DEFAULT_ASR_SETTINGS.wsl_asr_api_key),
+    mossBaseUrl: getSettingValue('moss_asr_base_url', DEFAULT_ASR_SETTINGS.moss_asr_base_url),
+    mossModel: getSettingValue('moss_asr_model', DEFAULT_ASR_SETTINGS.moss_asr_model),
+    mossApiKey: getSettingValue('moss_asr_api_key', DEFAULT_ASR_SETTINGS.moss_asr_api_key)
   };
 }
 
@@ -87,11 +95,12 @@ function mergeUsage(usages) {
  * @param {string} [params.language='auto'] - auto/zh/en
  * @param {string} [params.provider] - mimo/qwen_mlx/wsl_asr
  * @param {string} [params.wslModel] - WSL ASR 模型 ID
+ * @param {string} [params.asrModel] - 通用 ASR 模型 ID
  * @param {string} [params.context] - WSL ASR 上下文提示词
  * @param {Function} [params.onProgress] - 转录进度回调
  * @returns {Promise<{text: string, usage: Object|null}>}
  */
-async function transcribeMedia({ file, language = 'auto', provider, wslModel, context, onProgress }) {
+async function transcribeMedia({ file, language = 'auto', provider, wslModel, asrModel, context, onProgress }) {
   if (!SUPPORTED_LANGUAGES.has(language)) {
     throw new Error('语言参数无效，请选择自动、中文或英文');
   }
@@ -104,6 +113,18 @@ async function transcribeMedia({ file, language = 'auto', provider, wslModel, co
       baseUrl: config.wslBaseUrl,
       model: typeof wslModel === 'string' && wslModel.trim() ? wslModel.trim() : config.wslModel,
       apiKey: config.wslApiKey,
+      context,
+      onProgress
+    });
+  }
+
+  if (config.provider === 'moss_asr') {
+    return mossAsr.transcribeFile({
+      file,
+      language,
+      baseUrl: config.mossBaseUrl,
+      model: typeof asrModel === 'string' && asrModel.trim() ? asrModel.trim() : config.mossModel,
+      apiKey: config.mossApiKey,
       context,
       onProgress
     });
@@ -174,4 +195,30 @@ async function transcribeMedia({ file, language = 'auto', provider, wslModel, co
   return { text: texts.filter(Boolean).join('\n'), usage: mergeUsage(usages) };
 }
 
-module.exports = { DEFAULT_ASR_SETTINGS, getAsrConfig, transcribeMedia };
+/**
+ * 探测当前 ASR provider 的模型列表。
+ * @param {Object} params
+ * @param {string} params.provider - ASR provider
+ * @param {string} [params.baseUrl] - 临时覆盖 Base URL
+ * @param {string} [params.apiKey] - 临时覆盖 API Key
+ * @returns {Promise<{models: Array, resolvedUrl: string}>}
+ */
+async function fetchAsrModels({ provider = 'moss_asr', baseUrl, apiKey } = {}) {
+  const config = getAsrConfig(provider);
+  if (config.provider === 'mimo') {
+    throw new Error('MiMo 云端 ASR 暂不支持模型列表发现');
+  }
+
+  const providerConfig = {
+    qwen_mlx: { baseUrl: config.qwenBaseUrl, apiKey: config.qwenApiKey },
+    wsl_asr: { baseUrl: config.wslBaseUrl, apiKey: config.wslApiKey },
+    moss_asr: { baseUrl: config.mossBaseUrl, apiKey: config.mossApiKey },
+  }[config.provider];
+
+  return asrModels.fetchAsrModelsForConfig({
+    baseUrl: typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : providerConfig.baseUrl,
+    apiKey: typeof apiKey === 'string' ? apiKey : providerConfig.apiKey,
+  });
+}
+
+module.exports = { DEFAULT_ASR_SETTINGS, fetchAsrModels, getAsrConfig, transcribeMedia };

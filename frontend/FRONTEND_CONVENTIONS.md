@@ -43,13 +43,15 @@ frontend/src/
 │   ├── ScriptEditor.tsx
 │   ├── VoicePresets.tsx
 │   ├── Transcribe.tsx
-│   ├── History.tsx
+│   ├── ContentLibrary.tsx
+│   ├── Automation.tsx
 │   ├── Settings.tsx
 │   ├── settingsDraft.ts            # Settings 页纯逻辑 helper（需配测试）
 │   └── transcribeUtils.ts          # Transcribe 页纯逻辑 helper（需配测试）
 ├── components/
 │   ├── ModalShell.tsx             # 统一二级界面/弹窗/全屏编辑面板外壳
 │   ├── Layout/                 # 布局组件（Sidebar, Header）
+│   ├── Library/                # 内容库子面板（播报、转录稿）
 │   ├── Dashboard/              # Dashboard 子组件（含统一音频播放条 AudioPlaybackBar）
 │   └── Transcribe/             # 转录页子组件（统计、Provider 控件、历史结果查看、导入、下载、删除）
 ├── hooks/                       # 可复用 hooks（useDebounce, useSSE）
