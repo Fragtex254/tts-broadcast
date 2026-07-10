@@ -17,18 +17,17 @@ const QWEN_CHUNK_OPTIONS = {
   tooLargeMessage: '音频内容过大，转换后超过 Qwen 本地 ASR 单片限制'
 };
 const SUPPORTED_LANGUAGES = new Set(['auto', 'zh', 'en']);
-const SUPPORTED_ASR_PROVIDERS = new Set(['mimo', 'qwen_mlx', 'wsl_asr', 'moss_asr']);
+const SUPPORTED_ASR_PROVIDERS = new Set(['mimo', 'qwen_mlx', 'wsl_asr']);
+const SUPPORTED_WSL_ENGINES = new Set(['qwen', 'moss']);
 const DEFAULT_ASR_SETTINGS = {
   asr_provider: 'wsl_asr',
   qwen_asr_base_url: 'http://localhost:8765/v1',
   qwen_asr_model: 'Qwen/Qwen3-ASR-1.7B',
   qwen_asr_api_key: '',
   wsl_asr_base_url: 'http://192.168.31.137:18080/v1',
+  wsl_asr_engine: 'qwen',
   wsl_asr_model: 'qwen3-asr-1.7b',
-  wsl_asr_api_key: '',
-  moss_asr_base_url: 'http://192.168.31.137:18080/v1',
-  moss_asr_model: '',
-  moss_asr_api_key: ''
+  wsl_asr_api_key: ''
 };
 
 function getSettingValue(key, fallback) {
@@ -42,19 +41,30 @@ function getSettingValue(key, fallback) {
   }
 }
 
-function getAsrConfig(providerOverride) {
-  const provider = providerOverride || getSettingValue('asr_provider', DEFAULT_ASR_SETTINGS.asr_provider);
+function getAsrConfig(providerOverride, engineOverride) {
+  const requestedProvider = providerOverride || getSettingValue('asr_provider', DEFAULT_ASR_SETTINGS.asr_provider);
+  const isLegacyMossProvider = requestedProvider === 'moss_asr';
+  const provider = isLegacyMossProvider
+    ? 'wsl_asr'
+    : SUPPORTED_ASR_PROVIDERS.has(requestedProvider)
+      ? requestedProvider
+      : DEFAULT_ASR_SETTINGS.asr_provider;
+  const configuredWslEngine = getSettingValue('wsl_asr_engine', DEFAULT_ASR_SETTINGS.wsl_asr_engine);
+  const requestedWslEngine = isLegacyMossProvider ? 'moss' : engineOverride;
+  const wslEngine = SUPPORTED_WSL_ENGINES.has(requestedWslEngine)
+    ? requestedWslEngine
+    : SUPPORTED_WSL_ENGINES.has(configuredWslEngine)
+      ? configuredWslEngine
+      : DEFAULT_ASR_SETTINGS.wsl_asr_engine;
   return {
-    provider: SUPPORTED_ASR_PROVIDERS.has(provider) ? provider : DEFAULT_ASR_SETTINGS.asr_provider,
+    provider,
     qwenBaseUrl: getSettingValue('qwen_asr_base_url', DEFAULT_ASR_SETTINGS.qwen_asr_base_url),
     qwenModel: getSettingValue('qwen_asr_model', DEFAULT_ASR_SETTINGS.qwen_asr_model),
     qwenApiKey: getSettingValue('qwen_asr_api_key', DEFAULT_ASR_SETTINGS.qwen_asr_api_key),
     wslBaseUrl: getSettingValue('wsl_asr_base_url', DEFAULT_ASR_SETTINGS.wsl_asr_base_url),
+    wslEngine,
     wslModel: getSettingValue('wsl_asr_model', DEFAULT_ASR_SETTINGS.wsl_asr_model),
-    wslApiKey: getSettingValue('wsl_asr_api_key', DEFAULT_ASR_SETTINGS.wsl_asr_api_key),
-    mossBaseUrl: getSettingValue('moss_asr_base_url', DEFAULT_ASR_SETTINGS.moss_asr_base_url),
-    mossModel: getSettingValue('moss_asr_model', DEFAULT_ASR_SETTINGS.moss_asr_model),
-    mossApiKey: getSettingValue('moss_asr_api_key', DEFAULT_ASR_SETTINGS.moss_asr_api_key)
+    wslApiKey: getSettingValue('wsl_asr_api_key', DEFAULT_ASR_SETTINGS.wsl_asr_api_key)
   };
 }
 
@@ -93,38 +103,33 @@ function mergeUsage(usages) {
  * @param {Object} params
  * @param {Object} params.file - multer 文件对象
  * @param {string} [params.language='auto'] - auto/zh/en
- * @param {string} [params.provider] - mimo/qwen_mlx/wsl_asr
- * @param {string} [params.wslModel] - WSL ASR 模型 ID
- * @param {string} [params.asrModel] - 通用 ASR 模型 ID
+ * @param {string} [params.provider] - mimo/qwen_mlx/wsl_asr（兼容旧 moss_asr）
+ * @param {string} [params.asrEngine] - WSL 引擎 qwen/moss
+ * @param {string} [params.wslModel] - 旧 WSL ASR 模型参数，保留兼容
+ * @param {string} [params.asrModel] - ASR 模型 ID
  * @param {string} [params.context] - WSL ASR 上下文提示词
  * @param {Function} [params.onProgress] - 转录进度回调
  * @returns {Promise<{text: string, usage: Object|null}>}
  */
-async function transcribeMedia({ file, language = 'auto', provider, wslModel, asrModel, context, onProgress }) {
+async function transcribeMedia({ file, language = 'auto', provider, asrEngine, wslModel, asrModel, context, onProgress }) {
   if (!SUPPORTED_LANGUAGES.has(language)) {
     throw new Error('语言参数无效，请选择自动、中文或英文');
   }
 
-  const config = getAsrConfig(provider);
+  const config = getAsrConfig(provider, asrEngine);
   if (config.provider === 'wsl_asr') {
-    return wslAsr.transcribeFile({
+    const requestedModel = typeof asrModel === 'string' && asrModel.trim()
+      ? asrModel.trim()
+      : typeof wslModel === 'string' && wslModel.trim()
+        ? wslModel.trim()
+        : config.wslModel;
+    const adapter = config.wslEngine === 'moss' ? mossAsr : wslAsr;
+    return adapter.transcribeFile({
       file,
       language,
       baseUrl: config.wslBaseUrl,
-      model: typeof wslModel === 'string' && wslModel.trim() ? wslModel.trim() : config.wslModel,
+      model: requestedModel,
       apiKey: config.wslApiKey,
-      context,
-      onProgress
-    });
-  }
-
-  if (config.provider === 'moss_asr') {
-    return mossAsr.transcribeFile({
-      file,
-      language,
-      baseUrl: config.mossBaseUrl,
-      model: typeof asrModel === 'string' && asrModel.trim() ? asrModel.trim() : config.mossModel,
-      apiKey: config.mossApiKey,
       context,
       onProgress
     });
@@ -203,8 +208,8 @@ async function transcribeMedia({ file, language = 'auto', provider, wslModel, as
  * @param {string} [params.apiKey] - 临时覆盖 API Key
  * @returns {Promise<{models: Array, resolvedUrl: string}>}
  */
-async function fetchAsrModels({ provider = 'moss_asr', baseUrl, apiKey } = {}) {
-  const config = getAsrConfig(provider);
+async function fetchAsrModels({ provider = 'wsl_asr', engine, baseUrl, apiKey } = {}) {
+  const config = getAsrConfig(provider, engine);
   if (config.provider === 'mimo') {
     throw new Error('MiMo 云端 ASR 暂不支持模型列表发现');
   }
@@ -212,13 +217,23 @@ async function fetchAsrModels({ provider = 'moss_asr', baseUrl, apiKey } = {}) {
   const providerConfig = {
     qwen_mlx: { baseUrl: config.qwenBaseUrl, apiKey: config.qwenApiKey },
     wsl_asr: { baseUrl: config.wslBaseUrl, apiKey: config.wslApiKey },
-    moss_asr: { baseUrl: config.mossBaseUrl, apiKey: config.mossApiKey },
   }[config.provider];
 
-  return asrModels.fetchAsrModelsForConfig({
+  const result = await asrModels.fetchAsrModelsForConfig({
     baseUrl: typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : providerConfig.baseUrl,
     apiKey: typeof apiKey === 'string' ? apiKey : providerConfig.apiKey,
   });
+  if (config.provider !== 'wsl_asr' || config.wslEngine !== 'moss') {
+    return result;
+  }
+  const mossModels = result.models.filter((model) => {
+    const identity = `${model.id || ''} ${model.owned_by || ''}`.toLowerCase();
+    return identity.includes('moss');
+  });
+  return {
+    ...result,
+    models: mossModels.length > 0 ? mossModels : result.models
+  };
 }
 
 module.exports = { DEFAULT_ASR_SETTINGS, fetchAsrModels, getAsrConfig, transcribeMedia };

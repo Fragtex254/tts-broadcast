@@ -61,7 +61,8 @@ export interface TodayItem {
 
 /** 应用设置 */
 export type LlmApiFormat = 'openai' | 'anthropic';
-export type AsrProvider = 'mimo' | 'qwen_mlx' | 'wsl_asr' | 'moss_asr';
+export type AsrProvider = 'mimo' | 'qwen_mlx' | 'wsl_asr';
+export type AsrEngine = 'qwen' | 'moss';
 export type UiFontPreset = 'modern' | 'system' | 'editorial';
 export type UiFontScale = 'compact' | 'comfortable' | 'large' | 'extra_large';
 
@@ -88,11 +89,9 @@ export interface Settings {
   qwen_asr_model: string;
   qwen_asr_api_key: string;
   wsl_asr_base_url: string;
+  wsl_asr_engine: AsrEngine;
   wsl_asr_model: string;
   wsl_asr_api_key: string;
-  moss_asr_base_url: string;
-  moss_asr_model: string;
-  moss_asr_api_key: string;
   default_voice: string;
   ui_font_preset: UiFontPreset;
   ui_font_scale: UiFontScale;
@@ -149,7 +148,7 @@ export interface BatchGenerateResult {
 export type AsrLanguage = 'auto' | 'zh' | 'en';
 
 export interface TranscribeOptions {
-  wslModel?: string;
+  asrEngine?: AsrEngine;
   asrModel?: string;
   context?: string;
 }
@@ -162,6 +161,7 @@ export interface TranscriptionRecord {
   formatted_text: string;
   language: AsrLanguage;
   provider: AsrProvider | '';
+  engine: AsrEngine | '';
   model: string;
   context: string;
   usage?: Record<string, unknown> | null;
@@ -356,6 +356,7 @@ export interface AppState {
   }) => Promise<{ models: LlmModelOption[]; resolvedUrl?: string }>;
   fetchAsrModels: (data: {
     provider: AsrProvider;
+    engine?: AsrEngine;
     baseUrl?: string;
     apiKey?: string;
   }) => Promise<{ models: AsrModelOption[]; resolvedUrl?: string }>;

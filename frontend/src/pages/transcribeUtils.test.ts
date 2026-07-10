@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   formatBytes,
   formatDuration,
+  formatAsrSource,
   formatTimestamp,
   getErrorMessage,
   getRelativePath,
@@ -45,6 +46,12 @@ describe('transcribeUtils', () => {
     expect(formatDuration(3660)).toBe('1 小时 1 分');
   });
 
+  test('ASR 来源按位置和引擎展示，不把 MOSS 当作独立服务', () => {
+    expect(formatAsrSource({ provider: 'wsl_asr', engine: 'moss' })).toBe('WSL 局域网 · MOSS');
+    expect(formatAsrSource({ provider: 'wsl_asr', engine: 'qwen' })).toBe('WSL 局域网 · Qwen3-ASR');
+    expect(formatAsrSource({ provider: 'mimo', engine: '' })).toBe('MiMo 云端');
+  });
+
   test('文件名和路径转换保持可下载', () => {
     expect(sanitizeFileName(' a/b:c?.mp3 ')).toBe('a_b_c_.mp3');
     expect(sanitizeFileName('   ')).toBe('转录结果');
@@ -66,6 +73,7 @@ describe('transcribeUtils', () => {
       formatted_text: ' 排版文本 ',
       language: 'auto',
       provider: 'mimo',
+      engine: '',
       model: 'mimo-v2.5-asr',
       context: '',
       task_id: 'task-1',

@@ -111,6 +111,7 @@ try {
       formatted_text TEXT DEFAULT '',
       language TEXT DEFAULT 'auto',
       provider TEXT DEFAULT '',
+      engine TEXT DEFAULT '',
       model TEXT DEFAULT '',
       context TEXT DEFAULT '',
       usage TEXT,
@@ -144,6 +145,15 @@ try {
 } catch {
   db.exec('ALTER TABLE transcription_results ADD COLUMN processing_seconds REAL DEFAULT 0');
 }
+
+// 迁移：记录 WSL 内部使用的 ASR 引擎，并归并旧 MOSS provider 历史。
+try {
+  db.prepare('SELECT engine FROM transcription_results LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE transcription_results ADD COLUMN engine TEXT DEFAULT ''");
+}
+db.prepare("UPDATE transcription_results SET provider = 'wsl_asr', engine = 'moss' WHERE provider = 'moss_asr'").run();
+db.prepare("UPDATE transcription_results SET engine = 'qwen' WHERE provider = 'wsl_asr' AND engine = ''").run();
 
 // 迁移：确保 API 限速账本表存在，用于外部模型队列跨进程重启保留近窗口用量。
 try {
@@ -212,11 +222,9 @@ const defaultSettings = {
   qwen_asr_model: 'Qwen/Qwen3-ASR-1.7B',
   qwen_asr_api_key: '',
   wsl_asr_base_url: 'http://192.168.31.137:18080/v1',
+  wsl_asr_engine: 'qwen',
   wsl_asr_model: 'qwen3-asr-1.7b',
   wsl_asr_api_key: '',
-  moss_asr_base_url: 'http://192.168.31.137:18080/v1',
-  moss_asr_model: '',
-  moss_asr_api_key: '',
   default_voice: '冰糖',
   ui_font_preset: 'modern',
   ui_font_scale: 'comfortable',
@@ -237,5 +245,26 @@ for (const [key, value] of Object.entries(defaultSettings)) {
 // 迁移：WSL ASR 接入后，将旧默认 MiMo 转录引擎切到 WSL ASR。
 db.prepare("UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'asr_provider' AND value = ?")
   .run(JSON.stringify('wsl_asr'), JSON.stringify('mimo'));
+
+// 迁移：旧 MOSS provider 归入 WSL 局域网连接，并复用原有连接参数。
+const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
+const writeSetting = db.prepare(`
+  INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+`);
+const storedAsrProvider = readSetting.get('asr_provider');
+if (storedAsrProvider?.value === JSON.stringify('moss_asr')) {
+  const migrateLegacyMossSetting = db.transaction(() => {
+    const legacyBaseUrl = readSetting.get('moss_asr_base_url')?.value ?? JSON.stringify(defaultSettings.wsl_asr_base_url);
+    const legacyModel = readSetting.get('moss_asr_model')?.value ?? JSON.stringify('');
+    const legacyApiKey = readSetting.get('moss_asr_api_key')?.value ?? JSON.stringify('');
+    writeSetting.run('asr_provider', JSON.stringify('wsl_asr'));
+    writeSetting.run('wsl_asr_engine', JSON.stringify('moss'));
+    writeSetting.run('wsl_asr_base_url', legacyBaseUrl);
+    writeSetting.run('wsl_asr_model', legacyModel);
+    writeSetting.run('wsl_asr_api_key', legacyApiKey);
+  });
+  migrateLegacyMossSetting();
+}
 
 module.exports = db;

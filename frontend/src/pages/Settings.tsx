@@ -17,8 +17,7 @@ const voiceOptions = [
 
 const asrProviderOptions: { value: AppSettings['asr_provider']; label: string; description: string }[] = [
   { value: 'mimo', label: 'MiMo 云端', description: '复用 TTS API Key，适合无需本地部署的场景' },
-  { value: 'wsl_asr', label: 'WSL 局域网', description: '连接 Windows/WSL 上的常驻 ASR 网关' },
-  { value: 'moss_asr', label: 'MOSS', description: '连接局域网 MOSS OpenAI 兼容 ASR 服务' },
+  { value: 'wsl_asr', label: 'WSL 局域网', description: '一套连接，可使用 Qwen 或 MOSS 识别引擎' },
   { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）', description: '连接 Mac 上的 mlx-qwen3-asr serve 服务' },
 ];
 
@@ -527,7 +526,7 @@ export const Settings: React.FC = () => {
                     <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">这里只维护各服务的连接参数；当前任务使用哪个服务，请在转录页选择</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {asrProviderOptions.map((option) => (
                       <button
                         key={option.value}
@@ -600,17 +599,29 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR 模型</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认识别引擎</label>
+                        <select
+                          value={formData.wsl_asr_engine}
+                          onChange={(e) => handleChange('wsl_asr_engine', e.target.value as AppSettings['wsl_asr_engine'])}
+                          onBlur={() => handleAutoSave('wsl_asr_engine')}
+                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                        >
+                          <option value="qwen">Qwen3-ASR</option>
+                          <option value="moss">MOSS</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认模型</label>
                         <input
                           type="text"
                           value={formData.wsl_asr_model}
                           onChange={(e) => handleChange('wsl_asr_model', e.target.value)}
                           onBlur={() => handleAutoSave('wsl_asr_model')}
-                          placeholder="qwen3-asr-1.7b"
+                          placeholder={formData.wsl_asr_engine === 'moss' ? '可在转录页从模型列表选择' : 'qwen3-asr-1.7b'}
                           className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
                         />
                       </div>
-                      <div className="md:col-span-2">
+                      <div>
                         <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR API Key（可选）</label>
                         <PasswordField
                           value={formData.wsl_asr_api_key}
@@ -620,46 +631,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
-                        默认使用 WSL job API，由服务端负责切片、排队和模型加载进度。
-                      </p>
-                    </div>
-                  )}
-
-                  {asrConfigTab === 'moss_asr' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
-                      <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">MOSS ASR Base URL</label>
-                        <input
-                          type="text"
-                          value={formData.moss_asr_base_url}
-                          onChange={(e) => handleChange('moss_asr_base_url', e.target.value)}
-                          onBlur={() => handleAutoSave('moss_asr_base_url')}
-                          placeholder="http://192.168.31.137:18080/v1"
-                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">MOSS ASR 默认模型</label>
-                        <input
-                          type="text"
-                          value={formData.moss_asr_model}
-                          onChange={(e) => handleChange('moss_asr_model', e.target.value)}
-                          onBlur={() => handleAutoSave('moss_asr_model')}
-                          placeholder="可留空，在转录页从模型列表选择"
-                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">MOSS ASR API Key（可选）</label>
-                        <PasswordField
-                          value={formData.moss_asr_api_key}
-                          onChange={(v) => handleChange('moss_asr_api_key', v)}
-                          onBlur={() => handleAutoSave('moss_asr_api_key')}
-                          placeholder="如果 MOSS 服务启用了 Bearer Token，在这里填写"
-                        />
-                      </div>
-                      <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
-                        转录页选择 MOSS 后会自动探测模型列表，并用所选模型调用 /audio/transcriptions。
+                        Qwen 使用 WSL job API；MOSS 使用同一地址下的 OpenAI-compatible 转录接口。协议差异由后端自动处理。
                       </p>
                     </div>
                   )}

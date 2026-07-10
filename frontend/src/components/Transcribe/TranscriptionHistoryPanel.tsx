@@ -1,5 +1,6 @@
 import React from 'react';
 import type { TranscriptionRecord } from '../../store';
+import { formatAsrSource } from '../../pages/transcribeUtils';
 
 interface TranscriptionHistoryPanelProps {
   records: TranscriptionRecord[];
@@ -136,7 +137,7 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
                       {record.relative_path || record.file_name}
                     </p>
                     <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mt-1">
-                      {formatRecordDate(record.created_at)} · {record.provider || 'unknown'} · {record.model || 'default'}
+                      {formatRecordDate(record.created_at)} · {formatAsrSource(record)} · {record.model || '默认模型'}
                     </p>
                   </div>
                   {record.formatted_text.trim() && (

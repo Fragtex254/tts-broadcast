@@ -98,10 +98,12 @@ function buildAsrProvider(req) {
 }
 
 function buildTranscribeOptions(req) {
+  const asrEngine = req.body.asrEngine;
   const wslModel = req.body.wslModel;
   const asrModel = req.body.asrModel;
   const context = req.body.context;
   return {
+    asrEngine: typeof asrEngine === 'string' && asrEngine.trim() ? asrEngine.trim() : undefined,
     wslModel: typeof wslModel === 'string' && wslModel.trim() ? wslModel.trim() : undefined,
     asrModel: typeof asrModel === 'string' && asrModel.trim() ? asrModel.trim() : undefined,
     context: typeof context === 'string' && context.trim() ? context.trim() : undefined
@@ -109,24 +111,22 @@ function buildTranscribeOptions(req) {
 }
 
 function resolveTranscribeMetadata({ provider, language, options }) {
-  const config = asr.getAsrConfig(provider);
+  const config = asr.getAsrConfig(provider, options.asrEngine);
   let model = 'mimo-v2.5-asr';
   if (config.provider === 'qwen_mlx') {
     model = config.qwenModel;
   }
   if (config.provider === 'wsl_asr') {
-    model = typeof options.wslModel === 'string' && options.wslModel.trim()
-      ? options.wslModel.trim()
-      : config.wslModel;
-  }
-  if (config.provider === 'moss_asr') {
     model = typeof options.asrModel === 'string' && options.asrModel.trim()
       ? options.asrModel.trim()
-      : config.mossModel;
+      : typeof options.wslModel === 'string' && options.wslModel.trim()
+        ? options.wslModel.trim()
+        : config.wslModel;
   }
   return {
     language: language || 'auto',
     provider: config.provider,
+    engine: config.provider === 'wsl_asr' ? config.wslEngine : '',
     model,
     context: options.context || ''
   };
@@ -257,8 +257,8 @@ router.post('/', (req, res) => {
  */
 router.post('/models', async (req, res) => {
   try {
-    const { provider, baseUrl, apiKey } = req.body || {};
-    const result = await asr.fetchAsrModels({ provider, baseUrl, apiKey });
+    const { provider, engine, baseUrl, apiKey } = req.body || {};
+    const result = await asr.fetchAsrModels({ provider, engine, baseUrl, apiKey });
     res.json(result);
   } catch (error) {
     res.status(400).json({ error: error.message || '获取 ASR 模型列表失败' });

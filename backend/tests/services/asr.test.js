@@ -142,7 +142,7 @@ describe('ASR 服务', () => {
     });
   });
 
-  test('选择 WSL ASR provider 时直接提交文件且不走本地切片', async () => {
+  test('选择 WSL Qwen 引擎时直接提交到 job API 且不走本地切片', async () => {
     const file = { originalname: 'wsl.wav', buffer: Buffer.from('a') };
     const onProgress = jest.fn();
 
@@ -150,7 +150,8 @@ describe('ASR 服务', () => {
       file,
       language: 'zh',
       provider: 'wsl_asr',
-      wslModel: 'qwen3-asr-0.6b',
+      asrEngine: 'qwen',
+      asrModel: 'qwen3-asr-0.6b',
       context: '包青天, 福尔摩斯',
       onProgress
     });
@@ -186,14 +187,15 @@ describe('ASR 服务', () => {
     expect(media.fileToAsrDataUrls).not.toHaveBeenCalled();
   });
 
-  test('选择 MOSS ASR provider 时直接提交文件并使用通用模型参数', async () => {
+  test('选择 WSL MOSS 引擎时使用同一局域网连接并调用 MOSS 适配器', async () => {
     const file = { originalname: 'moss.wav', buffer: Buffer.from('a') };
     const onProgress = jest.fn();
 
     const result = await asr.transcribeMedia({
       file,
       language: 'zh',
-      provider: 'moss_asr',
+      provider: 'wsl_asr',
+      asrEngine: 'moss',
       asrModel: 'moss-asr-large',
       context: '术语A, 术语B',
       onProgress
@@ -216,8 +218,8 @@ describe('ASR 服务', () => {
     });
   });
 
-  test('探测 MOSS ASR 模型列表时使用默认配置', async () => {
-    const result = await asr.fetchAsrModels({ provider: 'moss_asr' });
+  test('探测 WSL MOSS 引擎模型列表时使用共享 WSL 配置', async () => {
+    const result = await asr.fetchAsrModels({ provider: 'wsl_asr', engine: 'moss' });
 
     expect(result).toEqual({
       models: [{ id: 'moss-asr-large' }],
@@ -227,6 +229,40 @@ describe('ASR 服务', () => {
       baseUrl: 'http://192.168.31.137:18080/v1',
       apiKey: ''
     });
+  });
+
+  test('MOSS 引擎从共享 WSL 模型列表中过滤掉 Qwen 模型', async () => {
+    asrModels.fetchAsrModelsForConfig.mockResolvedValue({
+      models: [
+        { id: 'qwen3-asr-1.7b', owned_by: 'Qwen' },
+        { id: 'moss-transcribe-diarize-0.9b', owned_by: 'OpenMOSS-Team' }
+      ],
+      resolvedUrl: 'http://192.168.31.137:18080/v1/models'
+    });
+
+    const result = await asr.fetchAsrModels({ provider: 'wsl_asr', engine: 'moss' });
+
+    expect(result.models).toEqual([
+      { id: 'moss-transcribe-diarize-0.9b', owned_by: 'OpenMOSS-Team' }
+    ]);
+  });
+
+  test('旧 moss_asr provider 自动兼容为 WSL MOSS 引擎', async () => {
+    const file = { originalname: 'legacy-moss.wav', buffer: Buffer.from('a') };
+
+    await asr.transcribeMedia({
+      file,
+      language: 'zh',
+      provider: 'moss_asr',
+      asrModel: 'moss-asr-large'
+    });
+
+    expect(mossAsr.transcribeFile).toHaveBeenCalledWith(expect.objectContaining({
+      file,
+      baseUrl: 'http://192.168.31.137:18080/v1',
+      model: 'moss-asr-large'
+    }));
+    expect(wslAsr.transcribeFile).not.toHaveBeenCalled();
   });
 
   test('自动转录多个音频切片并按顺序合并文本', async () => {

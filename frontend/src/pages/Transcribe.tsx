@@ -6,6 +6,7 @@ import { TranscriptionResultModal } from '../components/Transcribe/Transcription
 import { TranscribeProviderControls } from '../components/Transcribe/TranscribeProviderControls';
 import useStore, {
   type AsrModelOption,
+  type AsrEngine,
   type AsrProvider,
   type AsrLanguage,
   type BatchTranscriptionItem,
@@ -72,6 +73,7 @@ export const Transcribe: React.FC = () => {
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
   const fetchAsrModels = useStore((s) => s.fetchAsrModels);
+  const wslDefaultRef = useRef({ engine: settings.wsl_asr_engine, model: settings.wsl_asr_model });
 
   const [mode, setMode] = useState<TranscribeMode>('single');
   const [file, setFile] = useState<File | null>(null);
@@ -79,6 +81,7 @@ export const Transcribe: React.FC = () => {
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [language, setLanguage] = useState<AsrLanguage>('auto');
   const [selectedAsrProvider, setSelectedAsrProvider] = useState<AsrProvider | null>(null);
+  const [selectedWslEngine, setSelectedWslEngine] = useState<AsrEngine | null>(null);
   const [selectedWslModel, setSelectedWslModel] = useState<string | null>(null);
   const [selectedMossModel, setSelectedMossModel] = useState<string | null>(null);
   const [asrContext, setAsrContext] = useState('');
@@ -91,43 +94,57 @@ export const Transcribe: React.FC = () => {
   const [resultModalTarget, setResultModalTarget] = useState<ResultModalTarget | null>(null);
 
   const asrProvider = selectedAsrProvider ?? settings.asr_provider ?? 'wsl_asr';
-  const wslModel = selectedWslModel ?? settings.wsl_asr_model ?? 'qwen3-asr-1.7b';
-  const mossModel = selectedMossModel ?? (settings.moss_asr_model || mossModelOptions[0]?.id || '');
+  const wslEngine = selectedWslEngine ?? settings.wsl_asr_engine ?? 'qwen';
+  const wslModel = (
+    selectedWslModel ?? (settings.wsl_asr_engine === 'qwen' ? settings.wsl_asr_model : '')
+  ) || 'qwen3-asr-1.7b';
+  const mossModel = (
+    selectedMossModel ?? (settings.wsl_asr_engine === 'moss' ? settings.wsl_asr_model : '')
+  ) || mossModelOptions[0]?.id || '';
+  const asrModel = wslEngine === 'moss' ? mossModel : wslModel;
   const transcribeOptions = asrProvider === 'wsl_asr'
-    ? { wslModel: wslModel || settings.wsl_asr_model || 'qwen3-asr-1.7b', context: asrContext }
-    : asrProvider === 'moss_asr'
-      ? { asrModel: mossModel, context: asrContext }
-      : undefined;
-  const isMossModelMissing = asrProvider === 'moss_asr' && !mossModel.trim();
+    ? { asrEngine: wslEngine, asrModel, context: asrContext }
+    : undefined;
+  const isMossModelMissing = asrProvider === 'wsl_asr' && wslEngine === 'moss' && !mossModel.trim();
+
+  useEffect(() => {
+    wslDefaultRef.current = { engine: settings.wsl_asr_engine, model: settings.wsl_asr_model };
+  }, [settings.wsl_asr_engine, settings.wsl_asr_model]);
 
   const loadMossModels = useCallback(async () => {
     setIsFetchingMossModels(true);
     setMossModelFetchResult(null);
     try {
       const result = await fetchAsrModels({
-        provider: 'moss_asr',
-        baseUrl: settings.moss_asr_base_url,
-        apiKey: settings.moss_asr_api_key,
+        provider: 'wsl_asr',
+        engine: 'moss',
+        baseUrl: settings.wsl_asr_base_url,
+        apiKey: settings.wsl_asr_api_key,
       });
       setMossModelOptions(result.models);
       setMossModelFetchResult({ resolvedUrl: result.resolvedUrl });
-      setSelectedMossModel((current) => current ?? (settings.moss_asr_model || result.models[0]?.id || null));
+      const configuredModel = wslDefaultRef.current.engine === 'moss'
+        && result.models.some((option) => option.id === wslDefaultRef.current.model)
+        ? wslDefaultRef.current.model
+        : '';
+      const nextModel = configuredModel || result.models[0]?.id || '';
+      setSelectedMossModel(nextModel || null);
     } catch (err) {
       setMossModelOptions([]);
       setMossModelFetchResult({ error: err instanceof Error ? err.message : '获取 MOSS 模型列表失败' });
     } finally {
       setIsFetchingMossModels(false);
     }
-  }, [fetchAsrModels, settings.moss_asr_api_key, settings.moss_asr_base_url, settings.moss_asr_model]);
+  }, [fetchAsrModels, settings.wsl_asr_api_key, settings.wsl_asr_base_url]);
 
   useEffect(() => {
-    if (asrProvider === 'moss_asr') {
+    if (asrProvider === 'wsl_asr' && wslEngine === 'moss') {
       const timer = window.setTimeout(() => {
         void loadMossModels();
       }, 0);
       return () => window.clearTimeout(timer);
     }
-  }, [asrProvider, loadMossModels]);
+  }, [asrProvider, loadMossModels, wslEngine]);
 
   const handleSelectedFiles = useCallback((files: File[]) => {
     const supported = files.filter(isSupportedMedia);
@@ -171,6 +188,31 @@ export const Transcribe: React.FC = () => {
       setError('已切换本次服务，但保存默认转录服务失败');
     });
   }, [updateSettings]);
+
+  const handleWslEngineChange = useCallback((engine: AsrEngine) => {
+    setSelectedWslEngine(engine);
+    setError(null);
+    if (engine === 'qwen') {
+      const model = selectedWslModel || 'qwen3-asr-1.7b';
+      setSelectedWslModel(model);
+      void updateSettings({ wsl_asr_engine: engine, wsl_asr_model: model }).catch(() => {
+        setError('已切换本次引擎，但保存默认 WSL 引擎失败');
+      });
+      return;
+    }
+    setSelectedMossModel(null);
+    void updateSettings({ wsl_asr_engine: engine, wsl_asr_model: '' }).catch(() => {
+      setError('已切换本次引擎，但保存默认 WSL 引擎失败');
+    });
+  }, [selectedWslModel, updateSettings]);
+
+  const handleAsrModelChange = useCallback((model: string) => {
+    if (wslEngine === 'moss') setSelectedMossModel(model);
+    else setSelectedWslModel(model);
+    void updateSettings({ wsl_asr_model: model }).catch(() => {
+      setError('已切换本次模型，但保存默认 WSL 模型失败');
+    });
+  }, [updateSettings, wslEngine]);
 
   const removeBatchFile = (index: number) => {
     const nextFiles = batchFiles.filter((_, fileIndex) => fileIndex !== index);
@@ -437,21 +479,20 @@ export const Transcribe: React.FC = () => {
                 <TranscribeProviderControls
                   language={language}
                   provider={asrProvider}
-                  wslModel={wslModel}
+                  wslEngine={wslEngine}
+                  asrModel={asrModel}
                   asrContext={asrContext}
-                  mossModel={mossModel}
                   mossModelOptions={mossModelOptions}
                   isFetchingMossModels={isFetchingMossModels}
                   mossModelFetchResult={mossModelFetchResult}
                   isDisabled={isTranscribing}
                   qwenBaseUrl={settings.qwen_asr_base_url}
                   wslBaseUrl={settings.wsl_asr_base_url}
-                  mossBaseUrl={settings.moss_asr_base_url}
                   onLanguageChange={setLanguage}
                   onProviderChange={handleProviderChange}
-                  onWslModelChange={setSelectedWslModel}
+                  onWslEngineChange={handleWslEngineChange}
+                  onAsrModelChange={handleAsrModelChange}
                   onAsrContextChange={setAsrContext}
-                  onMossModelChange={setSelectedMossModel}
                   onRefreshMossModels={loadMossModels}
                 >
                   <button
@@ -603,9 +644,9 @@ export const Transcribe: React.FC = () => {
                 <TranscribeProviderControls
                   language={language}
                   provider={asrProvider}
-                  wslModel={wslModel}
+                  wslEngine={wslEngine}
+                  asrModel={asrModel}
                   asrContext={asrContext}
-                  mossModel={mossModel}
                   mossModelOptions={mossModelOptions}
                   isFetchingMossModels={isFetchingMossModels}
                   mossModelFetchResult={mossModelFetchResult}
@@ -613,12 +654,11 @@ export const Transcribe: React.FC = () => {
                   isBatch
                   qwenBaseUrl={settings.qwen_asr_base_url}
                   wslBaseUrl={settings.wsl_asr_base_url}
-                  mossBaseUrl={settings.moss_asr_base_url}
                   onLanguageChange={setLanguage}
                   onProviderChange={handleProviderChange}
-                  onWslModelChange={setSelectedWslModel}
+                  onWslEngineChange={handleWslEngineChange}
+                  onAsrModelChange={handleAsrModelChange}
                   onAsrContextChange={setAsrContext}
-                  onMossModelChange={setSelectedMossModel}
                   onRefreshMossModels={loadMossModels}
                 >
                   <button

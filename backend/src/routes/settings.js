@@ -30,11 +30,22 @@ router.get('/', (req, res) => {
  */
 router.put('/', (req, res) => {
   try {
-    const updates = req.body;
+    const requestedUpdates = req.body;
 
     // 验证输入
-    if (!updates || typeof updates !== 'object' || Array.isArray(updates) || Object.keys(updates).length === 0) {
+    if (!requestedUpdates || typeof requestedUpdates !== 'object' || Array.isArray(requestedUpdates) || Object.keys(requestedUpdates).length === 0) {
       return res.status(400).json({ error: '请提供有效的设置对象' });
+    }
+    const updates = { ...requestedUpdates };
+    if (updates.asr_provider === 'moss_asr') {
+      updates.asr_provider = 'wsl_asr';
+      updates.wsl_asr_engine = 'moss';
+    }
+    if (updates.asr_provider && !['mimo', 'qwen_mlx', 'wsl_asr'].includes(updates.asr_provider)) {
+      return res.status(400).json({ error: 'ASR 服务位置无效' });
+    }
+    if (updates.wsl_asr_engine && !['qwen', 'moss'].includes(updates.wsl_asr_engine)) {
+      return res.status(400).json({ error: 'WSL ASR 引擎无效' });
     }
 
     const upsert = db.prepare(`
