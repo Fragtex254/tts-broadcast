@@ -148,10 +148,12 @@ export default MyComponent;
 
 | 路径 | 组件 | 说明 |
 |------|------|------|
-| `/` | `SourceCollection` | 信源收集（默认页） |
+| `/` | `SourceCollection` | 内容工作台（默认页） |
 | `/editor` | `ScriptEditor` | 口播稿编辑 |
 | `/transcribe` | `Transcribe` | 音视频上传转录 |
-| `/history` | `History` | 播报历史 |
+| `/history` | `ContentLibrary` | 内容库（播报 / 转录稿） |
+| `/automation` | `Automation` | 自动化任务 |
+| `/voice-presets` | `VoicePresets` | 音色库 |
 | `/settings` | `Settings` | 系统设置 |
 | `*` | `NotFound` | 404 兜底 |
 
@@ -164,6 +166,7 @@ export default MyComponent;
 5. 新增页面：在 `pages/` 创建组件 → 在 `App.tsx` 添加 `<Route>` → 在 `Sidebar` 添加导航项。
 6. 新增用户可访问路径时，确认 `NotFound` 兜底仍存在。
 7. 导航使用 `<NavLink>`（不是 `<Link>`），以支持 `isActive` 高亮。
+8. 顶级导航只展示工作台、内容库、音色库、自动化和设置；编辑器与转录页由任务入口进入，不在 Sidebar 重复展示。
 
 ### TypeScript
 

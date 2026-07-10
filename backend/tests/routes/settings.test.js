@@ -71,6 +71,25 @@ describe('设置 API', () => {
     expect(res.body.settings.default_voice).toBe('茉莉');
   });
 
+  test('PUT /api/settings - 旧 MOSS provider 自动归并为 WSL MOSS 引擎', async () => {
+    const res = await request(app)
+      .put('/api/settings')
+      .send({ asr_provider: 'moss_asr' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.settings.asr_provider).toBe('wsl_asr');
+    expect(res.body.settings.wsl_asr_engine).toBe('moss');
+  });
+
+  test('PUT /api/settings - 非法 WSL ASR 引擎返回 400', async () => {
+    const res = await request(app)
+      .put('/api/settings')
+      .send({ wsl_asr_engine: 'unknown' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('WSL ASR 引擎无效');
+  });
+
   test('POST /api/settings/test-key - 测试 API Key', async () => {
     jest.spyOn(mimo, 'testApiKey').mockResolvedValue(true);
 

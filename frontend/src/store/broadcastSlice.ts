@@ -49,7 +49,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
       try {
         const response = await broadcastApi.rewrite(data);
         const script = response.data.script;
-        set({ script, isRewriting: false });
+        set({ script, currentBroadcast: null, isRewriting: false });
         return script;
       } catch (error) {
         set({ isRewriting: false });

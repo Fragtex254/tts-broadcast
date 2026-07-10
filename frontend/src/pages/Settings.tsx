@@ -17,7 +17,7 @@ const voiceOptions = [
 
 const asrProviderOptions: { value: AppSettings['asr_provider']; label: string; description: string }[] = [
   { value: 'mimo', label: 'MiMo 云端', description: '复用 TTS API Key，适合无需本地部署的场景' },
-  { value: 'wsl_asr', label: 'WSL 局域网', description: '连接 Windows/WSL 上的常驻 ASR 网关' },
+  { value: 'wsl_asr', label: 'WSL 局域网', description: '一套连接，可使用 Qwen 或 MOSS 识别引擎' },
   { value: 'qwen_mlx', label: 'Qwen 本地（Mac MLX）', description: '连接 Mac 上的 mlx-qwen3-asr serve 服务' },
 ];
 
@@ -34,14 +34,6 @@ const fontScaleOptions: { value: AppSettings['ui_font_scale']; label: string; de
   { value: 'extra_large', label: '大字', description: '远看更舒服' },
 ];
 
-const cronExamples = [
-  { label: '每天早上 8:00', value: '0 8 * * *' },
-  { label: '每天中午 12:00', value: '0 12 * * *' },
-  { label: '每天下午 18:00', value: '0 18 * * *' },
-  { label: '工作日早上 9:00', value: '0 9 * * 1-5' },
-  { label: '每周一早上 10:00', value: '0 10 * * 1' },
-];
-
 export const Settings: React.FC = () => {
   const settings = useStore((s) => s.settings);
   const isLoadingSettings = useStore((s) => s.isLoadingSettings);
@@ -49,11 +41,6 @@ export const Settings: React.FC = () => {
   const updateSettings = useStore((s) => s.updateSettings);
   const testApiKey = useStore((s) => s.testApiKey);
   const fetchLlmModels = useStore((s) => s.fetchLlmModels);
-  const schedules = useStore((s) => s.schedules);
-  const fetchSchedules = useStore((s) => s.fetchSchedules);
-  const createSchedule = useStore((s) => s.createSchedule);
-  const deleteSchedule = useStore((s) => s.deleteSchedule);
-  const toggleSchedule = useStore((s) => s.toggleSchedule);
 
   const [formData, setFormData] = useState(settings);
   const [isSaving, setIsSaving] = useState(false);
@@ -65,26 +52,30 @@ export const Settings: React.FC = () => {
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [modelFetchResult, setModelFetchResult] = useState<{ error?: string; resolvedUrl?: string } | null>(null);
   const [apiFormatTouched, setApiFormatTouched] = useState(false);
+  const [asrConfigTab, setAsrConfigTab] = useState<AppSettings['asr_provider']>(settings.asr_provider);
+  const [settingsView, setSettingsView] = useState<'connections' | 'preferences'>('connections');
 
   const autoSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const formDataRef = useRef(formData);
   const dirtyFieldsRef = useRef(dirtyFields);
-
-  const [scheduleForm, setScheduleForm] = useState({ name: '', cron_expression: '', content_types: '' });
-  const [isCreatingSchedule, setIsCreatingSchedule] = useState(false);
-  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const hasSyncedAsrTab = useRef(false);
 
   const setDirtyFieldsState = useCallback((next: Set<keyof AppSettings>) => {
     dirtyFieldsRef.current = next;
     setDirtyFields(next);
   }, []);
 
-  useEffect(() => { fetchSettings(); fetchSchedules(); }, [fetchSettings, fetchSchedules]);
+  useEffect(() => { fetchSettings(); }, [fetchSettings]);
   useEffect(() => {
     if (dirtyFieldsRef.current.size > 0) return;
     formDataRef.current = settings;
     setFormData(settings);
   }, [settings]);
+  useEffect(() => {
+    if (isLoadingSettings || hasSyncedAsrTab.current) return;
+    setAsrConfigTab(settings.asr_provider);
+    hasSyncedAsrTab.current = true;
+  }, [isLoadingSettings, settings.asr_provider]);
 
   const handleChange = <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
     const nextFormData = { ...formDataRef.current, [field]: value };
@@ -212,25 +203,6 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleCreateSchedule = async () => {
-    if (!scheduleForm.name || !scheduleForm.cron_expression) { setScheduleError('请填写任务名称和执行时间'); return; }
-    setIsCreatingSchedule(true); setScheduleError(null);
-    try { await createSchedule(scheduleForm); setScheduleForm({ name: '', cron_expression: '', content_types: '' }); }
-    catch { setScheduleError('创建定时任务失败'); }
-    finally { setIsCreatingSchedule(false); }
-  };
-
-  const handleDeleteSchedule = async (id: number) => {
-    if (!window.confirm('确定要删除此定时任务吗？')) return;
-    try { await deleteSchedule(id); } catch (e) { logger.error({ err: toLogError(e), scheduleId: id }, '删除定时任务失败'); }
-  };
-
-  const handleToggleSchedule = async (id: number) => {
-    try { await toggleSchedule(id); } catch (e) { logger.error({ err: toLogError(e), scheduleId: id }, '切换任务状态失败'); }
-  };
-
-  const formatCronExpression = (cron: string) => cronExamples.find((e) => e.value === cron)?.label || cron;
-
   const SectionCard: React.FC<{
     dotColor: string;
     title: string;
@@ -251,7 +223,7 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header title="系统设置" subtitle="配置 TTS 播报系统参数" />
+      <Header title="设置" subtitle="管理服务连接、默认偏好与界面体验" />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto space-y-4">
@@ -267,6 +239,27 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && (
+            <nav aria-label="设置分类" className="grid grid-cols-2 gap-2 rounded-card border border-card-border bg-white/55 p-2 shadow-card">
+              <button
+                type="button"
+                onClick={() => setSettingsView('connections')}
+                className={`rounded-2xl px-4 py-3 text-left transition-all duration-150 ${settingsView === 'connections' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
+              >
+                <span className="block font-display text-[16px] font-medium text-ink">服务连接</span>
+                <span className="mt-1 block font-body text-[10px] text-ink-soft/60">LLM、TTS 与 ASR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettingsView('preferences')}
+                className={`rounded-2xl px-4 py-3 text-left transition-all duration-150 ${settingsView === 'preferences' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
+              >
+                <span className="block font-display text-[16px] font-medium text-ink">默认偏好</span>
+                <span className="mt-1 block font-body text-[10px] text-ink-soft/60">界面、音色与播报文案</span>
+              </button>
+            </nav>
+          )}
+
+          {!isLoadingSettings && settingsView === 'preferences' && (
             <SectionCard dotColor="bg-lilac" title="界面字体" index={0}>
               <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5">
                 <div className="space-y-4">
@@ -328,7 +321,7 @@ export const Settings: React.FC = () => {
             </SectionCard>
           )}
 
-          {!isLoadingSettings && (
+          {!isLoadingSettings && settingsView === 'connections' && (
             <SectionCard dotColor="bg-pink" title="API 配置" index={1}>
               <div className="space-y-5">
                 <div className="space-y-3">
@@ -529,8 +522,8 @@ export const Settings: React.FC = () => {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">ASR 转录引擎</label>
-                    <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">选择默认转录服务；转录页也可以临时切换</p>
+                    <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">ASR 服务连接</label>
+                    <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">这里只维护各服务的连接参数；当前任务使用哪个服务，请在转录页选择</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -538,9 +531,8 @@ export const Settings: React.FC = () => {
                       <button
                         key={option.value}
                         type="button"
-                        onClick={() => handleChange('asr_provider', option.value)}
-                        onBlur={() => handleAutoSave('asr_provider')}
-                        className={`text-left p-3.5 rounded-2xl border transition-all ${formData.asr_provider === option.value ? 'bg-lemon/70 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
+                        onClick={() => setAsrConfigTab(option.value)}
+                        className={`text-left p-3.5 rounded-2xl border transition-all ${asrConfigTab === option.value ? 'bg-lilac/35 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
                       >
                         <span className="block font-body text-[12px] font-medium text-ink">{option.label}</span>
                         <span className="block mt-1 font-body text-[10px] text-ink-soft/70 leading-relaxed">{option.description}</span>
@@ -548,7 +540,13 @@ export const Settings: React.FC = () => {
                     ))}
                   </div>
 
-                  {formData.asr_provider === 'qwen_mlx' && (
+                  {asrConfigTab === 'mimo' && (
+                    <div className="rounded-2xl border border-card-border bg-white/45 p-4 font-body text-[11px] leading-relaxed text-ink-soft/70 animate-fade-in">
+                      MiMo 云端转录复用上方的 TTS API Key，无需额外连接参数。
+                    </div>
+                  )}
+
+                  {asrConfigTab === 'qwen_mlx' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
                       <div>
                         <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR Base URL</label>
@@ -587,7 +585,7 @@ export const Settings: React.FC = () => {
                     </div>
                   )}
 
-                  {formData.asr_provider === 'wsl_asr' && (
+                  {asrConfigTab === 'wsl_asr' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
                       <div>
                         <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR Base URL</label>
@@ -601,17 +599,29 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR 模型</label>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认识别引擎</label>
+                        <select
+                          value={formData.wsl_asr_engine}
+                          onChange={(e) => handleChange('wsl_asr_engine', e.target.value as AppSettings['wsl_asr_engine'])}
+                          onBlur={() => handleAutoSave('wsl_asr_engine')}
+                          className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
+                        >
+                          <option value="qwen">Qwen3-ASR</option>
+                          <option value="moss">MOSS</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认模型</label>
                         <input
                           type="text"
                           value={formData.wsl_asr_model}
                           onChange={(e) => handleChange('wsl_asr_model', e.target.value)}
                           onBlur={() => handleAutoSave('wsl_asr_model')}
-                          placeholder="qwen3-asr-1.7b"
+                          placeholder={formData.wsl_asr_engine === 'moss' ? '可在转录页从模型列表选择' : 'qwen3-asr-1.7b'}
                           className="w-full px-4 py-2.5 bg-white/70 border border-card-border rounded-xl text-ink placeholder-ink-soft/30 focus:outline-none focus:border-ink/20 font-body text-[12px] transition-colors"
                         />
                       </div>
-                      <div className="md:col-span-2">
+                      <div>
                         <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR API Key（可选）</label>
                         <PasswordField
                           value={formData.wsl_asr_api_key}
@@ -621,7 +631,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
-                        默认使用 WSL job API，由服务端负责切片、排队和模型加载进度。
+                        Qwen 使用 WSL job API；MOSS 使用同一地址下的 OpenAI-compatible 转录接口。协议差异由后端自动处理。
                       </p>
                     </div>
                   )}
@@ -630,7 +640,7 @@ export const Settings: React.FC = () => {
             </SectionCard>
           )}
 
-          {!isLoadingSettings && (
+          {!isLoadingSettings && settingsView === 'preferences' && (
             <SectionCard dotColor="bg-blush" title="音色设置" index={2}>
               <div>
                 <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">默认音色</label>
@@ -642,12 +652,12 @@ export const Settings: React.FC = () => {
                 >
                   {voiceOptions.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
                 </select>
-                <p className="mt-2 font-body text-[11px] text-ink-soft/70">选择播报时使用的默认语音音色</p>
+                <p className="mt-2 font-body text-[11px] text-ink-soft/70">新建或导入稿件进入编辑器时会自动应用，仍可在当前稿件中更换</p>
               </div>
             </SectionCard>
           )}
 
-          {!isLoadingSettings && (
+          {!isLoadingSettings && settingsView === 'preferences' && (
             <SectionCard dotColor="bg-sage" title="播报设置" index={3}>
               <div className="space-y-4">
                 <div>
@@ -709,70 +719,6 @@ export const Settings: React.FC = () => {
             </div>
           )}
 
-          <SectionCard dotColor="bg-lemon" title="定时任务" index={4}>
-            <div className="bg-white/30 rounded-2xl p-4 mb-4 border border-card-border">
-              <h4 className="font-body text-[12px] font-medium text-ink mb-3">添加新任务</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">任务名称</label>
-                  <input type="text" value={scheduleForm.name} onChange={(e) => setScheduleForm((p) => ({ ...p, name: e.target.value }))} placeholder="例如：每日早报" className="w-full px-3 py-2 bg-white/70 border border-card-border rounded-xl text-ink text-[12px] font-body placeholder-ink-soft/30 focus:outline-none focus:border-ink/20" />
-                </div>
-                <div>
-                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">执行时间</label>
-                  <select value={scheduleForm.cron_expression} onChange={(e) => setScheduleForm((p) => ({ ...p, cron_expression: e.target.value }))} className="w-full px-3 py-2 bg-white/70 border border-card-border rounded-xl text-ink text-[12px] font-body focus:outline-none focus:border-ink/20 appearance-none cursor-pointer">
-                    <option value="">选择执行时间</option>
-                    {cronExamples.map((ex) => <option key={ex.value} value={ex.value}>{ex.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">内容类型（可选）</label>
-                  <input type="text" value={scheduleForm.content_types} onChange={(e) => setScheduleForm((p) => ({ ...p, content_types: e.target.value }))} placeholder="留空则使用默认" className="w-full px-3 py-2 bg-white/70 border border-card-border rounded-xl text-ink text-[12px] font-body placeholder-ink-soft/30 focus:outline-none focus:border-ink/20" />
-                </div>
-              </div>
-              {scheduleError && <p className="mt-2 font-body text-[11px] text-pink">{scheduleError}</p>}
-              <div className="mt-3 flex justify-end">
-                <button onClick={handleCreateSchedule} disabled={isCreatingSchedule} className="px-4 py-2 bg-lemon hover:brightness-105 disabled:opacity-40 text-ink text-[12px] font-body font-medium rounded-xl shadow-btn transition-all duration-150">
-                  {isCreatingSchedule ? '创建中...' : '添加任务'}
-                </button>
-              </div>
-            </div>
-
-            {schedules.length === 0 ? (
-              <div className="text-center py-8 animate-fade-in">
-                <p className="font-display italic text-[14px] text-ink-soft/30">暂无定时任务</p>
-                <p className="font-body text-[11px] text-ink-soft/20 mt-1">添加定时任务可自动生成播报</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {schedules.map((schedule, index) => (
-                  <div
-                    key={schedule.id}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${schedule.is_active ? 'bg-white/40 border-card-border' : 'bg-white/20 border-card-border opacity-50'}`}
-                    style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both` }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleToggleSchedule(schedule.id)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${schedule.is_active ? 'bg-sage' : 'bg-ink/10'}`}
-                      >
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${schedule.is_active ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-                      </button>
-                      <div>
-                        <p className="font-body text-[13px] font-medium text-ink">{schedule.name}</p>
-                        <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">{formatCronExpression(schedule.cron_expression)}</p>
-                        {schedule.last_run_at && (
-                          <p className="font-body text-[10px] text-ink-soft/30 mt-0.5">上次运行: {new Date(schedule.last_run_at).toLocaleString('zh-CN')}</p>
-                        )}
-                      </div>
-                    </div>
-                    <button onClick={() => handleDeleteSchedule(schedule.id)} className="p-1.5 text-ink-soft/30 hover:text-pink transition-colors rounded-lg" title="删除任务">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
         </div>
       </main>
     </div>

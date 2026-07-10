@@ -4,8 +4,13 @@ const fs = require('fs');
 jest.mock('../../src/services/asr', () => ({
   getAsrConfig: jest.fn().mockReturnValue({
     provider: 'mimo',
+    wslEngine: 'qwen',
     qwenModel: 'Qwen/Qwen3-ASR-1.7B',
     wslModel: 'qwen3-asr-1.7b'
+  }),
+  fetchAsrModels: jest.fn().mockResolvedValue({
+    models: [{ id: 'moss-asr-large' }],
+    resolvedUrl: 'http://192.168.31.137:18080/v1/models'
   }),
   transcribeMedia: jest.fn().mockResolvedValue({
     text: '转录文本',
@@ -50,8 +55,13 @@ describe('转录 API', () => {
     db.prepare('DELETE FROM transcription_results').run();
     asr.getAsrConfig.mockReturnValue({
       provider: 'mimo',
+      wslEngine: 'qwen',
       qwenModel: 'Qwen/Qwen3-ASR-1.7B',
       wslModel: 'qwen3-asr-1.7b'
+    });
+    asr.fetchAsrModels.mockResolvedValue({
+      models: [{ id: 'moss-asr-large' }],
+      resolvedUrl: 'http://192.168.31.137:18080/v1/models'
     });
     asr.transcribeMedia.mockResolvedValue({
       text: '转录文本',
@@ -75,6 +85,7 @@ describe('转录 API', () => {
         text: '转录文本',
         language: 'zh',
         provider: 'mimo',
+        engine: '',
         model: 'mimo-v2.5-asr',
         usage: { total_tokens: 12 }
       }
@@ -107,12 +118,19 @@ describe('转录 API', () => {
     }));
   });
 
-  test('POST /api/transcribe 透传 WSL 模型与 context', async () => {
+  test('POST /api/transcribe 透传 WSL 引擎、模型与 context', async () => {
+    asr.getAsrConfig.mockReturnValue({
+      provider: 'wsl_asr',
+      wslEngine: 'qwen',
+      qwenModel: 'Qwen/Qwen3-ASR-1.7B',
+      wslModel: 'qwen3-asr-1.7b'
+    });
     const res = await request(app)
       .post('/api/transcribe')
       .field('language', 'zh')
       .field('provider', 'wsl_asr')
-      .field('wslModel', 'qwen3-asr-0.6b')
+      .field('asrEngine', 'qwen')
+      .field('asrModel', 'qwen3-asr-0.6b')
       .field('context', '包青天, 福尔摩斯')
       .attach('media', Buffer.from('fake-wav'), 'sample.wav');
 
@@ -120,9 +138,71 @@ describe('转录 API', () => {
     expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       language: 'zh',
       provider: 'wsl_asr',
-      wslModel: 'qwen3-asr-0.6b',
+      asrEngine: 'qwen',
+      asrModel: 'qwen3-asr-0.6b',
       context: '包青天, 福尔摩斯'
     }));
+    expect(res.body.transcriptionResult).toMatchObject({
+      provider: 'wsl_asr',
+      engine: 'qwen',
+      model: 'qwen3-asr-0.6b'
+    });
+  });
+
+  test('POST /api/transcribe 将 MOSS 作为 WSL 引擎透传并写入元数据', async () => {
+    asr.getAsrConfig.mockReturnValue({
+      provider: 'wsl_asr',
+      wslEngine: 'moss',
+      qwenModel: 'Qwen/Qwen3-ASR-1.7B',
+      wslModel: ''
+    });
+
+    const res = await request(app)
+      .post('/api/transcribe')
+      .field('language', 'zh')
+      .field('provider', 'wsl_asr')
+      .field('asrEngine', 'moss')
+      .field('asrModel', 'moss-asr-large')
+      .field('context', '术语A, 术语B')
+      .attach('media', Buffer.from('fake-wav'), 'sample.wav');
+
+    expect(res.status).toBe(200);
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'zh',
+      provider: 'wsl_asr',
+      asrEngine: 'moss',
+      asrModel: 'moss-asr-large',
+      context: '术语A, 术语B'
+    }));
+    expect(res.body.transcriptionResult).toMatchObject({
+      provider: 'wsl_asr',
+      engine: 'moss',
+      model: 'moss-asr-large',
+      context: '术语A, 术语B'
+    });
+  });
+
+  test('POST /api/transcribe/models 探测 ASR 模型列表', async () => {
+    const res = await request(app)
+      .post('/api/transcribe/models')
+      .send({
+        provider: 'wsl_asr',
+        engine: 'moss',
+        baseUrl: 'http://192.168.31.137:18080/v1',
+        apiKey: 'local-key'
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      models: [{ id: 'moss-asr-large' }],
+      resolvedUrl: 'http://192.168.31.137:18080/v1/models'
+    });
+    expect(asr.fetchAsrModels).toHaveBeenCalledWith({
+      provider: 'wsl_asr',
+      engine: 'moss',
+      baseUrl: 'http://192.168.31.137:18080/v1',
+      apiKey: 'local-key'
+    });
   });
 
   test('POST /api/transcribe 支持超过 50MB 的长音频上传', async () => {
@@ -295,6 +375,7 @@ describe('批量转录 API', () => {
     db.prepare('DELETE FROM transcription_results').run();
     asr.getAsrConfig.mockReturnValue({
       provider: 'mimo',
+      wslEngine: 'qwen',
       qwenModel: 'Qwen/Qwen3-ASR-1.7B',
       wslModel: 'qwen3-asr-1.7b'
     });
@@ -346,14 +427,15 @@ describe('批量转录 API', () => {
     expect(db.prepare('SELECT COUNT(*) as count FROM transcription_results').get().count).toBe(2);
   });
 
-  test('POST /api/transcribe/batch 透传 WSL 模型与 context', async () => {
+  test('POST /api/transcribe/batch 透传 WSL 引擎、模型与 context', async () => {
     asr.transcribeMedia.mockResolvedValue({ text: '文本', usage: null });
 
     const res = await request(app)
       .post('/api/transcribe/batch')
       .field('language', 'zh')
       .field('provider', 'wsl_asr')
-      .field('wslModel', 'qwen3-asr-0.6b')
+      .field('asrEngine', 'qwen')
+      .field('asrModel', 'qwen3-asr-0.6b')
       .field('context', '术语A, 术语B')
       .field('taskId', 'batch-wsl-options')
       .attach('media', Buffer.from('fake-mp3'), 'a.mp3');
@@ -364,7 +446,8 @@ describe('批量转录 API', () => {
     expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
       language: 'zh',
       provider: 'wsl_asr',
-      wslModel: 'qwen3-asr-0.6b',
+      asrEngine: 'qwen',
+      asrModel: 'qwen3-asr-0.6b',
       context: '术语A, 术语B'
     }));
   });

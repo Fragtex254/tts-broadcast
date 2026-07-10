@@ -124,7 +124,7 @@ export const ScriptPreview: React.FC = () => {
           ) : (
             <div className="bg-white/40 rounded-2xl p-8 min-h-[16rem] flex items-center justify-center border border-card-border">
               <p className="font-body text-[12px] text-ink-soft/70">
-                请先获取今日资讯并点击「一键改写口播稿」
+                还没有稿件，请从工作台采集资讯或转录音视频素材
               </p>
             </div>
           )}

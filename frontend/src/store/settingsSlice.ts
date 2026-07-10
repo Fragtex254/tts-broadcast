@@ -1,4 +1,4 @@
-import { settingsApi } from '../services/api';
+import { settingsApi, transcribeApi } from '../services/api';
 import { getApiErrorMessage } from '../services/apiError';
 import { createScopedLogger, toLogError } from '../services/logger';
 import { safeParse, SettingsSchema } from '../services/schemas';
@@ -10,7 +10,7 @@ const logger = createScopedLogger('settings-slice');
 
 export function createSettingsSlice(set: StoreSet): Pick<
   AppState,
-  'settings' | 'isLoadingSettings' | 'fetchSettings' | 'updateSettings' | 'testApiKey' | 'fetchLlmModels'
+  'settings' | 'isLoadingSettings' | 'fetchSettings' | 'updateSettings' | 'testApiKey' | 'fetchLlmModels' | 'fetchAsrModels'
 > {
   return {
     settings: defaultSettings,
@@ -57,6 +57,16 @@ export function createSettingsSlice(set: StoreSet): Pick<
       } catch (error) {
         logger.error({ err: toLogError(error), apiFormat: data.apiFormat, hasApiKey: Boolean(data.apiKey) }, '获取 LLM 模型列表失败');
         throw new Error(getApiErrorMessage(error, '获取模型列表失败'), { cause: error });
+      }
+    },
+
+    fetchAsrModels: async (data) => {
+      try {
+        const response = await transcribeApi.fetchModels(data);
+        return response.data;
+      } catch (error) {
+        logger.error({ err: toLogError(error), provider: data.provider, hasApiKey: Boolean(data.apiKey) }, '获取 ASR 模型列表失败');
+        throw new Error(getApiErrorMessage(error, '获取 ASR 模型列表失败'), { cause: error });
       }
     },
   };

@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import useStore, { type VoicePreset } from '../../store';
-import { broadcastApi } from '../../services/api';
 import { useDebounce } from '../../hooks/useDebounce';
 import { hasSelectedVoice } from '../../store/voiceConfigModel';
 import type { VoiceConfig } from '../../store/types';
 import { ModalShell } from '../ModalShell';
-import { VoicePresetTab } from './VoicePresetTab';
+import { VoicePresetPicker } from './VoicePresetPicker';
+
+interface VoiceGeneratorProps {
+  onManagePresets: () => void;
+}
 
 type VoicePanelType = 'builtin' | 'preset';
 
@@ -69,17 +72,20 @@ function getVoiceName(voiceConfig: VoiceConfig, presets: VoicePreset[], selected
   return '未选择音色';
 }
 
-export const VoiceGenerator: React.FC = () => {
+export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets }) => {
   const currentBroadcast = useStore((s) => s.currentBroadcast);
   const settings = useStore((s) => s.settings);
   const voiceConfig = useStore((s) => s.voiceConfig);
   const presets = useStore((s) => s.presets);
   const fetchPresets = useStore((s) => s.fetchPresets);
   const updateVoiceConfig = useStore((s) => s.updateVoiceConfig);
+  const syncVoiceConfig = useStore((s) => s.syncVoiceConfig);
 
-  const initialPanelType = presets.length > 0 || voiceConfig.voiceType === 'clone' || voiceConfig.voiceType === 'design' ? 'preset' : 'builtin';
+  const [hadInitialVoice] = useState(() => hasSelectedVoice(voiceConfig));
+  const [hasUserSelectedVoice, setHasUserSelectedVoice] = useState(false);
+  const initialPanelType = voiceConfig.voiceType === 'clone' || voiceConfig.voiceType === 'design' ? 'preset' : 'builtin';
   const [panelType, setPanelType] = useState<VoicePanelType>(initialPanelType);
-  const [selectedVoice, setSelectedVoice] = useState(voiceConfig.voice || '');
+  const [selectedVoice, setSelectedVoice] = useState(voiceConfig.voice || settings.default_voice || '冰糖');
   const [voiceClone, setVoiceClone] = useState(voiceConfig.voiceClone || '');
   const [voiceDesign, setVoiceDesign] = useState(voiceConfig.voiceDesign || '');
   const [stylePrompt, setStylePrompt] = useState(voiceConfig.stylePrompt || '');
@@ -91,7 +97,7 @@ export const VoiceGenerator: React.FC = () => {
   const [emotion, setEmotion] = useState(typeof voiceConfig.emotion === 'string' ? voiceConfig.emotion : '');
   const [pitchRatio, setPitchRatio] = useState(voiceConfig.pitch?.pitch_ratio ?? 1.0);
   const [showFineControls, setShowFineControls] = useState(false);
-  const [isSelectorOpen, setIsSelectorOpen] = useState(() => !hasSelectedVoice(voiceConfig));
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [selectedPresetName, setSelectedPresetName] = useState('');
 
   const localVoiceConfig = useMemo<VoiceConfig | null>(() => {
@@ -123,19 +129,16 @@ export const VoiceGenerator: React.FC = () => {
   }, [localVoiceConfig, updateVoiceConfig]);
 
   useEffect(() => {
+    if (hadInitialVoice || hasUserSelectedVoice || !settings.default_voice) return;
+    const timer = window.setTimeout(() => setSelectedVoice(settings.default_voice), 0);
+    return () => window.clearTimeout(timer);
+  }, [hadInitialVoice, hasUserSelectedVoice, settings.default_voice]);
+
+  useEffect(() => {
     if (presets.length > 0) return;
     if (voiceConfig.voiceType !== 'design' && voiceConfig.voiceType !== 'clone') return;
     fetchPresets();
   }, [fetchPresets, presets.length, voiceConfig.voiceType]);
-
-  useEffect(() => {
-    if (!isSelectorOpen) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsSelectorOpen(false);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isSelectorOpen]);
 
   useEffect(() => {
     if (!isSelectorOpen) return undefined;
@@ -157,20 +160,10 @@ export const VoiceGenerator: React.FC = () => {
 
   const syncToBackend = useCallback(() => {
     if (!currentBroadcast || !localVoiceConfig) return;
-    broadcastApi.updateVoiceConfig(currentBroadcast.id, {
-      voiceType: localVoiceConfig.voiceType,
-      voice: localVoiceConfig.voiceType === 'preset' ? localVoiceConfig.voice : undefined,
-      voiceDesign: localVoiceConfig.voiceType === 'design' ? localVoiceConfig.voiceDesign : undefined,
-      voiceClone: localVoiceConfig.voiceType === 'clone' ? localVoiceConfig.voiceClone : undefined,
-      stylePrompt: localVoiceConfig.stylePrompt || undefined,
-      optimizeTextPreview: localVoiceConfig.voiceType === 'design' ? localVoiceConfig.optimizeTextPreview : undefined,
-      speed: localVoiceConfig.speed,
-      emotion: localVoiceConfig.emotion,
-      pitch: localVoiceConfig.pitch,
-    }).catch(() => {
+    syncVoiceConfig(currentBroadcast.id, localVoiceConfig).catch(() => {
       // 拦截器已记录网络错误，界面保留用户当前选择。
     });
-  }, [currentBroadcast, localVoiceConfig]);
+  }, [currentBroadcast, localVoiceConfig, syncVoiceConfig]);
 
   const debouncedSyncToBackend = useDebounce(syncToBackend, 800);
 
@@ -180,6 +173,7 @@ export const VoiceGenerator: React.FC = () => {
   }, [debouncedSyncToBackend, localVoiceConfig]);
 
   const selectBuiltinVoice = (voice: string) => {
+    setHasUserSelectedVoice(true);
     setPanelType('builtin');
     setActivePresetType('');
     setSelectedVoice(voice);
@@ -197,6 +191,7 @@ export const VoiceGenerator: React.FC = () => {
   };
 
   const handleApplyPreset = (preset: VoicePreset) => {
+    setHasUserSelectedVoice(true);
     setPanelType('preset');
     setSelectedVoice('');
     setSelectedPresetName(preset.name);
@@ -335,7 +330,7 @@ export const VoiceGenerator: React.FC = () => {
     <ModalShell
       isOpen={isSelectorOpen}
       title="选择音色"
-      subtitle="选择后才会用于切分和生成语音。当前没有显式选择时，系统不会自动套用默认音色。"
+      subtitle="这里只选择当前稿件的音色；创建、编辑和删除预设请前往音色库。"
       onClose={() => setIsSelectorOpen(false)}
       size="xl"
       accent="blush"
@@ -365,48 +360,52 @@ export const VoiceGenerator: React.FC = () => {
             renderBuiltinVoices()
           ) : (
             <div className="min-h-72 rounded-2xl border border-card-border bg-white/55 p-4">
-              <VoicePresetTab onApplyPreset={handleApplyPreset} />
+              <VoicePresetPicker
+                presets={presets}
+                selectedPresetName={selectedPresetName}
+                onSelect={handleApplyPreset}
+                onManage={() => {
+                  setIsSelectorOpen(false);
+                  onManagePresets();
+                }}
+              />
             </div>
           )}
-          {renderFineControls()}
     </ModalShell>
   );
   const currentVoiceName = getVoiceName(voiceConfig, presets, selectedPresetName);
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openVoiceSelector}
-        className={`fixed bottom-8 right-0 z-40 flex h-32 w-24 flex-col items-center justify-between rounded-l-xl border border-r-0 p-2.5 text-center text-ink shadow-card backdrop-blur-sm transition-all duration-200 hover:-translate-x-1 hover:brightness-105 active:translate-x-0 active:shadow-none sm:w-28 xl:w-32 ${
-          hasVoice ? 'border-card-border bg-white/90' : 'border-blush/45 bg-white/85'
-        }`}
+      <section
+        className="bg-white/80 backdrop-blur-sm rounded-card p-4 shadow-card border border-card-border"
         style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0s both' }}
-        title={hasVoice ? `当前音色：${currentVoiceName}` : '选择音色'}
       >
-        <span
-          className={`pointer-events-none absolute -left-1 top-2 h-[calc(100%-16px)] w-1 rounded-l-md ${
-            hasVoice ? 'bg-sage/25' : 'bg-blush/25'
-          }`}
-          aria-hidden="true"
-        />
-        <span
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors duration-200 sm:h-12 sm:w-12 ${
-            hasVoice ? 'border-sage/50 bg-sage/30' : 'border-blush/45 bg-blush/20'
-          }`}
-          aria-hidden="true"
-        >
-          <span className={`h-2.5 w-2.5 rounded-full ${hasVoice ? 'bg-sage' : 'bg-blush animate-breathe'}`} />
-        </span>
-        <span className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1.5">
-          <span className="font-body text-[12px] font-medium leading-tight text-ink-soft">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${hasVoice ? 'border-sage/50 bg-sage/30' : 'border-blush/45 bg-blush/20'}`} aria-hidden="true">
+              <span className={`h-2.5 w-2.5 rounded-full ${hasVoice ? 'bg-sage' : 'bg-blush animate-breathe'}`} />
+            </span>
+            <div className="min-w-0">
+              <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/60">当前音色</p>
+              <p className="truncate font-display text-[18px] font-medium text-ink">
+                {hasVoice ? currentVoiceName : '未选择'}
+              </p>
+              {!hadInitialVoice && hasVoice && (
+                <p className="font-body text-[10px] text-ink-soft/60">已应用默认音色，可随时更换</p>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={openVoiceSelector}
+            className="rounded-xl bg-blush px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0 active:shadow-none"
+          >
             {hasVoice ? '更换音色' : '选择音色'}
-          </span>
-          <span className="line-clamp-2 max-w-full break-words font-display text-[16px] font-medium leading-tight text-ink sm:text-[17px]">
-            {hasVoice ? currentVoiceName : '未选择'}
-          </span>
-        </span>
-      </button>
+          </button>
+        </div>
+        {renderFineControls()}
+      </section>
       {selector}
     </>
   );

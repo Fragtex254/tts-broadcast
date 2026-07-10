@@ -15,6 +15,7 @@ export const defaultSettings: Settings = {
   qwen_asr_model: 'Qwen/Qwen3-ASR-1.7B',
   qwen_asr_api_key: '',
   wsl_asr_base_url: 'http://192.168.31.137:18080/v1',
+  wsl_asr_engine: 'qwen',
   wsl_asr_model: 'qwen3-asr-1.7b',
   wsl_asr_api_key: '',
   default_voice: '冰糖',

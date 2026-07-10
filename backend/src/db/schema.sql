@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS transcription_results (
   formatted_text TEXT DEFAULT '',
   language TEXT DEFAULT 'auto',
   provider TEXT DEFAULT '',
+  engine TEXT DEFAULT '',
   model TEXT DEFAULT '',
   context TEXT DEFAULT '',
   usage TEXT,

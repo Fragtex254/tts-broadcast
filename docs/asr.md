@@ -204,7 +204,7 @@ for chunk in completion:
 
 ### 调用方式
 
-项目使用独立 ASR provider 调用转录服务，不经过 Anthropic SDK。默认 provider 是 MiMo 云端，也可以切换到 Mac 本地 Qwen/MLX 服务或 Windows/WSL 局域网 ASR 网关：
+项目按“服务位置 → 识别引擎 → 模型”调用转录服务，不经过 Anthropic SDK。默认服务位置是 Windows/WSL 局域网，也可以切换到 MiMo 云端或 Mac 本地 Qwen/MLX：
 
 ```
 前端页面
@@ -219,15 +219,15 @@ for chunk in completion:
           POST {qwen_asr_base_url}/audio/transcriptions
           (model: qwen_asr_model)
         → provider=wsl_asr:
-          POST {wsl_asr_base_url}/audio/transcription-jobs
-          GET {wsl_asr_base_url}/jobs/{job_id}
-          (model: wsl_asr_model)
+          → engine=qwen: POST /audio/transcription-jobs + GET /jobs/{job_id}
+          → engine=moss: POST /audio/transcriptions
+          (共享 wsl_asr_base_url / wsl_asr_api_key)
       → services/transcriptionResultStore.js: 保存成功转录结果
 ```
 
-### Windows/WSL ASR provider
+### Windows/WSL ASR provider 与引擎
 
-设置页的「ASR 转录引擎」可选择 `WSL 局域网`。该 provider 调用 Windows PC 的 WSL ASR 网关 job API：后端把上传文件直接转发到 `/v1/audio/transcription-jobs`，再轮询 `/v1/jobs/{job_id}`，并把 WSL 的 queued / preprocessing / splitting / loading_model / transcribing / merging 进度映射为项目现有 SSE 事件。
+设置页的服务位置可选择 `WSL 局域网`，再在同一连接下选择 `qwen` 或 `moss` 引擎。Qwen 适配器把上传文件转发到 `/v1/audio/transcription-jobs`，再轮询 `/v1/jobs/{job_id}`；MOSS 适配器调用 OpenAI-compatible `/v1/audio/transcriptions`。两者共享地址和鉴权，协议差异不暴露为独立服务。
 
 与 `mimo` 和 `qwen_mlx` 不同，`wsl_asr` 不经过 `services/media.js` 的 data URL 转换，也不在本项目内做 ffmpeg 静音切片；切片、模型加载、GPU 队列和 chunk 级进度都由 WSL ASR 服务负责。批量转录仍由本项目按文件串行提交，避免单 GPU 并发推理。
 
@@ -235,7 +235,8 @@ for chunk in completion:
 
 | **前端字段** | **后端字段** | **说明** |
 | --- | --- | --- |
-| 模型 | `wslModel` | `qwen3-asr-1.7b` 或 `qwen3-asr-0.6b`；未传时使用 `wsl_asr_model` 设置默认值 |
+| 引擎 | `asrEngine` | `qwen` 或 `moss` |
+| 模型 | `asrModel` | 当前引擎的模型 ID；未传时使用 `wsl_asr_model` |
 | 上下文 | `context` | 作为弱热词/背景提示，原样透传给 WSL ASR job API 的 `context` 字段，对应 Qwen3-ASR 的 context 入参 |
 
 对应设置：
@@ -244,7 +245,8 @@ for chunk in completion:
 | --- | --- | --- |
 | `asr_provider` | `wsl_asr` | `wsl_asr`、`mimo` 或 `qwen_mlx` |
 | `wsl_asr_base_url` | `http://192.168.31.137:18080/v1` | Windows/WSL ASR 网关 Base URL；请求会禁用 Node 代理 |
-| `wsl_asr_model` | `qwen3-asr-1.7b` | WSL ASR 模型 ID，可切到 `qwen3-asr-0.6b` |
+| `wsl_asr_engine` | `qwen` | WSL 内部识别引擎，可选 `qwen` / `moss` |
+| `wsl_asr_model` | `qwen3-asr-1.7b` | 当前 WSL 引擎的默认模型 ID；MOSS 可留空自动选择发现列表首项 |
 | `wsl_asr_api_key` | 空 | 若 WSL 网关启用 Bearer Token，在这里填写 |
 
 后端到 WSL 的总超时默认 60 分钟，可用 `WSL_ASR_TIMEOUT_MS` 调整；job 轮询间隔默认 2 秒，可用 `WSL_ASR_POLL_INTERVAL_MS` 调整。
@@ -253,7 +255,7 @@ for chunk in completion:
 
 单文件转录成功后，`POST /api/transcribe` 会返回 `text`、`usage` 和 `transcriptionResult`，并将结果保存到 SQLite `transcription_results` 表。批量转录中，每个成功文件都会独立保存一条记录，SSE 的 `file-complete` 和最终 `complete` 事件都会带上 `resultId` / `transcriptionResult`；失败文件只返回错误，不写入结果表。
 
-`transcription_results` 保存原始转录文本、AI 排版文本、文件名、批量相对路径、语言、provider、模型、context、usage 和 task_id。转录页的单文件结果与批量结果共用同一个结果弹窗，AI 排版调用：
+`transcription_results` 保存原始转录文本、AI 排版文本、文件名、批量相对路径、语言、provider、engine、模型、context、usage 和 task_id。旧 `provider=moss_asr` 记录会迁移为 `provider=wsl_asr, engine=moss`。转录页的单文件结果与批量结果共用同一个结果弹窗，AI 排版调用：
 
 ```
 POST /api/transcribe/results/:id/format

@@ -17,6 +17,7 @@ export const NewsItemSchema = z.object({
 
 export const LlmApiFormatSchema = z.enum(['openai', 'anthropic']);
 export const AsrProviderSchema = z.enum(['mimo', 'qwen_mlx', 'wsl_asr']);
+export const AsrEngineSchema = z.enum(['qwen', 'moss']);
 export const UiFontPresetSchema = z.enum(['modern', 'system', 'editorial']);
 export const UiFontScaleSchema = z.enum(['compact', 'comfortable', 'large', 'extra_large']);
 
@@ -35,6 +36,7 @@ export const SettingsSchema = z.object({
   qwen_asr_model: z.string(),
   qwen_asr_api_key: z.string(),
   wsl_asr_base_url: z.string(),
+  wsl_asr_engine: AsrEngineSchema,
   wsl_asr_model: z.string(),
   wsl_asr_api_key: z.string(),
   default_voice: z.string(),
@@ -117,6 +119,7 @@ export const TranscriptionRecordSchema = z.object({
   formatted_text: z.string(),
   language: z.enum(['auto', 'zh', 'en']),
   provider: z.union([AsrProviderSchema, z.literal('')]),
+  engine: z.union([AsrEngineSchema, z.literal('')]),
   model: z.string(),
   context: z.string(),
   usage: z.record(z.string(), z.unknown()).nullable().optional(),

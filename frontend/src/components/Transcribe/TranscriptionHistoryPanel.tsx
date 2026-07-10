@@ -1,5 +1,6 @@
 import React from 'react';
 import type { TranscriptionRecord } from '../../store';
+import { formatAsrSource } from '../../pages/transcribeUtils';
 
 interface TranscriptionHistoryPanelProps {
   records: TranscriptionRecord[];
@@ -82,7 +83,7 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-blush" />
-          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">最近转录文稿</h3>
+          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录文稿</h3>
         </div>
         <button
           type="button"
@@ -120,7 +121,7 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
       )}
 
       {!isLoading && !error && records.length > 0 && (
-        <div className="space-y-3 max-h-[34rem] overflow-y-auto pr-1">
+        <div className="space-y-3">
           {records.map((record, index) => {
             const text = preferredText(record);
             const preview = previewText(record);
@@ -136,7 +137,7 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
                       {record.relative_path || record.file_name}
                     </p>
                     <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mt-1">
-                      {formatRecordDate(record.created_at)} · {record.provider || 'unknown'} · {record.model || 'default'}
+                      {formatRecordDate(record.created_at)} · {formatAsrSource(record)} · {record.model || '默认模型'}
                     </p>
                   </div>
                   {record.formatted_text.trim() && (

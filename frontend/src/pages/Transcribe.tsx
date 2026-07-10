@@ -1,17 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Header } from '../components/Layout/Header';
-import { TranscriptionHistoryPanel } from '../components/Transcribe/TranscriptionHistoryPanel';
 import { TranscriptionResultModal } from '../components/Transcribe/TranscriptionResultModal';
-import { TranscriptionStatsCenter } from '../components/Transcribe/TranscriptionStatsCenter';
 import { TranscribeProviderControls } from '../components/Transcribe/TranscribeProviderControls';
 import useStore, {
+  type AsrModelOption,
+  type AsrEngine,
   type AsrProvider,
   type AsrLanguage,
   type BatchTranscriptionItem,
-  type TranscriptionRecord,
 } from '../store';
 import {
   ACTION_BUTTON_FORMAT,
@@ -20,6 +18,7 @@ import {
   BATCH_STATUS_DOTS,
   BATCH_STATUS_LABELS,
   PHASE_LABELS,
+  downloadTextFile,
   formatBytes,
   formatTimestamp,
   getErrorMessage,
@@ -38,19 +37,7 @@ const FOLDER_INPUT_PROPS = {
 } as unknown as React.InputHTMLAttributes<HTMLInputElement>;
 
 type TranscribeMode = 'single' | 'batch';
-type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number } | { type: 'history'; id: number };
-
-function downloadTextFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+type ResultModalTarget = { type: 'single' } | { type: 'batch'; index: number };
 
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -73,17 +60,10 @@ export const Transcribe: React.FC = () => {
   const isTranscribing = useStore((s) => s.isTranscribing);
   const transcribeProgress = useStore((s) => s.transcribeProgress);
   const transcribeMedia = useStore((s) => s.transcribeMedia);
-  const transcriptionHistory = useStore((s) => s.transcriptionHistory);
-  const transcriptionStats = useStore((s) => s.transcriptionStats);
-  const isLoadingTranscriptionHistory = useStore((s) => s.isLoadingTranscriptionHistory);
-  const isLoadingTranscriptionStats = useStore((s) => s.isLoadingTranscriptionStats);
-  const isDeletingTranscriptionResult = useStore((s) => s.isDeletingTranscriptionResult);
-  const fetchTranscriptionHistory = useStore((s) => s.fetchTranscriptionHistory);
-  const fetchTranscriptionStats = useStore((s) => s.fetchTranscriptionStats);
-  const deleteTranscriptionHistoryResult = useStore((s) => s.deleteTranscriptionHistoryResult);
   const formatTranscriptionResult = useStore((s) => s.formatTranscriptionResult);
   const setTranscriptionText = useStore((s) => s.setTranscriptionText);
   const updateScript = useStore((s) => s.updateScript);
+  const setCurrentBroadcast = useStore((s) => s.setCurrentBroadcast);
 
   const batchTranscriptionItems = useStore((s) => s.batchTranscriptionItems);
   const isBatchTranscribing = useStore((s) => s.isBatchTranscribing);
@@ -91,6 +71,9 @@ export const Transcribe: React.FC = () => {
   const batchTranscribeMedia = useStore((s) => s.batchTranscribeMedia);
   const clearBatchTranscription = useStore((s) => s.clearBatchTranscription);
   const settings = useStore((s) => s.settings);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const fetchAsrModels = useStore((s) => s.fetchAsrModels);
+  const wslDefaultRef = useRef({ engine: settings.wsl_asr_engine, model: settings.wsl_asr_model });
 
   const [mode, setMode] = useState<TranscribeMode>('single');
   const [file, setFile] = useState<File | null>(null);
@@ -98,69 +81,154 @@ export const Transcribe: React.FC = () => {
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [language, setLanguage] = useState<AsrLanguage>('auto');
   const [selectedAsrProvider, setSelectedAsrProvider] = useState<AsrProvider | null>(null);
+  const [selectedWslEngine, setSelectedWslEngine] = useState<AsrEngine | null>(null);
   const [selectedWslModel, setSelectedWslModel] = useState<string | null>(null);
-  const [wslContext, setWslContext] = useState('');
+  const [selectedMossModel, setSelectedMossModel] = useState<string | null>(null);
+  const [asrContext, setAsrContext] = useState('');
+  const [mossModelOptions, setMossModelOptions] = useState<AsrModelOption[]>([]);
+  const [isFetchingMossModels, setIsFetchingMossModels] = useState(false);
+  const [mossModelFetchResult, setMossModelFetchResult] = useState<{ error?: string; resolvedUrl?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [batchCopiedIndex, setBatchCopiedIndex] = useState<number | null>(null);
   const [resultModalTarget, setResultModalTarget] = useState<ResultModalTarget | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<TranscriptionRecord | null>(null);
 
   const asrProvider = selectedAsrProvider ?? settings.asr_provider ?? 'wsl_asr';
-  const wslModel = selectedWslModel ?? settings.wsl_asr_model ?? 'qwen3-asr-1.7b';
+  const wslEngine = selectedWslEngine ?? settings.wsl_asr_engine ?? 'qwen';
+  const wslModel = (
+    selectedWslModel ?? (settings.wsl_asr_engine === 'qwen' ? settings.wsl_asr_model : '')
+  ) || 'qwen3-asr-1.7b';
+  const mossModel = (
+    selectedMossModel ?? (settings.wsl_asr_engine === 'moss' ? settings.wsl_asr_model : '')
+  ) || mossModelOptions[0]?.id || '';
+  const asrModel = wslEngine === 'moss' ? mossModel : wslModel;
   const transcribeOptions = asrProvider === 'wsl_asr'
-    ? { wslModel: wslModel || settings.wsl_asr_model || 'qwen3-asr-1.7b', context: wslContext }
+    ? { asrEngine: wslEngine, asrModel, context: asrContext }
     : undefined;
-
-  const loadTranscriptionHistory = useCallback(async () => {
-    setHistoryError(null);
-    try {
-      await fetchTranscriptionHistory({ limit: 30 });
-    } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : '获取转录历史失败');
-    }
-  }, [fetchTranscriptionHistory]);
-
-  const loadTranscriptionStats = useCallback(async () => {
-    setStatsError(null);
-    try {
-      await fetchTranscriptionStats();
-    } catch (err) {
-      setStatsError(err instanceof Error ? err.message : '获取转录统计失败');
-    }
-  }, [fetchTranscriptionStats]);
+  const isMossModelMissing = asrProvider === 'wsl_asr' && wslEngine === 'moss' && !mossModel.trim();
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadTranscriptionHistory();
-      void loadTranscriptionStats();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [loadTranscriptionHistory, loadTranscriptionStats]);
+    wslDefaultRef.current = { engine: settings.wsl_asr_engine, model: settings.wsl_asr_model };
+  }, [settings.wsl_asr_engine, settings.wsl_asr_model]);
 
-  const handleFile = useCallback((nextFile: File | null) => {
+  const loadMossModels = useCallback(async () => {
+    setIsFetchingMossModels(true);
+    setMossModelFetchResult(null);
+    try {
+      const result = await fetchAsrModels({
+        provider: 'wsl_asr',
+        engine: 'moss',
+        baseUrl: settings.wsl_asr_base_url,
+        apiKey: settings.wsl_asr_api_key,
+      });
+      setMossModelOptions(result.models);
+      setMossModelFetchResult({ resolvedUrl: result.resolvedUrl });
+      const configuredModel = wslDefaultRef.current.engine === 'moss'
+        && result.models.some((option) => option.id === wslDefaultRef.current.model)
+        ? wslDefaultRef.current.model
+        : '';
+      const nextModel = configuredModel || result.models[0]?.id || '';
+      setSelectedMossModel(nextModel || null);
+    } catch (err) {
+      setMossModelOptions([]);
+      setMossModelFetchResult({ error: err instanceof Error ? err.message : '获取 MOSS 模型列表失败' });
+    } finally {
+      setIsFetchingMossModels(false);
+    }
+  }, [fetchAsrModels, settings.wsl_asr_api_key, settings.wsl_asr_base_url]);
+
+  useEffect(() => {
+    if (asrProvider === 'wsl_asr' && wslEngine === 'moss') {
+      const timer = window.setTimeout(() => {
+        void loadMossModels();
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [asrProvider, loadMossModels, wslEngine]);
+
+  const handleSelectedFiles = useCallback((files: File[]) => {
+    const supported = files.filter(isSupportedMedia);
     setError(null);
     setCopied(false);
-    setFile(nextFile);
-  }, []);
+    setBatchCopiedIndex(null);
+    clearBatchTranscription();
+    if (supported.length === 0) {
+      setError('请选择支持的音频或视频文件');
+      return;
+    }
+    if (supported.length === 1) {
+      setMode('single');
+      setFile(supported[0]);
+      setBatchFiles([]);
+      setSelectedIndexes(new Set());
+      return;
+    }
+    setMode('batch');
+    setFile(null);
+    setBatchFiles(supported);
+    setSelectedIndexes(new Set(supported.map((_, index) => index)));
+  }, [clearBatchTranscription]);
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleSelectedFiles(Array.from(event.target.files || []));
+    event.target.value = '';
+  };
 
   const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files;
     if (!list) return;
-    const supported = Array.from(list).filter(isSupportedMedia);
-    setError(null);
-    setBatchCopiedIndex(null);
-    setBatchFiles(supported);
-    // 默认全部勾选
-    setSelectedIndexes(new Set(supported.map((_, i) => i)));
-    clearBatchTranscription();
+    handleSelectedFiles(Array.from(list));
     e.target.value = '';
   };
 
+  const handleProviderChange = useCallback((provider: AsrProvider) => {
+    setSelectedAsrProvider(provider);
+    setError(null);
+    void updateSettings({ asr_provider: provider }).catch(() => {
+      setError('已切换本次服务，但保存默认转录服务失败');
+    });
+  }, [updateSettings]);
+
+  const handleWslEngineChange = useCallback((engine: AsrEngine) => {
+    setSelectedWslEngine(engine);
+    setError(null);
+    if (engine === 'qwen') {
+      const model = selectedWslModel || 'qwen3-asr-1.7b';
+      setSelectedWslModel(model);
+      void updateSettings({ wsl_asr_engine: engine, wsl_asr_model: model }).catch(() => {
+        setError('已切换本次引擎，但保存默认 WSL 引擎失败');
+      });
+      return;
+    }
+    setSelectedMossModel(null);
+    void updateSettings({ wsl_asr_engine: engine, wsl_asr_model: '' }).catch(() => {
+      setError('已切换本次引擎，但保存默认 WSL 引擎失败');
+    });
+  }, [selectedWslModel, updateSettings]);
+
+  const handleAsrModelChange = useCallback((model: string) => {
+    if (wslEngine === 'moss') setSelectedMossModel(model);
+    else setSelectedWslModel(model);
+    void updateSettings({ wsl_asr_model: model }).catch(() => {
+      setError('已切换本次模型，但保存默认 WSL 模型失败');
+    });
+  }, [updateSettings, wslEngine]);
+
   const removeBatchFile = (index: number) => {
-    setBatchFiles((prev) => prev.filter((_, i) => i !== index));
+    const nextFiles = batchFiles.filter((_, fileIndex) => fileIndex !== index);
+    if (nextFiles.length === 1) {
+      handleSelectedFiles(nextFiles);
+      return;
+    }
+    if (nextFiles.length === 0) {
+      setBatchFiles([]);
+      setSelectedIndexes(new Set());
+      setMode('single');
+      setFile(null);
+      clearBatchTranscription();
+      return;
+    }
+    setBatchFiles(nextFiles);
     // 移除后重新映射选中索引：小于 index 的保留，大于 index 的减一
     setSelectedIndexes((prev) => {
       const next = new Set<number>();
@@ -231,12 +299,14 @@ export const Transcribe: React.FC = () => {
 
   const handleImport = () => {
     if (!transcriptionText.trim()) return;
+    setCurrentBroadcast(null);
     updateScript(transcriptionText.trim());
     navigate('/editor');
   };
 
   const handleImportItem = (text: string) => {
     if (!text.trim()) return;
+    setCurrentBroadcast(null);
     updateScript(text.trim());
     navigate('/editor');
   };
@@ -245,6 +315,7 @@ export const Transcribe: React.FC = () => {
     const completed = batchTranscriptionItems.filter((i) => i.status === 'completed' && i.text.trim());
     if (completed.length === 0) return;
     const merged = completed.map((i) => `【${i.relativePath}】\n${i.text.trim()}`).join('\n\n');
+    setCurrentBroadcast(null);
     updateScript(merged);
     navigate('/editor');
   };
@@ -258,34 +329,6 @@ export const Transcribe: React.FC = () => {
   const handleDownloadItem = (item: BatchTranscriptionItem) => {
     if (!item.text.trim()) return;
     downloadTextFile(relativePathToTxtName(item.relativePath), item.text);
-  };
-
-  const handleDownloadHistoryRecord = (record: TranscriptionRecord) => {
-    const text = record.formatted_text.trim() || record.text.trim();
-    if (!text) return;
-    downloadTextFile(relativePathToTxtName(record.relative_path || record.file_name), text);
-  };
-
-  const handleImportHistoryRecord = (record: TranscriptionRecord) => {
-    const text = record.formatted_text.trim() || record.text.trim();
-    if (!text) return;
-    updateScript(text);
-    navigate('/editor');
-  };
-
-  const handleConfirmDeleteHistoryRecord = async () => {
-    if (!deleteTarget) return;
-    setHistoryError(null);
-    try {
-      await deleteTranscriptionHistoryResult(deleteTarget.id);
-      await loadTranscriptionStats();
-      if (resultModalTarget?.type === 'history' && resultModalTarget.id === deleteTarget.id) {
-        setResultModalTarget(null);
-      }
-      setDeleteTarget(null);
-    } catch (err) {
-      setHistoryError(err instanceof Error ? err.message : '删除转录结果失败');
-    }
   };
 
   const [isZipping, setIsZipping] = useState(false);
@@ -320,39 +363,23 @@ export const Transcribe: React.FC = () => {
     }
   };
 
-  const switchMode = (next: TranscribeMode) => {
-    setMode(next);
-    setError(null);
-  };
-
   const showBatchItems = isBatchTranscribing || batchTranscriptionItems.length > 0;
   const completedCount = batchTranscriptionItems.filter((i) => i.status === 'completed' && i.text.trim()).length;
   const modalItem = resultModalTarget?.type === 'batch'
     ? batchTranscriptionItems[resultModalTarget.index]
     : null;
-  const modalHistoryRecord = resultModalTarget?.type === 'history'
-    ? transcriptionHistory.find((record) => record.id === resultModalTarget.id) ?? null
-    : null;
   const modalTitle = resultModalTarget?.type === 'single'
     ? (file?.name || transcriptionRecord?.file_name || '转录结果')
-    : resultModalTarget?.type === 'batch'
-    ? (modalItem?.relativePath || '转录结果')
-    : (modalHistoryRecord?.relative_path || modalHistoryRecord?.file_name || '转录结果');
+    : (modalItem?.relativePath || '转录结果');
   const modalText = resultModalTarget?.type === 'single'
     ? (transcriptionRecord?.text || transcriptionText)
-    : resultModalTarget?.type === 'batch'
-    ? (modalItem?.transcriptionResult?.text || modalItem?.text || '')
-    : (modalHistoryRecord?.text || '');
+    : (modalItem?.transcriptionResult?.text || modalItem?.text || '');
   const modalFormattedText = resultModalTarget?.type === 'single'
     ? (transcriptionRecord?.formatted_text || '')
-    : resultModalTarget?.type === 'batch'
-    ? (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '')
-    : (modalHistoryRecord?.formatted_text || '');
+    : (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '');
   const modalResultId = resultModalTarget?.type === 'single'
     ? transcriptionRecord?.id
-    : resultModalTarget?.type === 'batch'
-    ? (modalItem?.resultId || modalItem?.transcriptionResult?.id)
-    : modalHistoryRecord?.id;
+    : (modalItem?.resultId || modalItem?.transcriptionResult?.id);
 
   const handleFormatModalResult = async (text: string) => {
     if (!modalResultId) {
@@ -366,44 +393,47 @@ export const Transcribe: React.FC = () => {
     if (!text.trim()) return;
     const baseName = resultModalTarget?.type === 'single'
       ? (file ? stripExtension(file.name) : stripExtension(transcriptionRecord?.file_name || '转录结果'))
-      : resultModalTarget?.type === 'history'
-      ? stripExtension(modalHistoryRecord?.relative_path || modalHistoryRecord?.file_name || '转录结果')
       : stripExtension(modalItem?.relativePath || '转录结果');
     downloadTextFile(`${sanitizeFileName(baseName)}_排版.txt`, text);
   };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header title="转录" subtitle="上传音频或视频并转换为口播稿文本" />
+      <Header
+        title="音视频转录"
+        subtitle="添加一个或多个文件，系统会自动选择处理方式"
+        actions={(
+          <button
+            type="button"
+            onClick={() => navigate('/history?tab=transcriptions')}
+            className="rounded-xl border border-card-border bg-white/70 px-3.5 py-2 font-body text-[11px] text-ink-soft transition-colors hover:bg-white/90 hover:text-ink"
+          >
+            打开转录文稿库
+          </button>
+        )}
+      />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto space-y-4">
-          {/* 模式切换 */}
-          <div className="flex gap-2">
-            {(['single', 'batch'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => switchMode(m)}
-                disabled={isTranscribing || isBatchTranscribing}
-                className={`px-4 py-2 rounded-full font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150 disabled:opacity-40 ${
-                  mode === m ? 'bg-lemon text-ink shadow-btn' : 'bg-white/60 text-ink-soft border border-card-border'
-                }`}
-              >
-                {m === 'single' ? '单文件转录' : '批量转录'}
-              </button>
-            ))}
-          </div>
-
-          <TranscriptionStatsCenter
-            stats={transcriptionStats}
-            isLoading={isLoadingTranscriptionStats}
-            onRefresh={loadTranscriptionStats}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".wav,.mp3,.mpeg,.m4a,.mp4,.mov,.webm,audio/*,video/*"
+            onChange={handleFileSelect}
+            className="hidden"
           />
-          {statsError && (
-            <div className="bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
-              {statsError}
-            </div>
-          )}
+          <input
+            ref={folderInputRef}
+            type="file"
+            multiple
+            {...FOLDER_INPUT_PROPS}
+            onChange={handleFolderSelect}
+            className="hidden"
+          />
+          <div className="rounded-2xl border border-lilac/40 bg-lilac/15 px-4 py-3 font-body text-[12px] leading-relaxed text-ink-soft">
+            一个文件直接转录；多个文件或文件夹自动进入批量队列。历史文稿和统计统一在内容库管理。
+          </div>
 
           {mode === 'single' ? (
             <>
@@ -421,41 +451,53 @@ export const Transcribe: React.FC = () => {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
-                    handleFile(e.dataTransfer.files[0] ?? null);
+                    handleSelectedFiles(Array.from(e.dataTransfer.files));
                   }}
                   className="bg-white/60 rounded-2xl p-8 border border-card-border text-center cursor-pointer hover:border-ink/15 transition-colors"
                 >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".wav,.mp3,.mpeg,.m4a,.mp4,.mov,.webm,audio/*,video/*"
-                    onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-                    className="hidden"
-                  />
                   <p className="font-display italic text-[18px] text-ink-soft mb-1">
                     {file ? file.name : '选择或拖拽音频 / 视频'}
                   </p>
                   <p className="font-body text-[12px] text-ink-soft/70">
-                    wav, mp3, m4a, mp4, mov, webm
+                    可一次选择多个文件；也可以选择整个文件夹
                   </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <span className="rounded-xl bg-lilac px-3.5 py-2 font-body text-[11px] font-medium text-ink shadow-btn">选择文件</span>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        folderInputRef.current?.click();
+                      }}
+                      className="rounded-xl border border-card-border bg-white/75 px-3.5 py-2 font-body text-[11px] font-medium text-ink-soft transition-colors hover:text-ink"
+                    >
+                      选择文件夹
+                    </button>
+                  </div>
                 </div>
 
                 <TranscribeProviderControls
                   language={language}
                   provider={asrProvider}
-                  wslModel={wslModel}
-                  wslContext={wslContext}
+                  wslEngine={wslEngine}
+                  asrModel={asrModel}
+                  asrContext={asrContext}
+                  mossModelOptions={mossModelOptions}
+                  isFetchingMossModels={isFetchingMossModels}
+                  mossModelFetchResult={mossModelFetchResult}
                   isDisabled={isTranscribing}
                   qwenBaseUrl={settings.qwen_asr_base_url}
                   wslBaseUrl={settings.wsl_asr_base_url}
                   onLanguageChange={setLanguage}
-                  onProviderChange={setSelectedAsrProvider}
-                  onWslModelChange={setSelectedWslModel}
-                  onWslContextChange={setWslContext}
+                  onProviderChange={handleProviderChange}
+                  onWslEngineChange={handleWslEngineChange}
+                  onAsrModelChange={handleAsrModelChange}
+                  onAsrContextChange={setAsrContext}
+                  onRefreshMossModels={loadMossModels}
                 >
                   <button
                     onClick={handleSubmit}
-                    disabled={isTranscribing}
+                    disabled={isTranscribing || isMossModelMissing}
                     className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
                   >
                     {isTranscribing && (
@@ -564,49 +606,64 @@ export const Transcribe: React.FC = () => {
               >
                 <div className="flex items-center gap-2 mb-4">
                   <span className="w-2 h-2 rounded-full bg-lilac" />
-                  <h3 className="font-display italic text-[14px] font-medium text-ink-soft">选择文件夹</h3>
+                  <h3 className="font-display italic text-[14px] font-medium text-ink-soft">批量队列</h3>
                 </div>
 
                 <div
-                  onClick={() => !isBatchTranscribing && folderInputRef.current?.click()}
+                  onClick={() => !isBatchTranscribing && fileInputRef.current?.click()}
                   onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (!isBatchTranscribing) handleSelectedFiles(Array.from(e.dataTransfer.files));
+                  }}
                   className="bg-white/60 rounded-2xl p-8 border border-card-border text-center cursor-pointer hover:border-ink/15 transition-colors"
                 >
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    multiple
-                    {...FOLDER_INPUT_PROPS}
-                    onChange={handleFolderSelect}
-                    className="hidden"
-                  />
                   <p className="font-display italic text-[18px] text-ink-soft mb-1">
                     {batchFiles.length > 0
-                      ? `已选择 ${batchFiles.length} 个音视频文件`
-                      : '选择一个文件夹'}
+                      ? `已添加 ${batchFiles.length} 个音视频文件`
+                      : '选择多个文件或一个文件夹'}
                   </p>
                   <p className="font-body text-[12px] text-ink-soft/70">
-                    自动遍历子目录，仅保留 mp3 / mp4 / m4a / wav / mov / webm
+                    文件数量决定处理方式，不需要手动切换模式
                   </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <span className="rounded-xl bg-lilac px-3.5 py-2 font-body text-[11px] font-medium text-ink shadow-btn">重新选择文件</span>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isBatchTranscribing) folderInputRef.current?.click();
+                      }}
+                      className="rounded-xl border border-card-border bg-white/75 px-3.5 py-2 font-body text-[11px] font-medium text-ink-soft transition-colors hover:text-ink"
+                    >
+                      选择文件夹
+                    </button>
+                  </div>
                 </div>
 
                 <TranscribeProviderControls
                   language={language}
                   provider={asrProvider}
-                  wslModel={wslModel}
-                  wslContext={wslContext}
+                  wslEngine={wslEngine}
+                  asrModel={asrModel}
+                  asrContext={asrContext}
+                  mossModelOptions={mossModelOptions}
+                  isFetchingMossModels={isFetchingMossModels}
+                  mossModelFetchResult={mossModelFetchResult}
                   isDisabled={isBatchTranscribing}
                   isBatch
                   qwenBaseUrl={settings.qwen_asr_base_url}
                   wslBaseUrl={settings.wsl_asr_base_url}
                   onLanguageChange={setLanguage}
-                  onProviderChange={setSelectedAsrProvider}
-                  onWslModelChange={setSelectedWslModel}
-                  onWslContextChange={setWslContext}
+                  onProviderChange={handleProviderChange}
+                  onWslEngineChange={handleWslEngineChange}
+                  onAsrModelChange={handleAsrModelChange}
+                  onAsrContextChange={setAsrContext}
+                  onRefreshMossModels={loadMossModels}
                 >
                   <button
                     onClick={handleBatchSubmit}
-                    disabled={isBatchTranscribing || selectedIndexes.size === 0}
+                    disabled={isBatchTranscribing || selectedIndexes.size === 0 || isMossModelMissing}
                     className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
                   >
                     {isBatchTranscribing && (
@@ -838,31 +895,8 @@ export const Transcribe: React.FC = () => {
             </>
           )}
 
-          <TranscriptionHistoryPanel
-            records={transcriptionHistory}
-            isLoading={isLoadingTranscriptionHistory}
-            error={historyError}
-            onRefresh={loadTranscriptionHistory}
-            onOpen={(record) => setResultModalTarget({ type: 'history', id: record.id })}
-            onDownload={handleDownloadHistoryRecord}
-            onImport={handleImportHistoryRecord}
-            onDelete={setDeleteTarget}
-          />
         </div>
       </main>
-      <ConfirmDialog
-        isOpen={Boolean(deleteTarget)}
-        title="删除转录文稿"
-        message={`确定删除「${deleteTarget?.relative_path || deleteTarget?.file_name || '这条转录文稿'}」吗？`}
-        warningMessage="删除后无法从转录历史中恢复。"
-        confirmText="确认删除"
-        cancelText="取消"
-        isLoading={isDeletingTranscriptionResult}
-        onConfirm={handleConfirmDeleteHistoryRecord}
-        onCancel={() => {
-          if (!isDeletingTranscriptionResult) setDeleteTarget(null);
-        }}
-      />
       {resultModalTarget && (
         <TranscriptionResultModal
           key={`${resultModalTarget.type}-${modalResultId ?? 'unsaved'}-${resultModalTarget.type === 'batch' ? resultModalTarget.index : 0}`}
@@ -876,6 +910,7 @@ export const Transcribe: React.FC = () => {
           onDownload={handleDownloadModalResult}
           onImport={(text) => {
             if (!text.trim()) return;
+            setCurrentBroadcast(null);
             updateScript(text.trim());
             setResultModalTarget(null);
             navigate('/editor');

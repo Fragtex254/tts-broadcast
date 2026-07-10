@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Header } from '../components/Layout/Header';
-import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { createScopedLogger, toLogError } from '../services/logger';
-import useStore from '../store';
-import type { Broadcast } from '../store';
+import { AudioPlayer } from '../Dashboard/AudioPlayer';
+import { ConfirmDialog } from '../ConfirmDialog';
+import { createScopedLogger, toLogError } from '../../services/logger';
+import useStore from '../../store';
+import type { Broadcast } from '../../store';
 
 const logger = createScopedLogger('history-page');
 
@@ -42,7 +41,7 @@ const getStatusBadge = (status: string) => {
   );
 };
 
-export const History: React.FC = () => {
+export const BroadcastLibrary: React.FC = () => {
   const broadcasts = useStore((s) => s.broadcasts);
   const fetchBroadcasts = useStore((s) => s.fetchBroadcasts);
   const currentBroadcast = useStore((s) => s.currentBroadcast);
@@ -184,11 +183,14 @@ export const History: React.FC = () => {
   const selectedBroadcast = broadcasts.find((broadcast) => broadcast.id === currentBroadcast?.id) || null;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <Header
-        title="播报历史"
-        subtitle={`共 ${total} 条已保存播报`}
-        actions={
+    <div className="space-y-4">
+      <section className="flex flex-col gap-3 rounded-card border border-card-border bg-white/65 p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-display text-[17px] font-medium text-ink">已保存播报</p>
+          <p className="mt-1 font-body text-[11px] text-ink-soft/60">共 {total} 条，可重新编辑、播放或批量清理</p>
+        </div>
+        <div>
+          {
           isMultiSelectMode ? (
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -225,11 +227,10 @@ export const History: React.FC = () => {
               ✓ 多选
             </button>
           )
-        }
-      />
+          }
+        </div>
+      </section>
 
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-6xl mx-auto space-y-4">
           <div className="bg-white/80 backdrop-blur-sm rounded-card shadow-card border border-card-border overflow-hidden">
             {isLoading && (
               <div className="p-6 space-y-4">
@@ -264,8 +265,7 @@ export const History: React.FC = () => {
               return (
                 <div
                   key={broadcast.id}
-                  onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast) : handleSelectBroadcast(broadcast)}
-                  className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border cursor-pointer transition-all duration-200 ${
+                  className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border transition-all duration-200 ${
                     isMultiSelectMode && isChecked
                       ? 'bg-sage/10'
                       : isSelected
@@ -283,14 +283,18 @@ export const History: React.FC = () => {
                       className="w-4 h-4 rounded border-card-border text-pink focus:ring-pink/30"
                     />
                   )}
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast) : handleSelectBroadcast(broadcast)}
+                    className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                  >
                     <p className={`font-display text-[15px] font-medium truncate ${isSelected ? 'text-ink' : 'text-ink/80'}`}>{broadcast.title}</p>
                     {broadcast.saved === 1 && (
                       <svg className="w-3 h-3 text-lemon flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                       </svg>
                     )}
-                  </div>
+                  </button>
                   <span className="font-body text-[12px] text-ink-soft/60 min-w-[80px]">{formatDate(broadcast.created_at)}</span>
                   <span className="font-body text-[12px] text-ink-soft/60 min-w-[50px]">{formatDuration(broadcast.duration)}</span>
                   {getStatusBadge(broadcast.status)}
@@ -332,15 +336,15 @@ export const History: React.FC = () => {
             </div>
           )}
 
-          <AudioPlayer
-            audioUrl={selectedBroadcast ? getAudioUrl(selectedBroadcast) : null}
-            title={selectedBroadcast?.title || '选择一条已保存播报播放'}
-            broadcastId={selectedBroadcast?.id}
-            isSaved={selectedBroadcast?.saved === 1}
-            onSave={saveBroadcast}
-          />
-        </div>
-      </main>
+          {selectedBroadcast && (
+            <AudioPlayer
+              audioUrl={getAudioUrl(selectedBroadcast)}
+              title={selectedBroadcast.title}
+              broadcastId={selectedBroadcast.id}
+              isSaved={selectedBroadcast.saved === 1}
+              onSave={saveBroadcast}
+            />
+          )}
 
       {/* 确认删除对话框 */}
       <ConfirmDialog
@@ -363,4 +367,4 @@ export const History: React.FC = () => {
   );
 };
 
-export default History;
+export default BroadcastLibrary;

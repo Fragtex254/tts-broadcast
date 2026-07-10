@@ -110,8 +110,11 @@ function getRelativePath(file: File): string {
 }
 
 function appendTranscribeOptions(formData: FormData, options?: TranscribeOptions) {
-  if (options?.wslModel?.trim()) {
-    formData.append('wslModel', options.wslModel.trim());
+  if (options?.asrEngine) {
+    formData.append('asrEngine', options.asrEngine);
+  }
+  if (options?.asrModel?.trim()) {
+    formData.append('asrModel', options.asrModel.trim());
   }
   if (options?.context?.trim()) {
     formData.append('context', options.context.trim());

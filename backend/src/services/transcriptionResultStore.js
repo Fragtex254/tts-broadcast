@@ -44,6 +44,7 @@ function normalizeStats(row) {
  * @param {string} [params.formattedText] - AI 排版文本
  * @param {string} [params.language] - 转录语言
  * @param {string} [params.provider] - ASR provider
+ * @param {string} [params.engine] - WSL ASR 引擎
  * @param {string} [params.model] - ASR 模型
  * @param {string} [params.context] - WSL/Qwen context
  * @param {Object|null} [params.usage] - ASR usage
@@ -60,6 +61,7 @@ function create({
   formattedText,
   language,
   provider,
+  engine,
   model,
   context,
   usage,
@@ -70,10 +72,10 @@ function create({
 }) {
   const result = db.prepare(`
     INSERT INTO transcription_results (
-      file_name, relative_path, text, formatted_text, language, provider, model, context, usage, task_id,
+      file_name, relative_path, text, formatted_text, language, provider, engine, model, context, usage, task_id,
       file_size_bytes, audio_duration_seconds, processing_seconds
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fileName,
     relativePath || fileName,
@@ -81,6 +83,7 @@ function create({
     formattedText || '',
     language || 'auto',
     provider || '',
+    engine || '',
     model || '',
     context || '',
     serializeUsage(usage),

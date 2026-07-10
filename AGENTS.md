@@ -36,6 +36,8 @@
 - 前端设计系统当前为 Warm Workbench / Soft Editorial：语义色仍使用 `paper/ink/pink/lemon/blush/sage/lilac`，底层参考色板见 `frontend/src/index.css` 与 `.claude/skills/frontend-styling/SKILL.md`，组件层优先使用语义色。
 - 前端二级界面/弹窗/全屏编辑面板统一使用 `frontend/src/components/ModalShell.tsx`；禁止在业务组件里重复手写 `fixed inset-0`、`role="dialog"` 和关闭键盘逻辑。
 - 前端音频播放条统一使用 `frontend/src/components/Dashboard/AudioPlaybackBar.tsx`，或通过 `AudioPlayer` / `MiniAudioPlayer` 薄外壳接入；禁止在业务组件里重复维护 `<audio>`、播放状态、时长、seek、倍速逻辑。
+- 前端顶级导航按用户任务组织为「工作台 / 内容库 / 音色库 / 自动化 / 设置」；`/editor` 与 `/transcribe` 是从工作台或内容库进入的上下文任务页，不再作为顶级导航。转录历史与统计统一归入内容库。
+- ASR 产品契约按「服务位置 / 识别引擎 / 模型」分层：`asr_provider` 只表示 MiMo 云端、Mac 本地或 WSL 局域网；MOSS 是 WSL 下的 `asr_engine`，不得再作为独立 provider 或重复维护连接参数。
 - 开发引入新约定、新路由族、新组件类型或新持久化套路时，必须同步更新对应 skill 与本文件。
 
 ## Commands
