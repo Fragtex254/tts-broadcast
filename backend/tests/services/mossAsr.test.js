@@ -1,5 +1,6 @@
 jest.mock('axios', () => ({
-  post: jest.fn()
+  post: jest.fn(),
+  get: jest.fn()
 }));
 
 const axios = require('axios');
@@ -44,10 +45,52 @@ describe('MOSS ASR 服务', () => {
     const formData = axios.post.mock.calls[0][1];
     expect(formData.get('model')).toBe('moss-asr-large');
     expect(formData.get('language')).toBe('zh');
-    expect(formData.get('prompt')).toBe('术语A, 术语B');
+    expect(formData.get('context')).toBe('术语A, 术语B');
     expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'preparing',
       percent: 10
+    }));
+  });
+
+  test('同步端点对长音频返回 202 时轮询 job 直到完成', async () => {
+    axios.post.mockResolvedValue({
+      status: 202,
+      data: { id: 'job_moss_123', status: 'queued' }
+    });
+    axios.get
+      .mockResolvedValueOnce({
+        data: {
+          status: 'running',
+          progress: { phase: 'transcribing', percent: 40, completed_chunks: 2, total_chunks: 5 }
+        }
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'completed',
+          progress: { phase: 'completed', percent: 100, completed_chunks: 5, total_chunks: 5 },
+          result: { text: '长音频 MOSS 转录结果', usage: { audio_seconds: 3600 } }
+        }
+      });
+    const onProgress = jest.fn();
+
+    const result = await mossAsr.transcribeFile({
+      file: { originalname: 'podcast.mp3', mimetype: 'audio/mpeg', buffer: Buffer.from('mp3') },
+      baseUrl: 'http://192.168.31.137:18080/v1',
+      model: 'moss-transcribe-diarize-0.9b',
+      language: 'zh',
+      onProgress,
+      pollIntervalMs: 1
+    });
+
+    expect(result).toEqual({ text: '长音频 MOSS 转录结果', usage: { audio_seconds: 3600 } });
+    expect(axios.get).toHaveBeenCalledWith(
+      'http://192.168.31.137:18080/v1/jobs/job_moss_123',
+      expect.objectContaining({ proxy: false })
+    );
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'transcribing',
+      current: 2,
+      total: 5
     }));
   });
 

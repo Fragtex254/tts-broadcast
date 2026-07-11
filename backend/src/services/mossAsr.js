@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 
 const MOSS_ASR_TIMEOUT_MS = Number(process.env.MOSS_ASR_TIMEOUT_MS || 60 * 60 * 1000);
+const MOSS_ASR_POLL_INTERVAL_MS = Number(process.env.MOSS_ASR_POLL_INTERVAL_MS || 2000);
 
 function normalizeV1BaseUrl(baseUrl) {
   const normalized = String(baseUrl || '').trim().replace(/\/+$/, '');
@@ -68,9 +69,98 @@ async function buildFormData({ file, language, model, context }) {
     formData.append('language', language);
   }
   if (typeof context === 'string' && context.trim()) {
-    formData.append('prompt', context.trim());
+    formData.append('context', context.trim());
   }
   return formData;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractJobId(responseData) {
+  const jobId = responseData?.id || responseData?.job_id;
+  if (typeof jobId === 'string' && jobId.trim()) {
+    return jobId.trim();
+  }
+  throw new Error('MOSS ASR 未返回任务 ID');
+}
+
+function mapJobProgress(job) {
+  const progress = job?.progress || {};
+  const status = job?.status;
+  const phase = progress.phase || status || 'transcribing';
+  const total = Number(progress.total_chunks || 0);
+  const current = Number(progress.completed_chunks || 0);
+
+  if (status === 'queued' || phase === 'queued') {
+    return { phase: 'preparing', percent: 15, current: 0, total, text: '', message: '等待 MOSS ASR 队列' };
+  }
+  if (phase === 'preprocessing') {
+    return { phase: 'preparing', percent: 20, current: 0, total, text: '', message: 'MOSS ASR 正在预处理音频' };
+  }
+  if (phase === 'splitting') {
+    return { phase: 'preparing', percent: 30, current: 0, total, text: '', message: 'MOSS ASR 正在切分音频' };
+  }
+  if (phase === 'loading_model') {
+    return { phase: 'preparing', percent: 40, current: 0, total, text: '', message: 'MOSS ASR 正在加载模型' };
+  }
+  if (phase === 'merging') {
+    return { phase: 'transcribing', percent: 98, current: total, total, text: '', message: 'MOSS ASR 正在合并结果' };
+  }
+
+  const rawPercent = typeof progress.percent === 'number' ? progress.percent : 0;
+  const percent = Math.min(95, Math.max(45, Math.round(45 + rawPercent * 0.5)));
+  return {
+    phase: 'transcribing',
+    percent,
+    current,
+    total,
+    text: '',
+    message: total > 0 ? `MOSS ASR 正在转录 ${current}/${total}` : 'MOSS ASR 正在转录'
+  };
+}
+
+function extractCompletedJob(job) {
+  const result = job?.result;
+  if (!result || typeof result.text !== 'string') {
+    throw new Error('MOSS ASR 未返回转录结果');
+  }
+  return {
+    text: result.text.trim(),
+    usage: result.usage || null
+  };
+}
+
+async function pollJob({ baseUrl, jobId, headers, onProgress, pollIntervalMs }) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < MOSS_ASR_TIMEOUT_MS) {
+    const response = await axios.get(createMossAsrUrl(baseUrl, `/jobs/${encodeURIComponent(jobId)}`), {
+      headers,
+      proxy: false,
+      timeout: MOSS_ASR_TIMEOUT_MS
+    });
+    const job = response.data;
+    if (typeof onProgress === 'function') {
+      onProgress(mapJobProgress(job));
+    }
+    if (job?.status === 'completed') {
+      return extractCompletedJob(job);
+    }
+    if (job?.status === 'failed') {
+      const failed = new Error(job.error?.message || 'MOSS ASR 转录失败');
+      failed.response = { data: { error: job.error } };
+      throw failed;
+    }
+    if (job?.status === 'cancelled') {
+      throw new Error('MOSS ASR 转录任务已取消');
+    }
+    if (job?.status === 'expired') {
+      throw new Error('MOSS ASR 转录结果已过期，请重新提交');
+    }
+    await sleep(pollIntervalMs);
+  }
+  throw new Error('MOSS ASR 处理超时，请尝试更短音频或调大 MOSS_ASR_TIMEOUT_MS');
 }
 
 function extractText(responseData) {
@@ -120,23 +210,44 @@ function mapMossError(error) {
  * @param {string} [params.language='auto'] - auto/zh/en
  * @param {string} [params.context] - 转录提示词
  * @param {Function} [params.onProgress] - 进度回调
+ * @param {number} [params.pollIntervalMs] - job 轮询间隔，测试可覆盖
  * @returns {Promise<{text: string, usage: Object|null}>}
  */
-async function transcribeFile({ file, baseUrl, model, apiKey = '', language = 'auto', context = '', onProgress }) {
+async function transcribeFile({
+  file,
+  baseUrl,
+  model,
+  apiKey = '',
+  language = 'auto',
+  context = '',
+  onProgress,
+  pollIntervalMs = MOSS_ASR_POLL_INTERVAL_MS
+}) {
   if (typeof onProgress === 'function') {
     onProgress({ phase: 'preparing', percent: 10, current: 0, total: 0, text: '', message: '正在提交 MOSS ASR 任务' });
   }
 
   try {
+    const headers = buildHeaders(apiKey);
     const response = await axios.post(
       createMossAsrUrl(baseUrl, '/audio/transcriptions'),
       await buildFormData({ file, language, model, context }),
       {
-        headers: buildHeaders(apiKey),
+        headers,
         proxy: false,
         timeout: MOSS_ASR_TIMEOUT_MS
       }
     );
+
+    if (response.status === 202 || response.data?.status === 'queued') {
+      return await pollJob({
+        baseUrl,
+        jobId: extractJobId(response.data),
+        headers,
+        onProgress,
+        pollIntervalMs
+      });
+    }
 
     if (typeof onProgress === 'function') {
       onProgress({ phase: 'transcribing', percent: 95, current: 1, total: 1, text: '', message: 'MOSS ASR 正在返回结果' });
