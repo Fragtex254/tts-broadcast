@@ -23,8 +23,48 @@ export interface Broadcast {
   status: string;
   saved: number;
   mode: 'whole' | 'segmented';
+  template_id: number | null;
+  template_snapshot: string;
+  publish_metadata: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ContentTemplate {
+  id: number;
+  name: string;
+  platform: string;
+  content_type: string;
+  target_duration_seconds: number;
+  audience: string;
+  tone: string;
+  structure: string;
+  prompt_instructions: string;
+  default_voice_config: string;
+  is_builtin: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ContentTemplateInput = Omit<ContentTemplate, 'id' | 'is_builtin' | 'created_at' | 'updated_at'>;
+
+export interface PublishMetadata {
+  primaryTitle: string;
+  alternativeTitles: string[];
+  summary: string;
+  publishCopy: string;
+  tags: string[];
+}
+
+export interface PublishPackage {
+  metadata: PublishMetadata;
+  template: Record<string, unknown>;
+  scriptMarkdown: string;
+  scriptText: string;
+  publishMarkdown: string;
+  srt: string | null;
+  vtt: string | null;
+  subtitleStatus: 'ready' | 'whole-mode' | 'audio-incomplete';
 }
 
 /** 逐句 segment */
@@ -283,8 +323,16 @@ export interface AppState {
   isLoadingPresets: boolean;
   presetError: string | null;
 
+  contentTemplates: ContentTemplate[];
+  selectedTemplateId: number | null;
+  isLoadingContentTemplates: boolean;
+  contentTemplateError: string | null;
+  isGeneratingPublishMetadata: boolean;
+  isDownloadingPublishPackage: boolean;
+  publishPackageError: string | null;
+
   fetchTodayItems: (params?: { category?: string; take?: number }) => Promise<void>;
-  rewriteScript: (data: { items: NewsItem[]; opening?: string; closing?: string }) => Promise<string>;
+  rewriteScript: (data: { items: NewsItem[]; opening?: string; closing?: string; templateId?: number }) => Promise<string>;
   generateBroadcast: (data: {
     text: string;
     voice?: string;
@@ -297,6 +345,7 @@ export interface AppState {
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
     mode?: 'whole' | 'segmented';
+    templateId?: number;
   }) => Promise<{ broadcast: Broadcast; audioUrl: string }>;
   fetchBroadcasts: (params?: { page?: number; limit?: number }) => Promise<{
     broadcasts: Broadcast[];
@@ -305,6 +354,15 @@ export interface AppState {
   setCurrentBroadcast: (broadcast: Broadcast | null) => void;
   saveBroadcast: (id: number) => Promise<Broadcast>;
   updateScript: (script: string) => void;
+
+  fetchContentTemplates: () => Promise<ContentTemplate[]>;
+  selectContentTemplate: (id: number) => void;
+  createContentTemplate: (data: ContentTemplateInput) => Promise<ContentTemplate>;
+  updateContentTemplate: (id: number, data: ContentTemplateInput) => Promise<ContentTemplate>;
+  deleteContentTemplate: (id: number) => Promise<void>;
+  generatePublishMetadata: (broadcastId: number) => Promise<PublishMetadata>;
+  savePublishMetadata: (broadcastId: number, metadata: PublishMetadata) => Promise<PublishMetadata>;
+  downloadPublishPackage: (broadcastId: number) => Promise<void>;
 
   splitScriptAction: (text: string) => Promise<void>;
   splitScript: (broadcastId: number) => Promise<Segment[]>;

@@ -9,6 +9,7 @@ const tts = require('../services/tts');
 const audio = require('../services/audio');
 const db = require('../db');
 const broadcastStore = require('../services/broadcastStore');
+const contentTemplateStore = require('../services/contentTemplateStore');
 const segmentStore = require('../services/segmentStore');
 const voiceConfigService = require('../services/voiceConfig');
 const audioAsset = require('../services/audioAsset');
@@ -113,7 +114,7 @@ router.get('/today', async (req, res) => {
  */
 router.post('/rewrite', async (req, res) => {
   try {
-    const { items, opening, closing } = req.body;
+    const { items, opening, closing, templateId } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: '请提供资讯列表' });
@@ -123,10 +124,14 @@ router.post('/rewrite', async (req, res) => {
     const defaultOpening = db.prepare('SELECT value FROM settings WHERE key = ?').get('opening_script');
     const defaultClosing = db.prepare('SELECT value FROM settings WHERE key = ?').get('closing_script');
 
+    const template = templateId ? contentTemplateStore.getById(templateId) : null;
+    if (templateId && !template) return res.status(404).json({ error: '创作模板不存在' });
+
     const script = await mimo.rewriteToScript({
       items,
       opening: opening || JSON.parse(defaultOpening?.value || '""'),
-      closing: closing || JSON.parse(defaultClosing?.value || '""')
+      closing: closing || JSON.parse(defaultClosing?.value || '""'),
+      template,
     });
 
     res.json({ script });
@@ -142,7 +147,7 @@ router.post('/rewrite', async (req, res) => {
  */
 router.post('/generate', async (req, res) => {
   try {
-    const { text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, optimizeTextPreview, speed, emotion, pitch, sourceItems, mode } = req.body;
+    const { text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, optimizeTextPreview, speed, emotion, pitch, sourceItems, mode, templateId } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: '请提供口播稿内容' });
@@ -169,6 +174,8 @@ router.post('/generate', async (req, res) => {
       emotion,
       pitch
     });
+    const template = templateId ? contentTemplateStore.getById(templateId) : null;
+    if (templateId && !template) return res.status(404).json({ error: '创作模板不存在' });
 
     if (mode === 'segmented') {
       const broadcast = broadcastStore.create({
@@ -178,7 +185,9 @@ router.post('/generate', async (req, res) => {
         voiceConfig: normalized.voiceConfig,
         sourceItems,
         status: 'pending',
-        mode: 'segmented'
+        mode: 'segmented',
+        templateId: template?.id || null,
+        templateSnapshot: template || {},
       });
       return res.json({ broadcast });
     }
@@ -202,7 +211,9 @@ router.post('/generate', async (req, res) => {
       voiceConfig: normalized.voiceConfig,
       sourceItems,
       status: 'generated',
-      mode: 'whole'
+      mode: 'whole',
+      templateId: template?.id || null,
+      templateSnapshot: template || {},
     });
 
     // 清理旧的未保存记录，保留最近10条

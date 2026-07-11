@@ -40,6 +40,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
           text,
           ...buildVoicePayload(get().voiceConfig),
           mode: 'segmented',
+          templateId: get().selectedTemplateId ?? undefined,
         });
         const { broadcast } = genResponse.data;
         set((state) => ({

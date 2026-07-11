@@ -1,5 +1,5 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
-import type { AsrEngine, AsrProvider, NewsItem, Settings, VoiceConfig } from '../store/types';
+import type { AsrEngine, AsrProvider, ContentTemplateInput, NewsItem, PublishMetadata, Settings, VoiceConfig } from '../store/types';
 import { createScopedLogger, toLogError } from './logger';
 
 const logger = createScopedLogger('api-client');
@@ -54,7 +54,7 @@ export const broadcastApi = {
   getToday: (params?: { category?: string; take?: number }) =>
     api.get('/broadcast/today', { params }),
 
-  rewrite: (data: { items: NewsItem[]; opening?: string; closing?: string }) =>
+  rewrite: (data: { items: NewsItem[]; opening?: string; closing?: string; templateId?: number }) =>
     api.post('/broadcast/rewrite', data),
 
   generate: (data: {
@@ -69,6 +69,7 @@ export const broadcastApi = {
     emotion?: string | { emotion: string; weight: number }[] | null;
     pitch?: { pitch_ratio: number; style?: string } | null;
     mode?: 'whole' | 'segmented';
+    templateId?: number;
   }) => api.post('/broadcast/generate', data),
 
   getHistory: (params?: { page?: number; limit?: number }) =>
@@ -132,6 +133,25 @@ export const broadcastApi = {
   /** 批量删除播报记录 */
   batchDelete: (ids: number[]) =>
     api.post('/broadcast/batch-delete', { ids }),
+
+  generatePublishMetadata: (id: number) =>
+    api.post(`/broadcast/${id}/publish-metadata/generate`),
+
+  savePublishMetadata: (id: number, data: PublishMetadata) =>
+    api.put(`/broadcast/${id}/publish-metadata`, data),
+
+  getPublishPackage: (id: number) =>
+    api.get(`/broadcast/${id}/publish-package`),
+
+  getPublishAudio: (id: number) =>
+    api.get(`/broadcast/${id}/publish-audio`, { responseType: 'blob' }),
+};
+
+export const contentTemplateApi = {
+  getAll: () => api.get('/content-templates'),
+  create: (data: ContentTemplateInput) => api.post('/content-templates', data),
+  update: (id: number, data: ContentTemplateInput) => api.put(`/content-templates/${id}`, data),
+  delete: (id: number) => api.delete(`/content-templates/${id}`),
 };
 
 // 设置相关 API

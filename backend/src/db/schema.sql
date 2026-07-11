@@ -11,6 +11,25 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   status TEXT DEFAULT 'pending',
   saved BOOLEAN DEFAULT 0,
   mode TEXT DEFAULT 'whole' CHECK (mode IN ('whole', 'segmented')),
+  template_id INTEGER DEFAULT NULL,
+  template_snapshot TEXT DEFAULT '{}',
+  publish_metadata TEXT DEFAULT '{}',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS content_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  platform TEXT NOT NULL DEFAULT '通用',
+  content_type TEXT NOT NULL DEFAULT '口播',
+  target_duration_seconds INTEGER NOT NULL DEFAULT 180,
+  audience TEXT NOT NULL DEFAULT '泛知识内容受众',
+  tone TEXT NOT NULL DEFAULT '自然、清晰、有信息密度',
+  structure TEXT NOT NULL DEFAULT '开头点题；正文分层展开；结尾总结并给出行动引导',
+  prompt_instructions TEXT NOT NULL DEFAULT '',
+  default_voice_config TEXT NOT NULL DEFAULT '{}',
+  is_builtin BOOLEAN NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -48,6 +67,7 @@ CREATE TABLE IF NOT EXISTS segments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_broadcasts_created_at ON broadcasts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_content_templates_builtin ON content_templates(is_builtin DESC, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_schedules_is_active ON schedules(is_active);
 CREATE INDEX IF NOT EXISTS idx_segments_broadcast_id ON segments(broadcast_id);
 

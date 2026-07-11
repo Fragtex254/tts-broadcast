@@ -91,6 +91,7 @@ SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"
 - 路由层不直接调用 `db.prepare()`（settings 表除外）
 - store 函数接收/返回纯 JS 对象，不依赖 `req`/`res`
 - 新增业务表必须同步补对应 `*Store.js`，而不是在路由里散写 SQL
+- 可变配置影响历史结果时同时保存引用 ID 与 JSON 快照；例如 `broadcasts.template_id` 用于追溯，`template_snapshot` 保证模板后续修改不改变历史语义
 
 ## Checklist
 

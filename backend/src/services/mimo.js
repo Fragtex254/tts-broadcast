@@ -557,9 +557,10 @@ async function createVisionMessage({ prompt, systemPrompt, maxTokens, imageBuffe
  * @param {Array} params.items - 资讯列表
  * @param {string} params.opening - 开场白
  * @param {string} params.closing - 结束语
+ * @param {Object|null} [params.template] - 创作模板
  * @returns {Promise<string>} 口播稿
  */
-async function rewriteToScript({ items, opening, closing }) {
+async function rewriteToScript({ items, opening, closing, template = null }) {
   if (!items || !Array.isArray(items) || items.length === 0) {
     throw new Error('请提供有效的资讯列表');
   }
@@ -569,15 +570,27 @@ async function rewriteToScript({ items, opening, closing }) {
     `${i + 1}. ${item.title}\n   ${item.summary}\n   来源：${item.source}`
   ).join('\n\n');
 
+  const templateRequirements = template ? `
+创作模板：${template.name}
+目标平台：${template.platform}
+内容类型：${template.content_type}
+目标时长：约 ${template.target_duration_seconds} 秒
+目标受众：${template.audience}
+语言风格：${template.tone}
+稿件结构：${template.structure}
+补充要求：${template.prompt_instructions || '无'}
+` : '';
+
   const prompt = `你是一位专业的 AI 资讯播报员。请将以下 AI 资讯改写成适合口播的风格。
 
 要求：
 1. 语言自然流畅，适合朗读
 2. 保持信息准确性
 3. 适当添加过渡语句
-4. 控制总时长在 3-5 分钟内
+4. 严格参考创作模板的目标时长和结构；没有模板时控制在 3-5 分钟内
 5. 使用中文
 6. 纯文本输出，不要使用任何 Markdown 格式（不要用 **、##、- 等符号），直接输出可朗读的文字
+${templateRequirements}
 
 开场白：${opening}
 
@@ -594,6 +607,69 @@ ${itemsText}
     maxTokens: 2000,
     thinkingEnabled: config.rewriteThinkingEnabled
   });
+}
+
+/**
+ * 为播报生成可编辑的发布信息。
+ * @param {Object} params
+ * @param {string} params.title - 当前标题
+ * @param {string} params.content - 完整口播稿
+ * @param {Object|null} [params.template] - 创作模板快照
+ * @returns {Promise<Object>} 发布信息
+ */
+async function generatePublishMetadata({ title, content, template = null }) {
+  if (!content || typeof content !== 'string') {
+    throw new Error('请提供口播稿内容');
+  }
+  const platform = template?.platform || '通用内容平台';
+  const prompt = `请根据下面的口播稿生成一套可直接编辑和发布的内容信息。
+
+目标平台：${platform}
+当前标题：${title || '未命名内容'}
+
+要求：
+1. primaryTitle 是最推荐的标题，不超过 30 个中文字符
+2. alternativeTitles 必须恰好 4 个，风格有差异但不能标题党
+3. summary 为 80-160 字的内容简介
+4. publishCopy 为可直接发布的平台文案，包含自然换行，不虚构原稿没有的信息
+5. tags 为 5-10 个不带 # 的短标签
+6. 只输出 JSON 对象，不要 Markdown，不要解释
+
+JSON 格式：
+{"primaryTitle":"","alternativeTitles":["","","",""],"summary":"","publishCopy":"","tags":[""]}
+
+口播稿：
+${content}`;
+
+  const rawText = await createLlmMessage({
+    prompt,
+    systemPrompt: '你是内容发布编辑，只输出符合要求的 JSON 对象。',
+    maxTokens: 1800,
+    thinkingEnabled: false
+  });
+
+  let parsed;
+  try {
+    parsed = JSON.parse(extractJsonObjectText(rawText));
+  } catch {
+    throw new Error('发布信息解析失败，请重新生成');
+  }
+  const alternativeTitles = Array.isArray(parsed.alternativeTitles)
+    ? parsed.alternativeTitles.filter((item) => typeof item === 'string' && item.trim()).slice(0, 4)
+    : [];
+  const tags = Array.isArray(parsed.tags)
+    ? parsed.tags.filter((item) => typeof item === 'string' && item.trim()).slice(0, 10)
+    : [];
+  if (typeof parsed.primaryTitle !== 'string' || typeof parsed.summary !== 'string' || typeof parsed.publishCopy !== 'string') {
+    throw new Error('发布信息格式不完整，请重新生成');
+  }
+  return {
+    primaryTitle: parsed.primaryTitle.trim(),
+    alternativeTitles,
+    summary: parsed.summary.trim(),
+    publishCopy: parsed.publishCopy.trim(),
+    tags,
+  };
 }
 
 function buildSplitScriptPrompt(text) {
@@ -1177,6 +1253,7 @@ module.exports = {
   getLlmConfig,
   formatTranscriptionText,
   inferVoiceDesignFromImage,
+  generatePublishMetadata,
   rewriteToScript,
   suggestSegmentAudioTags,
   suggestTrialTextTags,

@@ -31,6 +31,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
   const fetchTodayItems = useStore((s) => s.fetchTodayItems);
   const rewriteScript = useStore((s) => s.rewriteScript);
   const isRewriting = useStore((s) => s.isRewriting);
+  const selectedTemplateId = useStore((s) => s.selectedTemplateId);
 
   const [category, setCategory] = useState<string>('');
   const [count, setCount] = useState<number>(10);
@@ -61,7 +62,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
     }
     setError(null);
     try {
-      await rewriteScript({ items: todayItems });
+      await rewriteScript({ items: todayItems, templateId: selectedTemplateId ?? undefined });
       onRewriteComplete?.();
     } catch (err) {
       setError('改写口播稿失败，请稍后重试');

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { ScriptPreview } from '../components/Dashboard/ScriptPreview';
@@ -6,12 +6,14 @@ import { VoiceGenerator } from '../components/Dashboard/VoiceGenerator';
 import { SegmentEditor } from '../components/Dashboard/SegmentEditor';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import useStore from '../store';
+import { PublishPackageModal } from '../components/Creator/PublishPackageModal';
 
 export const ScriptEditor: React.FC = () => {
   const navigate = useNavigate();
   const currentBroadcast = useStore((s) => s.currentBroadcast);
   const segments = useStore((s) => s.segments);
   const saveBroadcast = useStore((s) => s.saveBroadcast);
+  const [isPublishPackageOpen, setIsPublishPackageOpen] = useState(false);
 
   const audioUrl = currentBroadcast && (
     currentBroadcast.audio_path || (currentBroadcast.mode === 'segmented' && currentBroadcast.status === 'generated')
@@ -41,10 +43,18 @@ export const ScriptEditor: React.FC = () => {
               isSaved={currentBroadcast?.saved === 1}
               onSave={saveBroadcast}
               mode={currentBroadcast?.mode}
+              onOpenPublishPackage={currentBroadcast ? () => setIsPublishPackageOpen(true) : undefined}
             />
           </div>
         </main>
       </div>
+      {currentBroadcast && isPublishPackageOpen && (
+        <PublishPackageModal
+          isOpen={isPublishPackageOpen}
+          broadcast={currentBroadcast}
+          onClose={() => setIsPublishPackageOpen(false)}
+        />
+      )}
     </div>
   );
 };

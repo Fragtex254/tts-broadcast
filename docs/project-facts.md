@@ -73,8 +73,8 @@ tts-broadcast/
 │   ├── src/
 │   │   ├── app.js            # Express 应用入口，中间件配置，路由挂载
 │   │   ├── db/               # SQLite 初始化与 schema
-│   │   ├── routes/           # Express 路由（broadcast, segments, settings, schedule, voicePresets, transcribe, sse）
-│   │   ├── services/         # 业务逻辑 + 外部 API + DAL（aihot, audio*, asr/qwenAsr/wslAsr/mossAsr/asrModels, media, mimo*, tts*, voiceConfig, *Store, scheduler, sseManager）
+│   │   ├── routes/           # Express 路由（broadcast, segments, publishPackage, contentTemplates, settings, schedule, voicePresets, transcribe, sse）
+│   │   ├── services/         # 业务逻辑 + 外部 API + DAL（aihot, audio*, publishPackage, asr/qwenAsr/wslAsr/mossAsr/asrModels, media, mimo*, tts*, voiceConfig, *Store, scheduler, sseManager）
 │   │   └── utils/            # 共享工具函数（validation）
 │   ├── tests/                # Jest 测试，镜像 src/ 结构
 │   ├── audio/                # 生成的音频文件（已 gitignore）
@@ -97,7 +97,8 @@ tts-broadcast/
 
 SQLite 数据库包含核心业务表和运行控制表：
 
-- `broadcasts`：播报记录，含稿件内容、音频路径、状态、模式（整篇/分段）
+- `broadcasts`：播报记录，含稿件内容、音频路径、状态、模式（整篇/分段）、创作模板快照与发布信息
+- `content_templates`：创作模板，保存目标平台、内容类型、时长、受众、语气、结构和补充创作要求；内置模板只读，自定义模板可管理
 - `segments`：分段记录，关联 broadcast（外键 `ON DELETE CASCADE`），每段是一个适合 TTS 的语义块并独立生成音频
 - `settings`：键值存储，保存 API Key、音色偏好、脚本等配置
 - `schedules`：定时任务，基于 cron 表达式自动播报
@@ -114,6 +115,8 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `broadcasts.status`：播报状态（如 `pending`、`completed`）
 - `broadcasts.mode`：`whole`（整篇生成）或 `segmented`（分段生成）
 - `broadcasts.saved`：是否已保存（0/1），决定音频生命周期
+- `broadcasts.template_id` / `template_snapshot`：模板引用与创建时快照，模板后续修改不影响历史播报
+- `broadcasts.publish_metadata`：可编辑的主标题、备选标题、简介、平台文案和标签 JSON
 - `broadcasts.voice_type`：音色类型（简单值，如音色名称）
 - `broadcasts.voice_config`：音色配置 JSON（详细参数）
 - `segments.broadcast_id`：外键关联 broadcasts，级联删除

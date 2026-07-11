@@ -305,6 +305,54 @@ function resolveAudioFilePath(audioPath) {
 }
 
 /**
+ * 读取受控 /audio/ 路径下的音频文件。
+ * @param {string} audioPath - 数据库存储的音频路径
+ * @returns {Buffer} 音频内容
+ */
+function readAudioFile(audioPath) {
+  const filePath = resolveAudioFilePath(audioPath);
+  if (!fs.existsSync(filePath)) throw new Error('音频文件不存在');
+  return fs.readFileSync(filePath);
+}
+
+/**
+ * 读取 WAV 时长，并按播放倍速换算导出后的实际时长。
+ * @param {Object} params
+ * @param {string} params.audioPath - WAV 音频路径
+ * @param {number} [params.playbackRate=1] - 播放倍速
+ * @returns {number} 秒数
+ */
+function getWavDurationSeconds({ audioPath, playbackRate = 1 }) {
+  const filePath = resolveAudioFilePath(audioPath);
+  if (!fs.existsSync(filePath)) throw new Error('音频文件不存在');
+  const parsed = parseWavFile(fs.readFileSync(filePath), filePath);
+  const rate = normalizePlaybackRate(Number(playbackRate || 1));
+  return parsed.data.length / parsed.fmt.byteRate / rate;
+}
+
+/**
+ * 将音频 Buffer 转为适合发布的 MP3。
+ * @param {Object} params
+ * @param {Buffer} params.buffer - 输入音频
+ * @returns {Promise<Buffer>} MP3 内容
+ */
+async function transcodeAudioBufferToMp3({ buffer }) {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-publish-'));
+  const inputPath = path.join(tempDir, 'input.wav');
+  const outputPath = path.join(tempDir, 'output.mp3');
+  try {
+    fs.writeFileSync(inputPath, buffer);
+    await runFfmpeg([
+      '-hide_banner', '-y', '-i', inputPath, '-vn', '-map_metadata', '-1',
+      '-codec:a', 'libmp3lame', '-b:a', '192k', outputPath,
+    ]);
+    return fs.readFileSync(outputPath);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+/**
  * 按 segment playback_rate 逐段做不变调变速后合并为 WAV Buffer。
  * 原始 segment 音频不会被覆盖；临时变速文件会在处理结束后清理。
  * @param {Array<{audio_path:string, playback_rate?:number}>} segments - 已生成的段落列表
@@ -400,5 +448,8 @@ module.exports = {
   buildAtempoFilter,
   mergeWavFiles,
   mergeSegmentAudioWithRates,
+  readAudioFile,
+  getWavDurationSeconds,
+  transcodeAudioBufferToMp3,
   resolveVoiceClone,
 };

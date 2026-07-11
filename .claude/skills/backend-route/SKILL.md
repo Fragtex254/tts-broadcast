@@ -1,6 +1,6 @@
 ---
 name: backend-route
-description: 新增或修改后端 Express 路由端点时使用。涵盖路由定义模式、路由挂载、async/await 规则、validateId 参数校验、必填参数校验、业务规则校验、try-catch 错误处理、HTTP 状态码（200/201/400/404/413/500）、响应格式包裹、通过 *Store DAL 操作数据库。触发场景：加接口、改路由、新端点、加 API、改 broadcast/segments/settings/schedule/voicePresets/transcribe 路由、动作端点、CRUD 接口、状态码、错误响应。
+description: 新增或修改后端 Express 路由端点时使用。涵盖路由定义模式、路由挂载、async/await 规则、validateId 参数校验、必填参数校验、业务规则校验、try-catch 错误处理、HTTP 状态码（200/201/400/404/413/500）、响应格式包裹、通过 *Store DAL 操作数据库。触发场景：加接口、改路由、新端点、加 API、改 broadcast/segments/settings/schedule/voicePresets/transcribe/contentTemplates/publishPackage 路由、动作端点、CRUD 接口、状态码、错误响应。
 ---
 
 # 后端路由开发
@@ -55,6 +55,8 @@ app.use('/api/broadcast', require('./routes/broadcast'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/schedules', require('./routes/schedule'));
 app.use('/api/voice-presets', require('./routes/voicePresets'));
+app.use('/api/content-templates', require('./routes/contentTemplates'));
+app.use('/api/broadcast', require('./routes/publishPackage'));
 ```
 
 ### async/await 使用规则

@@ -59,8 +59,46 @@ export const BroadcastSchema = z.object({
   status: z.string(),
   saved: z.number(),
   mode: z.enum(['whole', 'segmented']),
+  template_id: z.number().nullable(),
+  template_snapshot: z.string(),
+  publish_metadata: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
+});
+
+export const ContentTemplateSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  platform: z.string(),
+  content_type: z.string(),
+  target_duration_seconds: z.number(),
+  audience: z.string(),
+  tone: z.string(),
+  structure: z.string(),
+  prompt_instructions: z.string(),
+  default_voice_config: z.string(),
+  is_builtin: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const PublishMetadataSchema = z.object({
+  primaryTitle: z.string(),
+  alternativeTitles: z.array(z.string()),
+  summary: z.string(),
+  publishCopy: z.string(),
+  tags: z.array(z.string()),
+});
+
+export const PublishPackageSchema = z.object({
+  metadata: PublishMetadataSchema,
+  template: z.record(z.string(), z.unknown()),
+  scriptMarkdown: z.string(),
+  scriptText: z.string(),
+  publishMarkdown: z.string(),
+  srt: z.string().nullable(),
+  vtt: z.string().nullable(),
+  subtitleStatus: z.enum(['ready', 'whole-mode', 'audio-incomplete']),
 });
 
 export const SegmentSchema = z.object({

@@ -6,6 +6,8 @@ import { createSegmentSlice } from './segmentSlice';
 import { createSettingsSlice } from './settingsSlice';
 import { createVoiceConfigSlice } from './voiceConfigSlice';
 import { createTranscribeSlice } from './transcribeSlice';
+import { createContentTemplateSlice } from './contentTemplateSlice';
+import { createPublishPackageSlice } from './publishPackageSlice';
 import type { AppState } from './types';
 
 export type {
@@ -20,9 +22,13 @@ export type {
   BatchTranscriptionPhase,
   BatchTranscriptionProgress,
   Broadcast,
+  ContentTemplate,
+  ContentTemplateInput,
   ConfirmDialogProps,
   LlmApiFormat,
   LlmModelOption,
+  PublishMetadata,
+  PublishPackage,
   Schedule,
   Segment,
   SegmentDraftInput,
@@ -43,6 +49,8 @@ export const useStore = create<AppState>((set, get) => ({
   ...createSettingsSlice(set),
   ...createScheduleSlice(set),
   ...createPresetSlice(set),
+  ...createContentTemplateSlice(set),
+  ...createPublishPackageSlice(set),
 }));
 
 export default useStore;

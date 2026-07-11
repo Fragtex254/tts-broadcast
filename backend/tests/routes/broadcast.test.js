@@ -7,6 +7,7 @@ const app = require('../../src/app');
 const db = require('../../src/db');
 const aihot = require('../../src/services/aihot');
 const audio = require('../../src/services/audio');
+const mimo = require('../../src/services/mimo');
 
 describe('播报 API', () => {
   beforeEach(() => {
@@ -162,6 +163,21 @@ describe('播报 API', () => {
         .send({});
       expect(res.status).toBe(400);
     });
+
+    test('将所选创作模板传给改写服务', async () => {
+      const template = db.prepare("SELECT * FROM content_templates WHERE name = '60 秒短视频口播'").get();
+      jest.spyOn(mimo, 'rewriteToScript').mockResolvedValue('模板化口播稿');
+      const res = await request(app)
+        .post('/api/broadcast/rewrite')
+        .send({
+          items: [{ id: '1', title: '测试资讯', summary: '测试摘要' }],
+          templateId: template.id,
+        });
+      expect(res.status).toBe(200);
+      expect(mimo.rewriteToScript).toHaveBeenCalledWith(expect.objectContaining({
+        template: expect.objectContaining({ id: template.id, name: '60 秒短视频口播' }),
+      }));
+    });
   });
 
   describe('POST /api/broadcast/generate (segmented)', () => {
@@ -191,18 +207,22 @@ describe('播报 API', () => {
     });
 
     test('segmented 模式创建播报记录', async () => {
+      const template = db.prepare("SELECT id FROM content_templates WHERE name = '3 分钟资讯播报'").get();
       const res = await request(app)
         .post('/api/broadcast/generate')
         .send({
           text: '测试口播稿内容，足够长以生成标题。',
           voiceType: 'preset',
           voice: '冰糖',
-          mode: 'segmented'
+          mode: 'segmented',
+          templateId: template.id,
         });
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('broadcast');
       expect(res.body.broadcast.mode).toBe('segmented');
       expect(res.body.broadcast.status).toBe('pending');
+      expect(res.body.broadcast.template_id).toBe(template.id);
+      expect(JSON.parse(res.body.broadcast.template_snapshot).name).toBe('3 分钟资讯播报');
     });
   });
 

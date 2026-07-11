@@ -12,12 +12,16 @@ const db = require('../db');
  * @param {string|Array|null} [params.sourceItems] - 来源资讯列表
  * @param {string} [params.status='pending'] - 播报状态
  * @param {string} [params.mode='whole'] - 播报模式（whole/segmented）
+ * @param {number|null} [params.templateId] - 创作模板 ID
+ * @param {Object|string|null} [params.templateSnapshot] - 创建时模板快照
  * @returns {Object} 创建的播报记录
  */
-function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems, status, mode }) {
+function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems, status, mode, templateId, templateSnapshot }) {
   const result = db.prepare(`
-    INSERT INTO broadcasts (title, content, audio_path, voice_type, voice_config, source_items, status, mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO broadcasts (
+      title, content, audio_path, voice_type, voice_config, source_items, status, mode,
+      template_id, template_snapshot
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     title,
     content,
@@ -26,9 +30,24 @@ function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems
     typeof voiceConfig === 'string' ? voiceConfig : JSON.stringify(voiceConfig || {}),
     sourceItems ? (typeof sourceItems === 'string' ? sourceItems : JSON.stringify(sourceItems)) : null,
     status || 'pending',
-    mode || 'whole'
+    mode || 'whole',
+    templateId || null,
+    typeof templateSnapshot === 'string' ? templateSnapshot : JSON.stringify(templateSnapshot || {})
   );
   return db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(result.lastInsertRowid);
+}
+
+/**
+ * 保存播报的发布信息。
+ * @param {number} id - 播报 ID
+ * @param {Object|string} publishMetadata - 发布信息
+ * @returns {Object|undefined} 更新后的播报
+ */
+function updatePublishMetadata(id, publishMetadata) {
+  const value = typeof publishMetadata === 'string' ? publishMetadata : JSON.stringify(publishMetadata || {});
+  db.prepare('UPDATE broadcasts SET publish_metadata = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(value, id);
+  return getById(id);
 }
 
 /**
@@ -214,6 +233,7 @@ module.exports = {
   getOldestSaved,
   updateAudioPath,
   updateVoiceConfig,
+  updatePublishMetadata,
   toggleSaved,
   deleteById,
   batchDeleteByIds,

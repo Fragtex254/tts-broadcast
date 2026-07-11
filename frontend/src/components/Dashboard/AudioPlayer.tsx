@@ -11,6 +11,7 @@ interface AudioPlayerProps {
   isSaved?: boolean;
   onSave?: (id: number) => void | Promise<unknown>;
   mode?: string | null;
+  onOpenPublishPackage?: () => void;
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
@@ -20,6 +21,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   isSaved,
   onSave,
   mode,
+  onOpenPublishPackage,
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -74,6 +76,11 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <h3 className="font-display italic text-[14px] font-medium text-ink-soft">播放器</h3>
         </div>
         <div className="flex items-center gap-3">
+          {broadcastId && onOpenPublishPackage && (
+            <button type="button" onClick={onOpenPublishPackage} className="font-body text-[11px] text-ink-soft/70 hover:text-ink transition-colors uppercase tracking-wider" title="生成发布内容包">
+              发布包
+            </button>
+          )}
           {broadcastId && onSave && (
             <button
               type="button"

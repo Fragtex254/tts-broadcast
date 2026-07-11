@@ -41,6 +41,50 @@ try {
   db.exec("ALTER TABLE broadcasts ADD COLUMN mode TEXT DEFAULT 'whole'");
 }
 
+// 迁移：为播报记录添加创作模板快照与发布信息。
+try {
+  db.prepare('SELECT template_id FROM broadcasts LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE broadcasts ADD COLUMN template_id INTEGER DEFAULT NULL');
+}
+
+try {
+  db.prepare('SELECT template_snapshot FROM broadcasts LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE broadcasts ADD COLUMN template_snapshot TEXT DEFAULT '{}'");
+}
+
+try {
+  db.prepare('SELECT publish_metadata FROM broadcasts LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE broadcasts ADD COLUMN publish_metadata TEXT DEFAULT '{}'");
+}
+
+// 迁移：确保创作模板表存在。
+try {
+  db.prepare('SELECT id FROM content_templates LIMIT 1').get();
+} catch {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS content_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      platform TEXT NOT NULL DEFAULT '通用',
+      content_type TEXT NOT NULL DEFAULT '口播',
+      target_duration_seconds INTEGER NOT NULL DEFAULT 180,
+      audience TEXT NOT NULL DEFAULT '泛知识内容受众',
+      tone TEXT NOT NULL DEFAULT '自然、清晰、有信息密度',
+      structure TEXT NOT NULL DEFAULT '开头点题；正文分层展开；结尾总结并给出行动引导',
+      prompt_instructions TEXT NOT NULL DEFAULT '',
+      default_voice_config TEXT NOT NULL DEFAULT '{}',
+      is_builtin BOOLEAN NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_content_templates_builtin
+      ON content_templates(is_builtin DESC, created_at ASC);
+  `);
+}
+
 // 迁移：为旧数据库的 segments 添加 style_tag 列
 try {
   db.prepare('SELECT style_tag FROM segments LIMIT 1').get();
@@ -279,6 +323,58 @@ const insertSetting = db.prepare(`
 
 for (const [key, value] of Object.entries(defaultSettings)) {
   insertSetting.run(key, JSON.stringify(value));
+}
+
+const builtinContentTemplates = [
+  {
+    name: '60 秒短视频口播', platform: '短视频', contentType: '短视频口播', duration: 60,
+    audience: '希望快速获得结论的移动端用户', tone: '直接、有节奏、有观点',
+    structure: '前 3 秒抛出结果或冲突；用 2-3 个要点展开；结尾给出明确 CTA',
+    instructions: '避免长铺垫，每句话尽量简短，优先使用具体数字和对比。'
+  },
+  {
+    name: '3 分钟资讯播报', platform: '资讯音频', contentType: '资讯播报', duration: 180,
+    audience: '关注行业动态、需要快速了解重点的听众', tone: '专业、自然、信息密度高',
+    structure: '简短开场；按重要性串联资讯；每条说明影响；结尾总结趋势',
+    instructions: '保持事实准确，资讯之间加入自然过渡，不夸大原始信息。'
+  },
+  {
+    name: 'B 站知识讲解', platform: 'Bilibili', contentType: '知识讲解', duration: 480,
+    audience: '愿意理解背景、原理和影响的知识型观众', tone: '清晰、有例子、循序渐进',
+    structure: '问题导入；补充背景；拆解核心机制；举例；总结可迁移结论',
+    instructions: '解释术语，避免只罗列新闻，强调为什么以及对观众有什么影响。'
+  },
+  {
+    name: '播客单人稿', platform: '播客', contentType: '单人播客', duration: 900,
+    audience: '通勤或休息时收听长内容的用户', tone: '真诚、从容、有个人判断',
+    structure: '生活化开场；提出主题；分章节展开；加入观点与例子；自然收束',
+    instructions: '允许适度口语停顿和第一人称表达，避免论文式小标题。'
+  },
+  {
+    name: '通用自由创作', platform: '通用', contentType: '口播', duration: 180,
+    audience: '泛知识内容受众', tone: '自然、清晰、有信息密度',
+    structure: '开头点题；正文分层展开；结尾总结并给出行动引导',
+    instructions: '忠于素材，可根据内容自然调整篇幅和结构。'
+  }
+];
+
+const insertBuiltinTemplate = db.prepare(`
+  INSERT OR IGNORE INTO content_templates (
+    name, platform, content_type, target_duration_seconds, audience, tone,
+    structure, prompt_instructions, default_voice_config, is_builtin
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', 1)
+`);
+for (const template of builtinContentTemplates) {
+  insertBuiltinTemplate.run(
+    template.name,
+    template.platform,
+    template.contentType,
+    template.duration,
+    template.audience,
+    template.tone,
+    template.structure,
+    template.instructions
+  );
 }
 
 // 迁移：WSL ASR 接入后，将旧默认 MiMo 转录引擎切到 WSL ASR。

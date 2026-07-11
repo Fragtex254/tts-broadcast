@@ -4,6 +4,7 @@ import { Header } from '../components/Layout/Header';
 import { QuickGenerate } from '../components/Dashboard/QuickGenerate';
 import { ModalShell } from '../components/ModalShell';
 import useStore from '../store';
+import { ContentTemplatePicker } from '../components/Creator/ContentTemplatePicker';
 
 export const SourceCollection: React.FC = () => {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export const SourceCollection: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-6xl space-y-4">
+          <ContentTemplatePicker />
           <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-2 h-2 rounded-full bg-lemon" />

@@ -98,6 +98,7 @@ const { script, updateScript, settings } = useStore();
 - 使用 Axios 实例，`baseURL: '/api'`，`timeout: 300000`（5 分钟，TTS 生成可能耗时较长）
 - 已配置全局响应拦截器，统一处理 401/403/429/500 等常见错误码
 - 按功能域导出 API 对象：`broadcastApi`, `settingsApi`, `scheduleApi`
+- 创作模板使用 `contentTemplateApi` + `contentTemplateSlice`；发布包使用 `broadcastApi` 动作端点 + `publishPackageSlice`，ZIP 生成复用 `services/publishBundle.ts`
 - Settings 页的 LLM 模型发现通过 `settingsApi.fetchLlmModels()` 调用 `POST /settings/llm-models`，页面只维护局部 loading/error 和模型下拉选项
 - API 响应的结构校验 schema 放在 `services/schemas.ts`；store slice 中按领域引入对应 schema
 
