@@ -136,9 +136,44 @@ describe('TTS 服务', () => {
       await expect(tts.generateSpeech({ text: '测试' })).rejects.toMatchObject({
         message: 'MiMo API 请求过于频繁，请稍后再试',
         code: 'MIMO_RATE_LIMIT',
+        isRateLimit: true,
+        rateLimitReason: 'capacity',
+        retryable: true,
         retryAfterMs: 8000,
       });
       expect(axios.post).toHaveBeenCalledTimes(1);
+    });
+
+    test('套餐额度耗尽的 429 标记为不可重试', async () => {
+      axios.post.mockRejectedValue({
+        response: {
+          status: 429,
+          data: { error: { code: 'quota_exhausted', message: 'Token Plan quota exhausted' } },
+        },
+      });
+
+      await expect(tts.generateSpeech({ text: '测试' })).rejects.toMatchObject({
+        message: 'MiMo TTS 套餐额度不足，请检查账户额度后重试',
+        code: 'MIMO_RATE_LIMIT',
+        isRateLimit: true,
+        rateLimitReason: 'quota',
+        retryable: false,
+      });
+      expect(axios.post).toHaveBeenCalledTimes(1);
+    });
+
+    test('insufficient capacity 不会被误判为套餐额度耗尽', async () => {
+      axios.post.mockRejectedValue({
+        response: {
+          status: 429,
+          data: { error: { code: 'server_busy', message: 'insufficient server capacity' } },
+        },
+      });
+
+      await expect(tts.generateSpeech({ text: '测试' })).rejects.toMatchObject({
+        rateLimitReason: 'capacity',
+        retryable: true,
+      });
     });
 
     test('429 不在 TTS 服务内快速重试，避免绕过全局队列', async () => {

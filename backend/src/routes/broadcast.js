@@ -18,6 +18,56 @@ const { validateId, cleanAudioFile } = require('../utils/validation');
 
 const logger = createScopedLogger('broadcast-route');
 
+function parseByteRange(rangeHeader, totalLength) {
+  if (typeof rangeHeader !== 'string') return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+  if (!match || (!match[1] && !match[2])) return { invalid: true };
+
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isInteger(suffixLength) || suffixLength <= 0) return { invalid: true };
+    start = Math.max(totalLength - suffixLength, 0);
+    end = totalLength - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Math.min(Number(match[2]), totalLength - 1) : totalLength - 1;
+  }
+
+  if (
+    !Number.isInteger(start)
+    || !Number.isInteger(end)
+    || start < 0
+    || start >= totalLength
+    || end < start
+  ) {
+    return { invalid: true };
+  }
+  return { start, end };
+}
+
+function sendSeekableAudioBuffer(req, res, buffer, contentType) {
+  const totalLength = buffer.length;
+  const range = parseByteRange(req.headers.range, totalLength);
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Content-Type', contentType);
+
+  if (range?.invalid) {
+    res.setHeader('Content-Range', `bytes */${totalLength}`);
+    return res.status(416).end();
+  }
+  if (!range) {
+    res.setHeader('Content-Length', totalLength);
+    return res.send(buffer);
+  }
+
+  const chunk = buffer.subarray(range.start, range.end + 1);
+  res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${totalLength}`);
+  res.setHeader('Content-Length', chunk.length);
+  return res.status(206).send(chunk);
+}
+
 function sanitizeDownloadName(value) {
   const base = String(value || 'tts-broadcast')
     .replace(/[\\/:*?"<>|]/g, '_')
@@ -430,8 +480,7 @@ router.get('/:id/audio', async (req, res) => {
       }
 
       const buffer = await audio.mergeSegmentAudioWithRates(segments);
-      res.setHeader('Content-Type', 'audio/wav');
-      return res.send(buffer);
+      return sendSeekableAudioBuffer(req, res, buffer, 'audio/wav');
     }
 
     if (!broadcast.audio_path) {

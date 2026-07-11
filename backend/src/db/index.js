@@ -181,10 +181,49 @@ try {
     CREATE TABLE IF NOT EXISTS api_rate_limit_state (
       scope TEXT PRIMARY KEY,
       backoff_until_ms INTEGER DEFAULT 0,
+      adaptive_concurrency_limit INTEGER DEFAULT 0,
+      adaptive_concurrency_ceiling INTEGER DEFAULT 0,
+      last_rate_limit_at_ms INTEGER DEFAULT 0,
+      circuit_until_ms INTEGER DEFAULT 0,
+      circuit_reason TEXT DEFAULT '',
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
 }
+
+// 迁移：持久化队列从 429 学到的安全并发与非重试型限流熔断状态。
+try {
+  db.prepare('SELECT adaptive_concurrency_limit FROM api_rate_limit_state LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE api_rate_limit_state ADD COLUMN adaptive_concurrency_limit INTEGER DEFAULT 0');
+}
+
+try {
+  db.prepare('SELECT last_rate_limit_at_ms FROM api_rate_limit_state LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE api_rate_limit_state ADD COLUMN last_rate_limit_at_ms INTEGER DEFAULT 0');
+}
+
+try {
+  db.prepare('SELECT adaptive_concurrency_ceiling FROM api_rate_limit_state LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE api_rate_limit_state ADD COLUMN adaptive_concurrency_ceiling INTEGER DEFAULT 0');
+}
+
+try {
+  db.prepare('SELECT circuit_until_ms FROM api_rate_limit_state LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE api_rate_limit_state ADD COLUMN circuit_until_ms INTEGER DEFAULT 0');
+}
+
+try {
+  db.prepare('SELECT circuit_reason FROM api_rate_limit_state LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE api_rate_limit_state ADD COLUMN circuit_reason TEXT DEFAULT ''");
+}
+
+// 迁移：MiMo RPM 按真实 HTTP 请求计数。旧版曾把 clone payload MiB 错当成请求数。
+db.prepare("UPDATE api_rate_limit_events SET request_cost = 1 WHERE scope = 'mimo-tts' AND request_cost <> 1").run();
 
 // 迁移：确保批量生成 job/lease 表存在，避免同一播报重复入队。
 try {

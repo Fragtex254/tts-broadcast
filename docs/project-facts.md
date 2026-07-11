@@ -103,7 +103,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `schedules`：定时任务，基于 cron 表达式自动播报
 - `voice_presets`：音色预设，含克隆和设计两种类型，支持保存试听音频和原始参考音频
 - `transcription_results`：转录结果记录，保存单文件/批量转录的原文、AI 排版文本、文件名、相对路径、provider、模型、context、usage 与 task_id
-- `api_rate_limit_events` / `api_rate_limit_state`：外部模型限速账本，保存最近窗口的请求成本和 429 backoff，用于跨后端进程重启延续 MiMo/MiniMax 账户侧限速记忆
+- `api_rate_limit_events` / `api_rate_limit_state`：外部模型限速账本，保存最近窗口的真实请求/token/payload 观测、429 backoff、自适应安全并发和熔断状态，用于跨后端进程重启延续 MiMo/MiniMax 账户侧限速记忆
 - `generation_jobs`：长生成任务 lease 表，当前用于分段批量 TTS，防止同一播报在刷新、多标签页或 HTTP 重试下重复入队
 
 关键字段说明：
@@ -174,7 +174,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 **限流规则**：RPM（每分钟请求数）与 TPM（每分钟 Token 数）是独立限流维度，按同一账号下调用同一模型的所有 API Key 聚合统计。真实服务还可能有短时间突发/并发保护，所以队列实现统一在 `services/rateLimitedQueue.js` 同时控制 RPM、TPM、启动短突发和在途并发；具体模型入口只配置默认值、硬上限和 token 估算。
 
 - **MiniMax-M3 LLM**：官方付费账号上限按 200 RPM / 10,000,000 TPM 管理；本项目默认使用 75% 安全预算，即 `MINIMAX_M3_LLM_RPM_LIMIT=150`、`MINIMAX_M3_LLM_TPM_LIMIT=7500000`，硬上限分别压到 200 / 10000000，`MINIMAX_M3_LLM_MAX_CONCURRENT=4`。所有 `mimo.js` 的文本/视觉 LLM 请求经 `services/llmQueue.js` 入队；高并发批量任务应批处理输入，然后让每个批次经过队列，禁止在调用处直接 `Promise.all` 打 LLM。
-- **MiMo TTS**：TTS 请求走 MiMo `api.xiaomimimo.com` 限速，不套 MiniMax 语音接口限额；模型上限按 100 RPM / 10,000,000 TPM 管理。所有 TTS 入口（整篇生成、分段批量、单段重新生成、音色试听）都必须通过 `services/ttsQueue.js` 做全局队列限速：默认 `MIMO_TTS_RPM_LIMIT=90`（硬上限 100）、`MIMO_TTS_TPM_LIMIT=9000000`（硬上限 10000000）、`MIMO_TTS_MAX_CONCURRENT=6`、`MIMO_TTS_START_BURST_LIMIT=1`；队列不做瞬时突发，按 RPM 间隔补启动请求。TTS 单例使用 `api_rate_limit_events/state` 持久化最近窗口和 backoff，避免 nodemon/进程重启后本地限速记忆清零。`voiceclone` 请求会按 `voiceClone` base64 payload 额外增加 request cost、payload cost 和并发成本，避免把 5MB 级克隆音频当成普通短文本 TTS。`tts.generateSpeech()` 自身不做 429 快速重试，避免绕过队列造成实际 HTTP RPM/TPM 超限。遇到无 `Retry-After` 的 429 时默认退避 15 秒，并由队列做指数退避重试，最大退避默认 120 秒。
+- **MiMo TTS**：TTS 请求走 MiMo `api.xiaomimimo.com` 限速，不套 MiniMax 语音接口限额；模型上限按 100 RPM / 10,000,000 TPM 管理。所有 TTS 入口（整篇生成、分段批量、单段重新生成、音色试听）都必须通过 `services/ttsQueue.js` 做全局队列限速：默认 `MIMO_TTS_RPM_LIMIT=90`（硬上限 100）、`MIMO_TTS_TPM_LIMIT=9000000`（硬上限 10000000）、`MIMO_TTS_INITIAL_CONCURRENT=3`、`MIMO_TTS_MAX_CONCURRENT=12`（硬上限 24）、`MIMO_TTS_START_BURST_LIMIT=1`；队列不做瞬时突发，按 RPM 间隔补启动请求。RPM 严格按真实 HTTP attempt 计数，clone payload 不再伪装成多次请求或多个并发槽；base64 字节由独立 `MIMO_TTS_MAX_IN_FLIGHT_PAYLOAD_BYTES` 控制（默认 40 MiB，硬上限 60 MiB），单请求仍遵守 10 MiB 官方上限，未公开的分钟 payload 配额默认关闭。保存于 `/audio/` 且大于等于 512 KiB 的 WAV 克隆参考会在批量开始前转为 24kHz mono 96kbps MP3，并按路径、mtime、size 缓存；转码失败记录告警并回退原 WAV。TTS 单例使用 `api_rate_limit_events/state` 持久化最近窗口、backoff、自适应安全并发、已失败并发上界和额度熔断：有队列压力且连续成功 3 次后并发 +1；本地 RPM/TPM 明显有余却收到可重试 429 时并发减半，并把普通恢复封顶在失败时实际并发减一，避免周期性再次撞同一上限；套餐额度耗尽时 60 秒内快速失败，避免每段重复撞限。`tts.generateSpeech()` 自身不做 429 快速重试；队列普通 429 默认最多重试 2 次，无 `Retry-After` 时从 15 秒指数退避，服务端显式 `Retry-After` 永远作为最短等待。
 
 **TTS 模型**：
 

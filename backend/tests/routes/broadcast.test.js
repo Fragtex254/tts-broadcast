@@ -339,6 +339,27 @@ describe('播报 API', () => {
       const broadcast = db.prepare('SELECT audio_path FROM broadcasts WHERE id = ?').get(broadcastId);
       expect(broadcast.audio_path).toBeNull();
     });
+
+    test('分段合并音频支持 Range 响应以便拖动播放进度', async () => {
+      const result = db.prepare(`
+        INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('进度拖动测试', '内容', 'preset', '{}', 'generated', 'segmented');
+      const broadcastId = result.lastInsertRowid;
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, audio_path, playback_rate) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(broadcastId, 0, '第一句', 'generated', '/audio/a.wav', 1);
+      jest.spyOn(audio, 'mergeSegmentAudioWithRates').mockResolvedValue(Buffer.from('preview-wav'));
+
+      const res = await request(app)
+        .get(`/api/broadcast/${broadcastId}/audio`)
+        .set('Range', 'bytes=2-5');
+
+      expect(res.status).toBe(206);
+      expect(res.headers['accept-ranges']).toBe('bytes');
+      expect(res.headers['content-range']).toBe('bytes 2-5/11');
+      expect(res.headers['content-length']).toBe('4');
+      expect(res.body).toEqual(Buffer.from('evie'));
+    });
   });
 
   describe('GET /api/broadcast/:id/download', () => {

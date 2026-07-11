@@ -1,7 +1,8 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { QuickGenerate } from '../components/Dashboard/QuickGenerate';
+import { ModalShell } from '../components/ModalShell';
 import useStore from '../store';
 
 export const SourceCollection: React.FC = () => {
@@ -10,14 +11,11 @@ export const SourceCollection: React.FC = () => {
   const script = useStore((state) => state.script);
   const currentBroadcast = useStore((state) => state.currentBroadcast);
   const isRewriting = useStore((state) => state.isRewriting);
+  const [isNewsIntakeOpen, setIsNewsIntakeOpen] = useState(false);
 
   const handleRewriteComplete = useCallback(() => {
     navigate('/editor');
   }, [navigate]);
-
-  const handleFocusNews = () => {
-    document.getElementById('news-intake')?.scrollIntoView({ block: 'start' });
-  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -33,7 +31,8 @@ export const SourceCollection: React.FC = () => {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <button
                 type="button"
-                onClick={handleFocusNews}
+                onClick={() => setIsNewsIntakeOpen(true)}
+                aria-label="AI 今日资讯"
                 className="group rounded-card border border-lemon/50 bg-lemon/15 p-5 text-left transition-all duration-150 hover:-translate-y-px hover:bg-lemon/25 hover:shadow-card active:translate-y-0"
               >
                 <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/60">从结构化信息开始</span>
@@ -124,6 +123,20 @@ export const SourceCollection: React.FC = () => {
           </div>
         </div>
       </main>
+
+      <ModalShell
+        isOpen={isNewsIntakeOpen}
+        title="AI 今日资讯"
+        subtitle="获取 AI HOT 资讯，筛选后改写为适合播报的稿件。"
+        onClose={() => setIsNewsIntakeOpen(false)}
+        variant="fullscreen"
+        accent="lemon"
+        contentClassName="p-5 sm:p-6"
+      >
+        <div className="mx-auto max-w-5xl">
+          <QuickGenerate onRewriteComplete={handleRewriteComplete} />
+        </div>
+      </ModalShell>
     </div>
   );
 };

@@ -18,9 +18,32 @@ function parseRetryAfterMs(headers) {
   return DEFAULT_RATE_LIMIT_RETRY_AFTER_MS;
 }
 
+function classifyRateLimit(err) {
+  const upstreamCode = err.response?.data?.error?.code || err.response?.data?.code || '';
+  const upstreamMessage = err.response?.data?.error?.message || err.response?.data?.message || '';
+  const detail = `${upstreamCode} ${upstreamMessage}`.toLowerCase();
+  const isQuotaExhausted = /quota|balance|credits?\s+exhausted|insufficient[_\s-]*(quota|balance|credits?)|额度|余额|套餐.{0,8}(耗尽|不足)/.test(detail);
+  return {
+    reason: isQuotaExhausted ? 'quota' : 'capacity',
+    retryable: !isQuotaExhausted,
+    upstreamCode: typeof upstreamCode === 'string' || typeof upstreamCode === 'number'
+      ? String(upstreamCode)
+      : '',
+  };
+}
+
 function createRateLimitError(err) {
-  const error = new Error('MiMo API 请求过于频繁，请稍后再试');
+  const classification = classifyRateLimit(err);
+  const error = new Error(
+    classification.reason === 'quota'
+      ? 'MiMo TTS 套餐额度不足，请检查账户额度后重试'
+      : 'MiMo API 请求过于频繁，请稍后再试'
+  );
   error.code = 'MIMO_RATE_LIMIT';
+  error.isRateLimit = true;
+  error.rateLimitReason = classification.reason;
+  error.retryable = classification.retryable;
+  error.upstreamCode = classification.upstreamCode;
   error.retryAfterMs = parseRetryAfterMs(err.response?.headers);
   return error;
 }
@@ -98,4 +121,4 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
   return Buffer.from(audioBase64, 'base64');
 }
 
-module.exports = { generateSpeech };
+module.exports = { classifyRateLimit, generateSpeech };
