@@ -1,11 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const childProcess = require('child_process');
+
+const mockAudioLoggerWarn = jest.fn();
+jest.mock('../../src/services/logger', () => ({
+  createScopedLogger: jest.fn(() => ({
+    warn: mockAudioLoggerWarn,
+  })),
+}));
+
 const {
   buildAtempoFilter,
   mergeWavFiles,
   normalizePlaybackRate,
+  resolveVoiceClone,
 } = require('../../src/services/audio');
+
+const audioDir = path.join(__dirname, '../../audio');
+const LARGE_WAV_SAMPLE_COUNT = 24000 * 12;
 
 /**
  * 创建一个最小的有效 WAV 文件（24kHz, 16bit, mono）
@@ -186,7 +199,38 @@ describe('音频不变调倍速工具', () => {
 });
 
 describe('resolveVoiceClone', () => {
-  const { resolveVoiceClone } = require('../../src/services/audio');
+  let cloneFixtureDir;
+  let outsideFixtureDir;
+
+  beforeEach(() => {
+    fs.mkdirSync(audioDir, { recursive: true });
+    cloneFixtureDir = fs.mkdtempSync(path.join(audioDir, 'voice-clone-test-'));
+    outsideFixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-clone-outside-'));
+    mockAudioLoggerWarn.mockClear();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    fs.rmSync(cloneFixtureDir, { recursive: true, force: true });
+    fs.rmSync(outsideFixtureDir, { recursive: true, force: true });
+  });
+
+  function writeCloneFixture(filename, buffer) {
+    const filePath = path.join(cloneFixtureDir, filename);
+    fs.writeFileSync(filePath, buffer);
+    return {
+      filePath,
+      audioPath: `/audio/${path.basename(cloneFixtureDir)}/${filename}`,
+    };
+  }
+
+  function decodeDataUri(dataUri) {
+    const [header, payload] = dataUri.split(',', 2);
+    return {
+      mime: header.slice('data:'.length, header.indexOf(';')),
+      buffer: Buffer.from(payload, 'base64'),
+    };
+  }
 
   test('data: 前缀的 base64 直接返回', async () => {
     const input = 'data:audio/wav;base64,AAAA';
@@ -194,9 +238,98 @@ describe('resolveVoiceClone', () => {
     expect(result).toBe(input);
   });
 
+  test('较大 WAV 在内存中压缩为 24kHz mono 96kbps MP3', async () => {
+    const wav = createTestWav(LARGE_WAV_SAMPLE_COUNT);
+    const { audioPath } = writeCloneFixture('large.wav', wav);
+    const execSpy = jest.spyOn(childProcess, 'execFile');
+
+    const result = decodeDataUri(await resolveVoiceClone(audioPath));
+
+    expect(result.mime).toBe('audio/mpeg');
+    expect(result.buffer.length).toBeLessThan(wav.length * 0.5);
+    expect(execSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining(['-ac', '1', '-ar', '24000', '-b:a', '96k', '-f', 'mp3', 'pipe:1']),
+      expect.objectContaining({ encoding: 'buffer' }),
+      expect.any(Function)
+    );
+  });
+
+  test('小 MP3 直读为 audio/mpeg，不启动 FFmpeg', async () => {
+    const mp3 = Buffer.from('ID3-small-mp3-fixture');
+    const { audioPath } = writeCloneFixture('small.mp3', mp3);
+    const execSpy = jest.spyOn(childProcess, 'execFile');
+
+    const result = decodeDataUri(await resolveVoiceClone(audioPath));
+
+    expect(result.mime).toBe('audio/mpeg');
+    expect(result.buffer).toEqual(mp3);
+    expect(execSpy).not.toHaveBeenCalled();
+  });
+
+  test('按绝对路径、mtime 和 size 复用缓存并在文件变化时失效', async () => {
+    const firstWav = createTestWav(LARGE_WAV_SAMPLE_COUNT);
+    const { filePath, audioPath } = writeCloneFixture('cached.wav', firstWav);
+    const execSpy = jest.spyOn(childProcess, 'execFile');
+
+    const first = await resolveVoiceClone(audioPath);
+    const second = await resolveVoiceClone(audioPath);
+    expect(second).toBe(first);
+    expect(execSpy).toHaveBeenCalledTimes(1);
+
+    const future = new Date(Date.now() + 5000);
+    fs.utimesSync(filePath, future, future);
+    await resolveVoiceClone(audioPath);
+    expect(execSpy).toHaveBeenCalledTimes(2);
+
+    fs.writeFileSync(filePath, createTestWav(LARGE_WAV_SAMPLE_COUNT + 24000));
+    await resolveVoiceClone(audioPath);
+    expect(execSpy).toHaveBeenCalledTimes(3);
+  });
+
+  test('FFmpeg 失败时记录 warning 并回退原始 WAV data URI', async () => {
+    const wav = createTestWav(LARGE_WAV_SAMPLE_COUNT);
+    const { audioPath } = writeCloneFixture('fallback.wav', wav);
+    jest.spyOn(childProcess, 'execFile').mockImplementation((file, args, options, callback) => {
+      callback(new Error('ffmpeg unavailable'), Buffer.alloc(0), Buffer.from('encoder failed'));
+    });
+
+    const result = decodeDataUri(await resolveVoiceClone(audioPath));
+
+    expect(result.mime).toBe('audio/wav');
+    expect(result.buffer.equals(wav)).toBe(true);
+    expect(mockAudioLoggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.any(Error),
+        sourceExtension: '.wav',
+        sourceSizeBytes: wav.length,
+        targetSampleRate: 24000,
+        targetChannels: 1,
+        targetBitrateKbps: 96,
+      }),
+      'voiceClone WAV 压缩失败，已回退原始音频'
+    );
+  });
+
   test('无效输入（非 data: 且非文件路径）抛出校验错误', async () => {
     await expect(resolveVoiceClone('not-valid-input'))
       .rejects.toThrow('voiceClone 格式无效');
+  });
+
+  test('拒绝逃逸 audio 目录的路径', async () => {
+    await expect(resolveVoiceClone('/audio/../../package.json'))
+      .rejects.toThrow('音频路径无效');
+  });
+
+  test('拒绝 audio 目录内指向外部文件的 symlink', async () => {
+    const outsideFile = path.join(outsideFixtureDir, 'outside.wav');
+    fs.writeFileSync(outsideFile, createTestWav(100));
+    const symlinkPath = path.join(cloneFixtureDir, 'escape.wav');
+    fs.symlinkSync(outsideFile, symlinkPath);
+    const audioPath = `/audio/${path.basename(cloneFixtureDir)}/escape.wav`;
+
+    await expect(resolveVoiceClone(audioPath))
+      .rejects.toThrow('voiceClone 音频路径无效');
   });
 
   test('空值抛出校验错误', async () => {

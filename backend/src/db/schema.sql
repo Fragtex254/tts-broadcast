@@ -106,6 +106,11 @@ CREATE INDEX IF NOT EXISTS idx_api_rate_limit_events_scope_started
 CREATE TABLE IF NOT EXISTS api_rate_limit_state (
   scope TEXT PRIMARY KEY,
   backoff_until_ms INTEGER DEFAULT 0,
+  adaptive_concurrency_limit INTEGER DEFAULT 0,
+  adaptive_concurrency_ceiling INTEGER DEFAULT 0,
+  last_rate_limit_at_ms INTEGER DEFAULT 0,
+  circuit_until_ms INTEGER DEFAULT 0,
+  circuit_reason TEXT DEFAULT '',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

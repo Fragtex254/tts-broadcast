@@ -3,18 +3,26 @@
 
 const { RateLimitedQueueManager, estimateTextTokens } = require('./rateLimitedQueue');
 const rateLimitStore = require('./rateLimitStore');
+const { createScopedLogger } = require('./logger');
+
+const logger = createScopedLogger('tts-queue');
 
 const DEFAULT_TTS_RPM_LIMIT = 90;
 const MIMO_TTS_RPM_LIMIT = 100;
 const DEFAULT_TTS_TPM_LIMIT = 9000000;
 const MIMO_TTS_TPM_LIMIT = 10000000;
-const DEFAULT_TTS_PAYLOAD_PER_MINUTE_LIMIT = 60 * 1024 * 1024;
-const DEFAULT_TTS_MAX_CONCURRENT = 6;
+const DEFAULT_TTS_PAYLOAD_PER_MINUTE_LIMIT = 0;
+const DEFAULT_TTS_MAX_ACTIVE_PAYLOAD = 40 * 1024 * 1024;
+const MIMO_TTS_MAX_ACTIVE_PAYLOAD = 60 * 1024 * 1024;
+const DEFAULT_TTS_MAX_CONCURRENT = 12;
+const MIMO_TTS_MAX_CONCURRENT = 24;
+const DEFAULT_TTS_INITIAL_CONCURRENT = 3;
 const DEFAULT_TTS_START_BURST_LIMIT = 1;
-const DEFAULT_TTS_RATE_LIMIT_RETRIES = 6;
+const DEFAULT_TTS_RATE_LIMIT_RETRIES = 2;
 const DEFAULT_TTS_MAX_RATE_LIMIT_BACKOFF_MS = 120000;
-const CLONE_REQUEST_UNIT_BYTES = 1024 * 1024;
-const CLONE_CONCURRENCY_UNIT_BYTES = 2 * 1024 * 1024;
+const DEFAULT_TTS_ADAPTIVE_RECOVERY_SUCCESSES = 3;
+const DEFAULT_TTS_ADAPTIVE_RECOVERY_COOLDOWN_MS = 60000;
+const MIMO_TTS_MAX_CLONE_PAYLOAD = 10 * 1024 * 1024;
 
 /**
  * 粗略估算一次 TTS 请求消耗的文本 token。
@@ -36,16 +44,12 @@ function estimateClonePayloadBytes(params = {}) {
   return Buffer.byteLength(params.voiceClone, 'utf8');
 }
 
-function estimateTtsRequestCost(params = {}) {
-  const payloadBytes = estimateClonePayloadBytes(params);
-  if (payloadBytes <= 0) return 1;
-  return Math.max(1, Math.ceil(payloadBytes / CLONE_REQUEST_UNIT_BYTES));
+function estimateTtsRequestCost() {
+  return 1;
 }
 
-function estimateTtsConcurrencyCost(params = {}) {
-  const payloadBytes = estimateClonePayloadBytes(params);
-  if (payloadBytes <= 0) return 1;
-  return Math.max(2, Math.ceil(payloadBytes / CLONE_CONCURRENCY_UNIT_BYTES));
+function estimateTtsConcurrencyCost() {
+  return 1;
 }
 
 class TTSQueueManager extends RateLimitedQueueManager {
@@ -62,8 +66,19 @@ class TTSQueueManager extends RateLimitedQueueManager {
       tpmEnvName: 'MIMO_TTS_TPM_LIMIT',
       defaultPayloadPerMinuteLimit: DEFAULT_TTS_PAYLOAD_PER_MINUTE_LIMIT,
       payloadPerMinuteEnvName: 'MIMO_TTS_PAYLOAD_PER_MINUTE_LIMIT',
+      defaultMaxActivePayloadCost: DEFAULT_TTS_MAX_ACTIVE_PAYLOAD,
+      hardMaxActivePayloadCost: MIMO_TTS_MAX_ACTIVE_PAYLOAD,
+      maxActivePayloadCostEnvName: 'MIMO_TTS_MAX_IN_FLIGHT_PAYLOAD_BYTES',
       defaultMaxConcurrent: DEFAULT_TTS_MAX_CONCURRENT,
+      hardMaxConcurrent: MIMO_TTS_MAX_CONCURRENT,
       maxConcurrentEnvName: 'MIMO_TTS_MAX_CONCURRENT',
+      defaultInitialConcurrent: DEFAULT_TTS_INITIAL_CONCURRENT,
+      initialConcurrentEnvName: 'MIMO_TTS_INITIAL_CONCURRENT',
+      adaptiveConcurrency: options.adaptiveConcurrency ?? true,
+      defaultAdaptiveRecoverySuccesses: DEFAULT_TTS_ADAPTIVE_RECOVERY_SUCCESSES,
+      adaptiveRecoverySuccessesEnvName: 'MIMO_TTS_ADAPTIVE_RECOVERY_SUCCESSES',
+      defaultAdaptiveRecoveryCooldownMs: DEFAULT_TTS_ADAPTIVE_RECOVERY_COOLDOWN_MS,
+      adaptiveRecoveryCooldownMsEnvName: 'MIMO_TTS_ADAPTIVE_RECOVERY_COOLDOWN_MS',
       defaultStartBurstLimit: DEFAULT_TTS_START_BURST_LIMIT,
       startBurstLimitEnvName: 'MIMO_TTS_START_BURST_LIMIT',
       defaultRateLimitRetries: DEFAULT_TTS_RATE_LIMIT_RETRIES,
@@ -71,7 +86,38 @@ class TTSQueueManager extends RateLimitedQueueManager {
       rateLimitRetriesEnvName: 'MIMO_TTS_RATE_LIMIT_RETRIES',
       defaultMaxRateLimitBackoffMs: DEFAULT_TTS_MAX_RATE_LIMIT_BACKOFF_MS,
       maxRateLimitBackoffMsEnvName: 'MIMO_TTS_MAX_RATE_LIMIT_BACKOFF_MS',
+      onRateLimit: options.onRateLimit || (({
+        error,
+        retryAfterMs,
+        activeCount,
+        queued,
+        effectiveMaxConcurrent,
+        attemptConcurrency,
+        rpmUsed,
+      }) => {
+        logger.warn({
+          err: error,
+          retryAfterMs,
+          activeCount,
+          queued,
+          effectiveMaxConcurrent,
+          attemptConcurrency,
+          rpmUsed,
+          rateLimitReason: error?.rateLimitReason || 'unknown',
+        }, 'TTS 触发远端限流，队列已调整并退避');
+      }),
+      onConcurrencyChange: options.onConcurrencyChange || (({
+        direction,
+        previous,
+        current,
+        reason,
+      }) => {
+        logger.info({ direction, previous, current, reason }, 'TTS 自适应并发已调整');
+      }),
     });
+    if (this.maxActivePayloadCost <= 0) {
+      this.maxActivePayloadCost = DEFAULT_TTS_MAX_ACTIVE_PAYLOAD;
+    }
   }
 
   /**
@@ -81,10 +127,14 @@ class TTSQueueManager extends RateLimitedQueueManager {
    * @returns {Promise} 请求结果
    */
   enqueueTts(speechParams, requestFn) {
+    const payloadCost = estimateClonePayloadBytes(speechParams);
+    if (payloadCost > MIMO_TTS_MAX_CLONE_PAYLOAD) {
+      return Promise.reject(new Error('克隆参考音频 Base64 不能超过 10 MB'));
+    }
     return this.enqueue(requestFn, {
       requestCost: estimateTtsRequestCost(speechParams),
       tokenCost: estimateTtsTokenCost(speechParams),
-      payloadCost: estimateClonePayloadBytes(speechParams),
+      payloadCost,
       concurrencyCost: estimateTtsConcurrencyCost(speechParams),
     });
   }

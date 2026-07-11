@@ -893,7 +893,7 @@ return Buffer.from(audioBase64, 'base64');
 - **RPM**（每分钟请求数）：100
 - **TPM**（每分钟 Token 数）：10M
 - 超出返回 `429 Too Many Requests`
-- 整篇生成、分段批量生成、单句重新生成和音色试听统一经过 `services/ttsQueue.js` 全局限速：默认按 90 RPM 启动请求（可用 `MIMO_TTS_RPM_LIMIT` 调整，硬上限 100），最多 6 个在途请求（`MIMO_TTS_MAX_CONCURRENT`），不做瞬时启动突发（`MIMO_TTS_START_BURST_LIMIT` 默认 1），之后按 RPM 间隔补启动请求。遇到 429 时队列按 `Retry-After` 或默认 15 秒退避，并对当前请求做队列级重试（`MIMO_TTS_RATE_LIMIT_RETRIES` 默认 2 次）。这样恢复 MiMo TTS 100 RPM 下保留 10% 冗余的安全模型，也不会因为某个短句 TTS 请求慢而阻塞后续请求启动。
+- 整篇生成、分段批量生成、单句重新生成和音色试听统一经过 `services/ttsQueue.js` 全局限速：默认按 90 RPM 启动真实 HTTP 请求（可用 `MIMO_TTS_RPM_LIMIT` 调整，硬上限 100），不做瞬时启动突发（`MIMO_TTS_START_BURST_LIMIT` 默认 1），之后按 RPM 间隔补启动请求。并发从 3 起步（`MIMO_TTS_INITIAL_CONCURRENT`），在有队列压力时通过连续成功逐级探测，最高默认 12（`MIMO_TTS_MAX_CONCURRENT`）；429 且本地 RPM/TPM 有余时减半、持久化安全值，并把普通恢复封顶在本次已失败并发减一，避免周期性再次撞同一上限。clone base64 不放大 RPM 或并发槽，只受独立在途 payload 上限保护（`MIMO_TTS_MAX_IN_FLIGHT_PAYLOAD_BYTES` 默认 40 MiB）；单个 Base64 超过 10 MiB 会在入队前拒绝。保存的大 WAV 参考音频会在批量开始时一次性压成 24kHz mono 96kbps MP3 并缓存，避免每段重复上传数 MB。普通 429 按 `Retry-After` 或默认 15 秒退避并最多重试 2 次；服务端 `Retry-After` 是最短等待；明确套餐额度耗尽时短时熔断并快速失败，避免批量每段反复请求。
 
 ## 计费说明
 

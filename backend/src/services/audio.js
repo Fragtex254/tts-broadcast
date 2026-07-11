@@ -1,13 +1,20 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFile } = require('child_process');
+const childProcess = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
+const { createScopedLogger } = require('./logger');
 
 const WAV_HEADER_SIZE = 44;
 const MIN_PLAYBACK_RATE = 0.5;
 const MAX_PLAYBACK_RATE = 2;
 const RIFF_HEADER_SIZE = 12;
+const VOICE_CLONE_WAV_TRANSCODE_THRESHOLD_BYTES = 512 * 1024;
+const VOICE_CLONE_TRANSCODE_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
+const VOICE_CLONE_CACHE_MAX_ENTRIES = 32;
+const VOICE_CLONE_AUDIO_ROOT = path.resolve(__dirname, '../../audio');
+const voiceCloneDataUriCache = new Map();
+const logger = createScopedLogger('audio-service');
 
 /**
  * 归一化并校验播放/导出倍速。
@@ -152,7 +159,7 @@ function mergeWavFiles(filePaths) {
 
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
-    execFile(ffmpegPath, args, { maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
+    childProcess.execFile(ffmpegPath, args, { maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(`FFmpeg 变速处理失败: ${stderr || error.message}`));
         return;
@@ -160,6 +167,134 @@ function runFfmpeg(args) {
       resolve(stdout);
     });
   });
+}
+
+function transcodeVoiceCloneWavToMp3(filePath) {
+  return new Promise((resolve, reject) => {
+    childProcess.execFile(ffmpegPath, [
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-nostdin',
+      '-i', filePath,
+      '-vn',
+      '-map_metadata', '-1',
+      '-ac', '1',
+      '-ar', '24000',
+      '-codec:a', 'libmp3lame',
+      '-b:a', '96k',
+      '-f', 'mp3',
+      'pipe:1',
+    ], {
+      encoding: 'buffer',
+      maxBuffer: VOICE_CLONE_TRANSCODE_MAX_BUFFER_BYTES,
+    }, (error, stdout, stderr) => {
+      if (error) {
+        const detail = Buffer.isBuffer(stderr) ? stderr.toString('utf8').trim() : String(stderr || '').trim();
+        reject(new Error(`FFmpeg 音色参考压缩失败: ${detail || error.message}`));
+        return;
+      }
+
+      const output = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout || '');
+      if (output.length === 0) {
+        reject(new Error('FFmpeg 音色参考压缩失败: 未产生 MP3 数据'));
+        return;
+      }
+      resolve(output);
+    });
+  });
+}
+
+function toAudioDataUri(mime, buffer) {
+  return `data:${mime};base64,${buffer.toString('base64')}`;
+}
+
+function getVoiceCloneMime(extension) {
+  return extension === '.mp3' ? 'audio/mpeg' : 'audio/wav';
+}
+
+function getCachedVoiceClone(filePath, stats) {
+  const cached = voiceCloneDataUriCache.get(filePath);
+  if (!cached || cached.mtimeMs !== stats.mtimeMs || cached.size !== stats.size) {
+    voiceCloneDataUriCache.delete(filePath);
+    return null;
+  }
+
+  // 重新插入以维持简单的 LRU 顺序。
+  voiceCloneDataUriCache.delete(filePath);
+  voiceCloneDataUriCache.set(filePath, cached);
+  return cached.promise;
+}
+
+function cacheVoiceClone(filePath, stats, promise) {
+  voiceCloneDataUriCache.set(filePath, {
+    mtimeMs: stats.mtimeMs,
+    size: stats.size,
+    promise,
+  });
+  while (voiceCloneDataUriCache.size > VOICE_CLONE_CACHE_MAX_ENTRIES) {
+    const oldestKey = voiceCloneDataUriCache.keys().next().value;
+    voiceCloneDataUriCache.delete(oldestKey);
+  }
+}
+
+function deleteCachedVoiceClone(filePath, promise) {
+  if (voiceCloneDataUriCache.get(filePath)?.promise === promise) {
+    voiceCloneDataUriCache.delete(filePath);
+  }
+}
+
+function isPathInsideRoot(rootPath, targetPath) {
+  const relativePath = path.relative(rootPath, targetPath);
+  return relativePath !== ''
+    && relativePath !== '..'
+    && !relativePath.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relativePath);
+}
+
+function resolveVoiceCloneFilePath(relativePath) {
+  const candidatePath = path.resolve(VOICE_CLONE_AUDIO_ROOT, relativePath);
+  if (!isPathInsideRoot(VOICE_CLONE_AUDIO_ROOT, candidatePath)) {
+    throw new Error('voiceClone 音频路径无效');
+  }
+  if (!fs.existsSync(candidatePath)) return null;
+
+  const realAudioRoot = fs.realpathSync(VOICE_CLONE_AUDIO_ROOT);
+  const realFilePath = fs.realpathSync(candidatePath);
+  if (!isPathInsideRoot(realAudioRoot, realFilePath)) {
+    throw new Error('voiceClone 音频路径无效');
+  }
+  return realFilePath;
+}
+
+async function createVoiceCloneDataUri({ filePath, extension, stats }) {
+  if (extension === '.wav' && stats.size >= VOICE_CLONE_WAV_TRANSCODE_THRESHOLD_BYTES) {
+    try {
+      const mp3Buffer = await transcodeVoiceCloneWavToMp3(filePath);
+      return {
+        dataUri: toAudioDataUri('audio/mpeg', mp3Buffer),
+        cacheable: true,
+      };
+    } catch (error) {
+      logger.warn({
+        err: error,
+        sourceExtension: extension,
+        sourceSizeBytes: stats.size,
+        targetSampleRate: 24000,
+        targetChannels: 1,
+        targetBitrateKbps: 96,
+      }, 'voiceClone WAV 压缩失败，已回退原始音频');
+      return {
+        dataUri: toAudioDataUri('audio/wav', fs.readFileSync(filePath)),
+        // 不缓存失败降级结果，让后续请求可在 FFmpeg 恢复后重试压缩。
+        cacheable: false,
+      };
+    }
+  }
+
+  return {
+    dataUri: toAudioDataUri(getVoiceCloneMime(extension), fs.readFileSync(filePath)),
+    cacheable: true,
+  };
 }
 
 function resolveAudioFilePath(audioPath) {
@@ -230,12 +365,29 @@ async function resolveVoiceClone(voiceClone) {
   }
   if (voiceClone.startsWith('data:')) return voiceClone;
   if (voiceClone.startsWith('/audio/')) {
-    const filePath = path.join(__dirname, '../..', voiceClone);
-    if (fs.existsSync(filePath)) {
-      const buffer = fs.readFileSync(filePath);
-      const ext = path.extname(filePath).toLowerCase();
-      const mime = ext === '.mp3' ? 'audio/mpeg' : 'audio/wav';
-      return `data:${mime};base64,${buffer.toString('base64')}`;
+    const relativePath = voiceClone.slice('/audio/'.length);
+    const filePath = resolveVoiceCloneFilePath(relativePath);
+    if (filePath) {
+      const stats = fs.statSync(filePath);
+      const cached = getCachedVoiceClone(filePath, stats);
+      if (cached) {
+        const result = await cached;
+        return result.dataUri;
+      }
+
+      const extension = path.extname(filePath).toLowerCase();
+      const promise = createVoiceCloneDataUri({ filePath, extension, stats });
+      cacheVoiceClone(filePath, stats, promise);
+      try {
+        const result = await promise;
+        if (!result.cacheable) {
+          deleteCachedVoiceClone(filePath, promise);
+        }
+        return result.dataUri;
+      } catch (error) {
+        deleteCachedVoiceClone(filePath, promise);
+        throw error;
+      }
     }
   }
   throw new Error('voiceClone 格式无效，需要 data: 前缀或 /audio/ 文件路径');

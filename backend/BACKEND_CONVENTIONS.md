@@ -57,9 +57,9 @@ backend/src/
 │   ├── llmModels.js        # OpenAI-compatible 模型列表候选 URL 生成与探测
 │   ├── mimoApiClient.js    # MiMo 标准 API HTTP client
 │   ├── tts.js              # MiMo TTS 服务（generateSpeech）
-│   ├── ttsQueue.js         # MiMo TTS 全局 RPM/TPM/payload/短突发队列限速
+│   ├── ttsQueue.js         # MiMo TTS 全局 RPM/TPM/在途 payload/自适应并发队列
 │   ├── rateLimitedQueue.js # 通用 RPM/TPM/payload/短突发队列实现
-│   ├── rateLimitStore.js   # DAL：外部模型限速窗口与 backoff 账本
+│   ├── rateLimitStore.js   # DAL：限速窗口、backoff、自适应并发与熔断账本
 │   ├── generationJobStore.js # DAL：长生成任务 lease，避免重复入队
 │   ├── broadcastStore.js   # DAL：broadcasts 表的 CRUD
 │   ├── segmentStore.js     # DAL：segments 表的 CRUD，待生成查询包含 stale generating 恢复
