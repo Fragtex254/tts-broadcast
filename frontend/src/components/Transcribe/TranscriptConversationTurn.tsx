@@ -10,8 +10,17 @@ interface TranscriptConversationTurnProps {
   tone: TranscriptSpeakerTone;
   isActive: boolean;
   isMuted: boolean;
+  isSearchTarget?: boolean;
+  isEditing: boolean;
+  editingDraft: string;
+  positionInSet?: number;
+  setSize?: number;
   onActiveChange: (turnId: number | null) => void;
+  onEditingDraftChange: (value: string) => void;
+  onFinishEditing: () => void;
   onFilterSpeaker: (speakerKey: string) => void;
+  onNavigate: (direction: -1 | 1) => void;
+  onStartEditing: (turnId: number, value: string) => void;
   onCorrect: (turnId: number, correctedText: string) => Promise<void>;
 }
 
@@ -21,24 +30,31 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
   tone,
   isActive,
   isMuted,
+  isSearchTarget = false,
+  isEditing,
+  editingDraft,
+  positionInSet,
+  setSize,
   onActiveChange,
+  onEditingDraftChange,
+  onFinishEditing,
   onFilterSpeaker,
+  onNavigate,
+  onStartEditing,
   onCorrect,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(turn.corrected_text || turn.text);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const displayText = turn.corrected_text || turn.text;
 
   const handleSave = async () => {
-    const correctedText = draft.trim();
+    const correctedText = editingDraft.trim();
     if (!correctedText) return;
     setIsSaving(true);
     setError(null);
     try {
       await onCorrect(turn.id, correctedText);
-      setIsEditing(false);
+      onFinishEditing();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '保存校对内容失败');
     } finally {
@@ -47,9 +63,8 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
   };
 
   const startEditing = () => {
-    setDraft(displayText);
     setError(null);
-    setIsEditing(true);
+    onStartEditing(turn.id, displayText);
     onActiveChange(turn.id);
   };
 
@@ -57,6 +72,10 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
     <article
       id={`conversation-turn-${turn.id}`}
       tabIndex={0}
+      aria-current={isSearchTarget ? 'true' : undefined}
+      aria-posinset={positionInSet}
+      aria-setsize={setSize}
+      aria-keyshortcuts="ArrowUp ArrowDown"
       aria-label={`发言 ${turn.turn_index + 1}，${speakerName}，${formatTranscriptTime(turn.start_seconds)} 到 ${formatTranscriptTime(turn.end_seconds)}`}
       onMouseEnter={() => onActiveChange(turn.id)}
       onMouseLeave={() => {
@@ -69,12 +88,18 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
         }
       }}
       onClick={() => onActiveChange(turn.id)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          onNavigate(event.key === 'ArrowUp' ? -1 : 1);
+        }
+      }}
       className={`relative rounded-r-2xl border border-l-[3px] px-4 py-4 outline-none transition-all duration-200 sm:px-5 ${tone.border} ${
         isActive || isEditing
           ? `${tone.strongSurface} ${tone.mutedBorder} shadow-card`
           : 'border-transparent hover:border-card-border hover:bg-white/55 focus:border-card-border focus:bg-white/55'
-      } ${isMuted && !isEditing ? 'opacity-45' : 'opacity-100'}`}
-      style={{ animation: 'fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) both' }}
+      } ${isSearchTarget ? 'ring-2 ring-lilac/70 ring-offset-2 ring-offset-paper' : ''} ${isMuted && !isEditing ? 'opacity-45' : 'opacity-100'}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -94,17 +119,17 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
         {isEditing ? (
           <div className="space-y-2.5">
             <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              rows={Math.min(10, Math.max(4, Math.ceil(draft.length / 48)))}
+              value={editingDraft}
+              onChange={(event) => onEditingDraftChange(event.target.value)}
+              rows={Math.min(10, Math.max(4, Math.ceil(editingDraft.length / 48)))}
               autoFocus
               className="w-full resize-y rounded-xl border border-lilac/55 bg-white/75 px-3.5 py-3 font-body text-[15px] leading-[1.8] text-ink outline-none transition-colors focus:border-ink/20"
             />
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" disabled={isSaving || !draft.trim()} onClick={() => void handleSave()} className="rounded-xl bg-sage px-4 py-2 font-body text-[11px] font-medium text-ink shadow-btn transition-all hover:-translate-y-px hover:brightness-105 active:translate-y-0 disabled:opacity-40">
+              <button type="button" disabled={isSaving || !editingDraft.trim()} onClick={() => void handleSave()} className="rounded-xl bg-sage px-4 py-2 font-body text-[11px] font-medium text-ink shadow-btn transition-all hover:-translate-y-px hover:brightness-105 active:translate-y-0 disabled:opacity-40">
                 {isSaving ? '保存中…' : '保存校对'}
               </button>
-              <button type="button" disabled={isSaving} onClick={() => setIsEditing(false)} className="font-body text-[11px] text-ink-soft transition-colors hover:text-ink">
+              <button type="button" disabled={isSaving} onClick={onFinishEditing} className="font-body text-[11px] text-ink-soft transition-colors hover:text-ink">
                 取消
               </button>
             </div>
@@ -113,21 +138,17 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
         ) : (
           <>
             <p className="whitespace-pre-wrap font-body text-[15px] leading-[1.85] text-ink">{displayText}</p>
-            {(isActive || turn.corrected_text) && (
-              <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                {isActive && (
-                  <>
-                    <button type="button" onClick={() => onFilterSpeaker(turn.speaker_key)} className="inline-flex items-center gap-1 rounded-full border border-card-border bg-white/70 px-3 py-1.5 font-body text-[10px] text-ink-soft transition-all hover:-translate-y-px hover:text-ink">
-                      <Eye aria-hidden="true" size={12} weight="regular" />只看 {speakerName} 的发言
-                    </button>
-                    <button type="button" onClick={startEditing} className="inline-flex items-center gap-1 font-body text-[10px] text-ink-soft underline decoration-card-border underline-offset-4 transition-colors hover:text-ink">
-                      <PencilSimple aria-hidden="true" size={12} weight="regular" />校对文字
-                    </button>
-                  </>
-                )}
-                {turn.corrected_text && <span className="rounded-full bg-sage/35 px-2.5 py-1 font-body text-[9px] text-ink">已校对</span>}
-              </div>
-            )}
+            <div className="mt-3 flex min-h-7 flex-wrap items-center gap-2.5">
+              <span className={`contents ${isActive ? '' : 'invisible pointer-events-none'}`} aria-hidden={!isActive}>
+                <button type="button" onClick={() => onFilterSpeaker(turn.speaker_key)} className="inline-flex items-center gap-1 rounded-full border border-card-border bg-white/70 px-3 py-1.5 font-body text-[10px] text-ink-soft transition-all hover:-translate-y-px hover:text-ink">
+                  <Eye aria-hidden="true" size={12} weight="regular" />只看 {speakerName} 的发言
+                </button>
+                <button type="button" onClick={startEditing} className="inline-flex items-center gap-1 font-body text-[10px] text-ink-soft underline decoration-card-border underline-offset-4 transition-colors hover:text-ink">
+                  <PencilSimple aria-hidden="true" size={12} weight="regular" />校对文字
+                </button>
+              </span>
+              {turn.corrected_text && <span className="rounded-full bg-sage/35 px-2.5 py-1 font-body text-[9px] text-ink">已校对</span>}
+            </div>
           </>
         )}
       </div>

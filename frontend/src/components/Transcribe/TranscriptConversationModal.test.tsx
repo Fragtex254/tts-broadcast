@@ -96,7 +96,59 @@ describe('TranscriptConversationModal', () => {
     expect(screen.getByText(/我觉得二零二五对于我来说是行动的一年/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('搜索逐字稿'), { target: { value: '不存在的关键词' } });
-    expect(screen.getByText('没有找到匹配的发言')).toBeTruthy();
+    expect(screen.getByText(/找到 0 个匹配/)).toBeTruthy();
+    expect(screen.getByText(/我觉得二零二五对于我来说是行动的一年/)).toBeTruthy();
+  });
+
+  test('长逐字稿只渲染视口附近发言，并可搜索跳转到远端发言', () => {
+    const longTurns: TranscriptTurn[] = Array.from({ length: 240 }, (_, index) => ({
+      id: 1000 + index,
+      transcription_id: 9,
+      turn_index: index,
+      speaker_key: index % 2 === 0 ? 'speaker-0001' : 'speaker-0002',
+      start_seconds: index * 10,
+      end_seconds: index * 10 + 8,
+      text: index === 120 || index === 239 ? `这里是第 ${index + 1} 处远端关键词` : `普通发言 ${index + 1}`,
+      corrected_text: '',
+      evidence_segment_indexes: [index],
+      created_at: '',
+      updated_at: '',
+    }));
+
+    render(
+      <TranscriptConversationModal
+        isOpen
+        title="长播客"
+        turns={longTurns}
+        speakers={speakers}
+        onClose={vi.fn()}
+        onCorrect={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(screen.getAllByRole('article').length).toBeLessThan(20);
+    expect(screen.queryByText('这里是第 121 处远端关键词')).toBeNull();
+
+    const firstTurn = screen.getByLabelText('发言 1，主持人，0:00 到 0:08');
+    fireEvent.focus(firstTurn);
+    fireEvent.keyDown(firstTurn, { key: 'ArrowDown' });
+    expect(within(screen.getByTestId('active-turn-context')).getByText('发言 2 / 240')).toBeTruthy();
+
+    const searchInput = screen.getByLabelText('搜索逐字稿');
+    fireEvent.change(searchInput, { target: { value: '远端关键词' } });
+
+    expect(screen.getByText('这里是第 121 处远端关键词')).toBeTruthy();
+    expect(screen.getByText('1 / 2')).toBeTruthy();
+    expect(within(screen.getByTestId('active-turn-context')).getByText('发言 121 / 240')).toBeTruthy();
+
+    fireEvent.keyDown(searchInput, { key: 'Enter' });
+    expect(screen.getByText('这里是第 240 处远端关键词')).toBeTruthy();
+    expect(screen.getByText('2 / 2')).toBeTruthy();
+    expect(within(screen.getByTestId('active-turn-context')).getByText('发言 240 / 240')).toBeTruthy();
+
+    fireEvent.keyDown(searchInput, { key: 'Enter', shiftKey: true });
+    expect(screen.getByText('1 / 2')).toBeTruthy();
+    expect(within(screen.getByTestId('active-turn-context')).getByText('发言 121 / 240')).toBeTruthy();
   });
 
   test('高亮发言可以直接进入校对并保存', async () => {
@@ -119,5 +171,59 @@ describe('TranscriptConversationModal', () => {
     fireEvent.click(within(zaraTurn).getByRole('button', { name: '保存校对' }));
 
     await waitFor(() => expect(onCorrect).toHaveBeenCalledWith(12, '行动之后，再带着问题学习。'));
+  });
+
+  test('未保存校对时阻止关闭，并保留草稿直到用户取消', () => {
+    const onClose = vi.fn();
+    render(
+      <TranscriptConversationModal
+        isOpen
+        title="AI时代是谁的黄金时代？"
+        turns={turns}
+        speakers={speakers}
+        onClose={onClose}
+        onCorrect={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const zaraTurn = screen.getByLabelText('发言 2，Zara，0:29 到 1:07');
+    fireEvent.mouseEnter(zaraTurn);
+    fireEvent.click(within(zaraTurn).getByRole('button', { name: '校对文字' }));
+    fireEvent.change(within(zaraTurn).getByRole('textbox'), { target: { value: '尚未保存的校对草稿' } });
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain('请先保存或取消当前校对');
+    expect(within(zaraTurn).getByRole<HTMLTextAreaElement>('textbox').value).toBe('尚未保存的校对草稿');
+
+    fireEvent.click(within(zaraTurn).getByRole('button', { name: '取消' }));
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('先关闭挂载再打开时仍会响应真实滚动并更新位置', async () => {
+    const longTurns: TranscriptTurn[] = Array.from({ length: 120 }, (_, index) => ({
+      ...turns[index % turns.length],
+      id: 2000 + index,
+      turn_index: index,
+      text: `滚动发言 ${index + 1}`,
+    }));
+    const props = {
+      title: '延迟打开的长播客',
+      turns: longTurns,
+      speakers,
+      onClose: vi.fn(),
+      onCorrect: vi.fn().mockResolvedValue(undefined),
+    };
+    const { rerender } = render(<TranscriptConversationModal {...props} isOpen={false} />);
+    rerender(<TranscriptConversationModal {...props} isOpen />);
+
+    const progress = screen.getByRole('progressbar', { name: '逐字稿阅读进度' });
+    const initialProgress = Number(progress.getAttribute('aria-valuenow'));
+    const scroller = screen.getByTestId('transcript-virtual-scroll');
+    scroller.scrollTop = 10000;
+    fireEvent.scroll(scroller);
+
+    await waitFor(() => expect(Number(progress.getAttribute('aria-valuenow'))).toBeGreaterThan(initialProgress));
   });
 });
