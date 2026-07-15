@@ -38,6 +38,9 @@
 - 前端音频播放条统一使用 `frontend/src/components/Dashboard/AudioPlaybackBar.tsx`，或通过 `AudioPlayer` / `MiniAudioPlayer` 薄外壳接入；禁止在业务组件里重复维护 `<audio>`、播放状态、时长、seek、倍速逻辑。
 - 前端顶级导航按用户任务组织为「工作台 / 内容库 / 音色库 / 自动化 / 设置」；`/editor` 与 `/transcribe` 是从工作台或内容库进入的上下文任务页，不再作为顶级导航。转录历史与统计统一归入内容库。
 - ASR 产品契约按「服务位置 / 识别引擎 / 模型」分层：`asr_provider` 只表示 MiMo 云端、Mac 本地或 WSL 局域网；MOSS 是 WSL 下的 `asr_engine`，不得再作为独立 provider 或重复维护连接参数。
+- 文件转录的中间文字只按已完成 chunk 推送：WSL job 的 `progress.text` 是累计临时文本，`progress.chunk_text` 是最新稳定 chunk，`progress.chunks` 是可恢复的有序已完成列表；前端遇到不带文字的阶段事件必须保留已有内容，并按 chunk index 去重。native long-form 单次推理不得伪造中间文字。
+- 播客结构化转录中，`transcription_segments` 是不可变 ASR 事实；去重、合并和用户校对只发生在派生 `transcription_turns`，不得反写 Segment。Summary 必须引用已验证的 Segment index，时间范围由后端事实派生；逐字稿校对后旧摘要标记 `stale`。当前不持久化上传源音频，也不实现点击时间码、seek 或“回到现场”。
+- 播客一键总结通过 `mimo.createLlmMessage()` 进入 `llmQueue`，长稿分批串行处理，并用 `transcription_summary_jobs` lease 防止刷新、多标签页或重试造成重复执行。
 - 开发引入新约定、新路由族、新组件类型或新持久化套路时，必须同步更新对应 skill 与本文件。
 
 ## Commands

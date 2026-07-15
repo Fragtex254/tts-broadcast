@@ -58,6 +58,14 @@ export const TranscriptionLibrary: React.FC = () => {
     navigate('/editor');
   };
 
+  const handleOpen = (record: TranscriptionRecord) => {
+    if (record.content_mode === 'podcast' && record.structure_status === 'ready') {
+      navigate(`/history/transcriptions/${record.id}`);
+      return;
+    }
+    setSelectedRecord(record);
+  };
+
   const handleDownload = (record: TranscriptionRecord) => {
     const text = preferredTranscriptionText(record);
     if (!text) return;
@@ -92,7 +100,7 @@ export const TranscriptionLibrary: React.FC = () => {
         isLoading={isLoadingRecords}
         error={error}
         onRefresh={loadLibrary}
-        onOpen={setSelectedRecord}
+        onOpen={handleOpen}
         onDownload={handleDownload}
         onImport={handleImport}
         onDelete={setDeleteTarget}

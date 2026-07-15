@@ -4,6 +4,8 @@ import { ASR_PROVIDER_OPTIONS, LANGUAGE_OPTIONS, WSL_ENGINE_OPTIONS, WSL_MODEL_O
 
 interface TranscribeProviderControlsProps {
   language: AsrLanguage;
+  contentMode: 'standard' | 'podcast';
+  canUsePodcastMode: boolean;
   provider: AsrProvider;
   wslEngine: AsrEngine;
   asrModel: string;
@@ -16,6 +18,7 @@ interface TranscribeProviderControlsProps {
   qwenBaseUrl: string;
   wslBaseUrl: string;
   onLanguageChange: (language: AsrLanguage) => void;
+  onContentModeChange: (mode: 'standard' | 'podcast') => void;
   onProviderChange: (provider: AsrProvider) => void;
   onWslEngineChange: (engine: AsrEngine) => void;
   onAsrModelChange: (model: string) => void;
@@ -26,6 +29,8 @@ interface TranscribeProviderControlsProps {
 
 export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProps> = ({
   language,
+  contentMode,
+  canUsePodcastMode,
   provider,
   wslEngine,
   asrModel,
@@ -38,6 +43,7 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
   qwenBaseUrl,
   wslBaseUrl,
   onLanguageChange,
+  onContentModeChange,
   onProviderChange,
   onWslEngineChange,
   onAsrModelChange,
@@ -51,11 +57,40 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
 
   return (
     <>
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="整理方式">
+        <button
+          type="button"
+          onClick={() => onContentModeChange('standard')}
+          disabled={isDisabled}
+          aria-pressed={contentMode === 'standard'}
+          className={`rounded-2xl border p-3 text-left transition-all duration-150 disabled:opacity-40 ${
+            contentMode === 'standard' ? 'border-lilac/60 bg-lilac/20' : 'border-card-border bg-white/55 hover:bg-white/75'
+          }`}
+        >
+          <span className="block font-body text-[12px] font-medium text-ink">普通转录</span>
+          <span className="mt-1 block font-body text-[11px] leading-relaxed text-ink-soft/65">获得可编辑原文，适合独白和一般录音。</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onContentModeChange('podcast')}
+          disabled={isDisabled}
+          aria-pressed={contentMode === 'podcast'}
+          className={`rounded-2xl border p-3 text-left transition-all duration-150 disabled:opacity-40 ${
+            contentMode === 'podcast' ? 'border-lemon/60 bg-lemon/20' : 'border-card-border bg-white/55 hover:bg-white/75'
+          }`}
+        >
+          <span className="block font-body text-[12px] font-medium text-ink">播客整理</span>
+          <span className="mt-1 block font-body text-[11px] leading-relaxed text-ink-soft/65">
+            {canUsePodcastMode ? '区分说话人并生成可总结的内容资产。' : '将切换到 MOSS，并校验模型的结构化能力。'}
+          </span>
+        </button>
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-3 mt-4">
         <select
           value={language}
           onChange={(e) => onLanguageChange(e.target.value as AsrLanguage)}
-          disabled={isDisabled}
+          disabled={isDisabled || contentMode === 'podcast'}
           className="bg-white/70 text-ink rounded-full px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors disabled:opacity-40"
         >
           {LANGUAGE_OPTIONS.map((option) => (

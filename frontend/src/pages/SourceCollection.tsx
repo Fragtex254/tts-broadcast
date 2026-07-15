@@ -48,11 +48,11 @@ export const SourceCollection: React.FC = () => {
                 className="group rounded-card border border-lilac/55 bg-lilac/15 p-5 text-left transition-all duration-150 hover:-translate-y-px hover:bg-lilac/25 hover:shadow-card active:translate-y-0"
               >
                 <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/60">从已有素材开始</span>
-                <span className="mt-2 block font-display text-[22px] font-medium text-ink">音视频转录</span>
+                <span className="mt-2 block font-display text-[22px] font-medium text-ink">音视频整理</span>
                 <span className="mt-2 block max-w-md font-body text-[12px] leading-relaxed text-ink-soft/70">
-                  上传一个或多个音视频，自动转成可编辑、可排版的稿件。
+                  上传音视频，选择普通转录或播客整理，并在内容库继续总结与校对。
                 </span>
-                <span className="mt-4 inline-flex font-body text-[11px] font-medium text-ink transition-transform duration-150 group-hover:translate-x-1">开始转录 →</span>
+                <span className="mt-4 inline-flex font-body text-[11px] font-medium text-ink transition-transform duration-150 group-hover:translate-x-1">开始整理 →</span>
               </button>
             </div>
           </section>

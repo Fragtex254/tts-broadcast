@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { Header } from '../components/Layout/Header';
-import { TranscriptionResultModal } from '../components/Transcribe/TranscriptionResultModal';
+import { LiveTranscriptionPreview } from '../components/Transcribe/LiveTranscriptionPreview';
 import { TranscribeProviderControls } from '../components/Transcribe/TranscribeProviderControls';
+import { TranscriptConversationModal } from '../components/Transcribe/TranscriptConversationModal';
+import { TranscriptionPreviewModal } from '../components/Transcribe/TranscriptionPreviewModal';
 import useStore, {
   type AsrModelOption,
   type AsrEngine,
@@ -56,12 +58,14 @@ export const Transcribe: React.FC = () => {
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const transcriptionText = useStore((s) => s.transcriptionText);
+  const transcriptionChunks = useStore((s) => s.transcriptionChunks);
   const transcriptionRecord = useStore((s) => s.transcriptionRecord);
   const isTranscribing = useStore((s) => s.isTranscribing);
   const transcribeProgress = useStore((s) => s.transcribeProgress);
   const transcribeMedia = useStore((s) => s.transcribeMedia);
-  const formatTranscriptionResult = useStore((s) => s.formatTranscriptionResult);
-  const setTranscriptionText = useStore((s) => s.setTranscriptionText);
+  const transcriptDetail = useStore((s) => s.transcriptDetail);
+  const fetchTranscriptDetail = useStore((s) => s.fetchTranscriptDetail);
+  const correctTranscriptTurn = useStore((s) => s.correctTranscriptTurn);
   const updateScript = useStore((s) => s.updateScript);
   const setCurrentBroadcast = useStore((s) => s.setCurrentBroadcast);
 
@@ -80,6 +84,7 @@ export const Transcribe: React.FC = () => {
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [language, setLanguage] = useState<AsrLanguage>('auto');
+  const [contentMode, setContentMode] = useState<'standard' | 'podcast'>('standard');
   const [selectedAsrProvider, setSelectedAsrProvider] = useState<AsrProvider | null>(null);
   const [selectedWslEngine, setSelectedWslEngine] = useState<AsrEngine | null>(null);
   const [selectedWslModel, setSelectedWslModel] = useState<string | null>(null);
@@ -91,7 +96,9 @@ export const Transcribe: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [batchCopiedIndex, setBatchCopiedIndex] = useState<number | null>(null);
-  const [resultModalTarget, setResultModalTarget] = useState<ResultModalTarget | null>(null);
+  const [previewModalTarget, setPreviewModalTarget] = useState<ResultModalTarget | null>(null);
+  const [conversationResultId, setConversationResultId] = useState<number | null>(null);
+  const [isOpeningResult, setIsOpeningResult] = useState(false);
 
   const asrProvider = selectedAsrProvider ?? settings.asr_provider ?? 'wsl_asr';
   const wslEngine = selectedWslEngine ?? settings.wsl_asr_engine ?? 'qwen';
@@ -102,10 +109,17 @@ export const Transcribe: React.FC = () => {
     selectedMossModel ?? (settings.wsl_asr_engine === 'moss' ? settings.wsl_asr_model : '')
   ) || mossModelOptions[0]?.id || '';
   const asrModel = wslEngine === 'moss' ? mossModel : wslModel;
-  const transcribeOptions = asrProvider === 'wsl_asr'
-    ? { asrEngine: wslEngine, asrModel, context: asrContext }
-    : undefined;
+  const selectedMossOption = mossModelOptions.find((option) => option.id === mossModel);
+  const canUsePodcastMode = asrProvider === 'wsl_asr'
+    && wslEngine === 'moss'
+    && selectedMossOption?.capabilities?.diarization === true
+    && selectedMossOption.capabilities.segment_timestamps === true;
+  const transcribeOptions = {
+    ...(asrProvider === 'wsl_asr' ? { asrEngine: wslEngine, asrModel, context: asrContext } : {}),
+    contentMode,
+  };
   const isMossModelMissing = asrProvider === 'wsl_asr' && wslEngine === 'moss' && !mossModel.trim();
+  const isPodcastUnavailable = contentMode === 'podcast' && !canUsePodcastMode;
 
   useEffect(() => {
     wslDefaultRef.current = { engine: settings.wsl_asr_engine, model: settings.wsl_asr_model };
@@ -214,6 +228,16 @@ export const Transcribe: React.FC = () => {
     });
   }, [updateSettings, wslEngine]);
 
+  const handleContentModeChange = useCallback((nextMode: 'standard' | 'podcast') => {
+    setContentMode(nextMode);
+    setError(null);
+    if (nextMode === 'podcast') {
+      setLanguage('auto');
+      setSelectedAsrProvider('wsl_asr');
+      setSelectedWslEngine('moss');
+    }
+  }, []);
+
   const removeBatchFile = (index: number) => {
     const nextFiles = batchFiles.filter((_, fileIndex) => fileIndex !== index);
     if (nextFiles.length === 1) {
@@ -263,7 +287,7 @@ export const Transcribe: React.FC = () => {
     }
     setError(null);
     try {
-      await transcribeMedia(file, language, asrProvider, transcribeOptions);
+      await transcribeMedia(file, contentMode === 'podcast' ? 'auto' : language, asrProvider, transcribeOptions);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -277,7 +301,7 @@ export const Transcribe: React.FC = () => {
     }
     setError(null);
     try {
-      await batchTranscribeMedia(selectedFiles, language, asrProvider, transcribeOptions);
+      await batchTranscribeMedia(selectedFiles, contentMode === 'podcast' ? 'auto' : language, asrProvider, transcribeOptions);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -295,13 +319,6 @@ export const Transcribe: React.FC = () => {
     await navigator.clipboard.writeText(text);
     setBatchCopiedIndex(index);
     setTimeout(() => setBatchCopiedIndex(null), 1200);
-  };
-
-  const handleImport = () => {
-    if (!transcriptionText.trim()) return;
-    setCurrentBroadcast(null);
-    updateScript(transcriptionText.trim());
-    navigate('/editor');
   };
 
   const handleImportItem = (text: string) => {
@@ -365,36 +382,50 @@ export const Transcribe: React.FC = () => {
 
   const showBatchItems = isBatchTranscribing || batchTranscriptionItems.length > 0;
   const completedCount = batchTranscriptionItems.filter((i) => i.status === 'completed' && i.text.trim()).length;
-  const modalItem = resultModalTarget?.type === 'batch'
-    ? batchTranscriptionItems[resultModalTarget.index]
+  const modalItem = previewModalTarget?.type === 'batch'
+    ? batchTranscriptionItems[previewModalTarget.index]
     : null;
-  const modalTitle = resultModalTarget?.type === 'single'
+  const modalTitle = previewModalTarget?.type === 'single'
     ? (file?.name || transcriptionRecord?.file_name || '转录结果')
     : (modalItem?.relativePath || '转录结果');
-  const modalText = resultModalTarget?.type === 'single'
+  const modalText = previewModalTarget?.type === 'single'
     ? (transcriptionRecord?.text || transcriptionText)
     : (modalItem?.transcriptionResult?.text || modalItem?.text || '');
-  const modalFormattedText = resultModalTarget?.type === 'single'
-    ? (transcriptionRecord?.formatted_text || '')
-    : (modalItem?.transcriptionResult?.formatted_text || modalItem?.formattedText || '');
-  const modalResultId = resultModalTarget?.type === 'single'
-    ? transcriptionRecord?.id
-    : (modalItem?.resultId || modalItem?.transcriptionResult?.id);
+  const modalChunks = previewModalTarget?.type === 'single' ? transcriptionChunks : [];
+  const isPreviewLive = previewModalTarget?.type === 'single' && isTranscribing;
+  const modalIsPodcast = previewModalTarget?.type === 'single'
+    ? (transcriptionRecord?.content_mode || contentMode) === 'podcast'
+    : modalItem?.transcriptionResult?.content_mode === 'podcast';
+  const currentConversation = transcriptDetail?.record.id === conversationResultId ? transcriptDetail : null;
 
-  const handleFormatModalResult = async (text: string) => {
-    if (!modalResultId) {
-      throw new Error('转录结果尚未保存，无法排版');
-    }
-    const record = await formatTranscriptionResult(modalResultId, text);
-    return record.formatted_text;
-  };
-
-  const handleDownloadModalResult = (text: string) => {
-    if (!text.trim()) return;
-    const baseName = resultModalTarget?.type === 'single'
+  const handleDownloadModalResult = () => {
+    if (!modalText.trim()) return;
+    const baseName = previewModalTarget?.type === 'single'
       ? (file ? stripExtension(file.name) : stripExtension(transcriptionRecord?.file_name || '转录结果'))
       : stripExtension(modalItem?.relativePath || '转录结果');
-    downloadTextFile(`${sanitizeFileName(baseName)}_排版.txt`, text);
+    downloadTextFile(`${sanitizeFileName(baseName)}.txt`, modalText);
+  };
+
+  const handleOpenResult = async (target: ResultModalTarget) => {
+    const record = target.type === 'single'
+      ? transcriptionRecord
+      : batchTranscriptionItems[target.index]?.transcriptionResult;
+    const isPodcastResult = record?.content_mode === 'podcast' && record.structure_status === 'ready';
+    if (!isPodcastResult || !record?.id) {
+      setPreviewModalTarget(target);
+      return;
+    }
+
+    setIsOpeningResult(true);
+    setError(null);
+    try {
+      await fetchTranscriptDetail(record.id);
+      setConversationResultId(record.id);
+    } catch (openError) {
+      setError(openError instanceof Error ? openError.message : '打开对话逐字稿失败');
+    } finally {
+      setIsOpeningResult(false);
+    }
   };
 
   return (
@@ -478,6 +509,8 @@ export const Transcribe: React.FC = () => {
 
                 <TranscribeProviderControls
                   language={language}
+                  contentMode={contentMode}
+                  canUsePodcastMode={canUsePodcastMode}
                   provider={asrProvider}
                   wslEngine={wslEngine}
                   asrModel={asrModel}
@@ -489,6 +522,7 @@ export const Transcribe: React.FC = () => {
                   qwenBaseUrl={settings.qwen_asr_base_url}
                   wslBaseUrl={settings.wsl_asr_base_url}
                   onLanguageChange={setLanguage}
+                  onContentModeChange={handleContentModeChange}
                   onProviderChange={handleProviderChange}
                   onWslEngineChange={handleWslEngineChange}
                   onAsrModelChange={handleAsrModelChange}
@@ -497,7 +531,7 @@ export const Transcribe: React.FC = () => {
                 >
                   <button
                     onClick={handleSubmit}
-                    disabled={isTranscribing || isMossModelMissing}
+                    disabled={isTranscribing || isMossModelMissing || isPodcastUnavailable}
                     className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
                   >
                     {isTranscribing && (
@@ -543,60 +577,18 @@ export const Transcribe: React.FC = () => {
                 )}
               </section>
 
-              <section
-                className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-sage" />
-                    <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录结果</h3>
-                  </div>
-                  {transcriptionText && (
-                    <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
-                      {transcriptionText.length} 字
-                    </span>
-                  )}
-                </div>
-
-                <textarea
-                  value={transcriptionText}
-                  onChange={(e) => setTranscriptionText(e.target.value)}
-                  className="w-full h-72 bg-white/60 text-ink rounded-2xl p-4 border border-card-border focus:border-ink/20 focus:outline-none resize-none font-body text-[13px] leading-[1.9] transition-colors"
-                  placeholder="转录过程中，文本会实时出现在这里..."
-                />
-
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    onClick={handleCopy}
-                    disabled={!transcriptionText}
-                    className={ACTION_BUTTON_NEUTRAL}
-                  >
-                    {copied ? '已复制' : '复制'}
-                  </button>
-                  <button
-                    onClick={handleDownload}
-                    disabled={!transcriptionText.trim()}
-                    className={ACTION_BUTTON_NEUTRAL}
-                  >
-                    下载 TXT
-                  </button>
-                  <button
-                    onClick={() => setResultModalTarget({ type: 'single' })}
-                    disabled={!transcriptionText.trim() || !transcriptionRecord?.id}
-                    className={ACTION_BUTTON_FORMAT}
-                  >
-                    查看 / 排版
-                  </button>
-                  <button
-                    onClick={handleImport}
-                    disabled={!transcriptionText.trim()}
-                    className={ACTION_BUTTON_IMPORT}
-                  >
-                    导入稿件
-                  </button>
-                </div>
-              </section>
+              <LiveTranscriptionPreview
+                text={transcriptionText}
+                chunks={transcriptionChunks}
+                progress={transcribeProgress}
+                isTranscribing={isTranscribing}
+                isPodcast={(transcriptionRecord?.content_mode || contentMode) === 'podcast'}
+                isCopied={copied}
+                isOpening={isOpeningResult}
+                onOpen={() => void handleOpenResult({ type: 'single' })}
+                onCopy={() => void handleCopy()}
+                onDownload={handleDownload}
+              />
             </>
           ) : (
             <>
@@ -643,6 +635,8 @@ export const Transcribe: React.FC = () => {
 
                 <TranscribeProviderControls
                   language={language}
+                  contentMode={contentMode}
+                  canUsePodcastMode={canUsePodcastMode}
                   provider={asrProvider}
                   wslEngine={wslEngine}
                   asrModel={asrModel}
@@ -655,6 +649,7 @@ export const Transcribe: React.FC = () => {
                   qwenBaseUrl={settings.qwen_asr_base_url}
                   wslBaseUrl={settings.wsl_asr_base_url}
                   onLanguageChange={setLanguage}
+                  onContentModeChange={handleContentModeChange}
                   onProviderChange={handleProviderChange}
                   onWslEngineChange={handleWslEngineChange}
                   onAsrModelChange={handleAsrModelChange}
@@ -663,7 +658,7 @@ export const Transcribe: React.FC = () => {
                 >
                   <button
                     onClick={handleBatchSubmit}
-                    disabled={isBatchTranscribing || selectedIndexes.size === 0 || isMossModelMissing}
+                    disabled={isBatchTranscribing || selectedIndexes.size === 0 || isMossModelMissing || isPodcastUnavailable}
                     className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
                   >
                     {isBatchTranscribing && (
@@ -760,12 +755,16 @@ export const Transcribe: React.FC = () => {
                         )}
 
                         {(item.status === 'completed' || item.status === 'transcribing') && (
-                          <textarea
-                            value={item.text}
-                            readOnly
-                            placeholder={item.status === 'transcribing' ? '转录中，文本会实时出现...' : ''}
-                            className="w-full h-32 bg-white/70 text-ink rounded-xl p-3 border border-card-border resize-none font-body text-[12px] leading-[1.8] transition-colors"
-                          />
+                          <div className="h-32 overflow-y-auto rounded-xl border border-card-border bg-white/70 p-3">
+                            {item.text ? (
+                              <p className="whitespace-pre-wrap font-body text-[12px] leading-[1.8] text-ink-soft/90">{item.text}</p>
+                            ) : (
+                              <div className="flex h-full flex-col items-center justify-center text-center">
+                                <p className="font-display italic text-[13px] text-ink-soft/45">等待首个音频片段完成</p>
+                                <p className="mt-1 font-body text-[9px] text-ink-soft/35">当前区域只读，完成的分片会自动追加。</p>
+                              </div>
+                            )}
+                          </div>
                         )}
 
                         {item.status === 'completed' && item.text && (
@@ -787,11 +786,11 @@ export const Transcribe: React.FC = () => {
                                 下载
                               </button>
                               <button
-                                onClick={() => setResultModalTarget({ type: 'batch', index })}
+                                onClick={() => void handleOpenResult({ type: 'batch', index })}
                                 disabled={!item.resultId && !item.transcriptionResult?.id}
                                 className={ACTION_BUTTON_FORMAT}
                               >
-                                查看 / 排版
+                                {item.transcriptionResult?.content_mode === 'podcast' ? '打开对话逐字稿' : '查看文稿'}
                               </button>
                               <button
                                 onClick={() => handleImportItem(item.text)}
@@ -897,25 +896,39 @@ export const Transcribe: React.FC = () => {
 
         </div>
       </main>
-      {resultModalTarget && (
-        <TranscriptionResultModal
-          key={`${resultModalTarget.type}-${modalResultId ?? 'unsaved'}-${resultModalTarget.type === 'batch' ? resultModalTarget.index : 0}`}
+      {previewModalTarget && (
+        <TranscriptionPreviewModal
           isOpen
           title={modalTitle}
           text={modalText}
-          formattedText={modalFormattedText}
-          canFormat={Boolean(modalResultId)}
-          onClose={() => setResultModalTarget(null)}
-          onCopy={(text) => navigator.clipboard.writeText(text)}
+          chunks={modalChunks}
+          isLive={isPreviewLive}
+          isCopied={copied}
+          onClose={() => setPreviewModalTarget(null)}
+          onCopy={() => void navigator.clipboard.writeText(modalText).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1200);
+          })}
           onDownload={handleDownloadModalResult}
-          onImport={(text) => {
-            if (!text.trim()) return;
+          onImport={!isPreviewLive && !modalIsPodcast ? () => {
+            if (!modalText.trim()) return;
             setCurrentBroadcast(null);
-            updateScript(text.trim());
-            setResultModalTarget(null);
+            updateScript(modalText.trim());
+            setPreviewModalTarget(null);
             navigate('/editor');
+          } : undefined}
+        />
+      )}
+      {currentConversation && (
+        <TranscriptConversationModal
+          isOpen
+          title={currentConversation.record.relative_path || currentConversation.record.file_name}
+          turns={currentConversation.turns}
+          speakers={currentConversation.speakers}
+          onClose={() => setConversationResultId(null)}
+          onCorrect={async (turnId, correctedText) => {
+            await correctTranscriptTurn(currentConversation.record.id, turnId, correctedText);
           }}
-          onFormat={handleFormatModalResult}
         />
       )}
     </div>

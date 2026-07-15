@@ -14,11 +14,22 @@ function serializeUsage(usage) {
   return usage ? JSON.stringify(usage) : null;
 }
 
+function parseJson(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
 function normalize(row) {
   if (!row) return undefined;
   return {
     ...row,
     usage: parseUsage(row.usage),
+    asr_diagnostics: parseJson(row.asr_diagnostics, {}),
+    asr_warnings: parseJson(row.asr_warnings, []),
     file_size_bytes: Number(row.file_size_bytes || 0),
     audio_duration_seconds: Number(row.audio_duration_seconds || 0),
     processing_seconds: Number(row.processing_seconds || 0)
@@ -68,14 +79,26 @@ function create({
   taskId,
   fileSizeBytes,
   audioDurationSeconds,
-  processingSeconds
+  processingSeconds,
+  contentMode,
+  structureStatus,
+  summaryStatus,
+  summaryError,
+  speakerScope,
+  diarizationStatus,
+  speakerCount,
+  diarizationConflicts,
+  asrDiagnostics,
+  asrWarnings
 }) {
   const result = db.prepare(`
     INSERT INTO transcription_results (
       file_name, relative_path, text, formatted_text, language, provider, engine, model, context, usage, task_id,
-      file_size_bytes, audio_duration_seconds, processing_seconds
+      file_size_bytes, audio_duration_seconds, processing_seconds, content_mode, structure_status,
+      summary_status, summary_error, speaker_scope, diarization_status, speaker_count,
+      diarization_conflicts, asr_diagnostics, asr_warnings
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fileName,
     relativePath || fileName,
@@ -90,7 +113,17 @@ function create({
     taskId || '',
     Number(fileSizeBytes || 0),
     Number(audioDurationSeconds || 0),
-    Number(processingSeconds || 0)
+    Number(processingSeconds || 0),
+    contentMode || 'standard',
+    structureStatus || 'unavailable',
+    summaryStatus || 'not_started',
+    summaryError || '',
+    speakerScope || '',
+    diarizationStatus || '',
+    Number(speakerCount || 0),
+    Number(diarizationConflicts || 0),
+    JSON.stringify(asrDiagnostics || {}),
+    JSON.stringify(Array.isArray(asrWarnings) ? asrWarnings : [])
   );
   return getById(result.lastInsertRowid);
 }

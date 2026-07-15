@@ -72,7 +72,17 @@ export interface ModelOption {
 }
 
 export type LlmModelOption = ModelOption;
-export type AsrModelOption = ModelOption;
+export interface AsrModelCapabilities {
+  transcription?: boolean;
+  diarization?: boolean;
+  segment_timestamps?: boolean;
+  languages?: string[];
+  speaker_resolution_modes?: string[];
+}
+
+export interface AsrModelOption extends ModelOption {
+  capabilities?: AsrModelCapabilities;
+}
 
 export interface Settings {
   mimo_api_key: string;
@@ -151,6 +161,7 @@ export interface TranscribeOptions {
   asrEngine?: AsrEngine;
   asrModel?: string;
   context?: string;
+  contentMode?: 'standard' | 'podcast';
 }
 
 export interface TranscriptionRecord {
@@ -169,8 +180,105 @@ export interface TranscriptionRecord {
   file_size_bytes: number;
   audio_duration_seconds: number;
   processing_seconds: number;
+  content_mode: 'standard' | 'podcast';
+  structure_status: 'unavailable' | 'ready';
+  summary_status: 'not_started' | 'queued' | 'running' | 'completed' | 'failed' | 'stale';
+  summary_error: string;
+  speaker_scope: '' | 'global' | 'mixed' | 'chunk';
+  diarization_status: string;
+  speaker_count: number;
+  diarization_conflicts: number;
+  asr_diagnostics: Record<string, unknown>;
+  asr_warnings: string[];
+  summary_model: string;
+  summary_updated_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TranscriptSpeaker {
+  id: number;
+  transcription_id: number;
+  speaker_key: string;
+  display_name: string;
+  sort_order: number;
+  speaker_scope: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TranscriptSegment {
+  id: number;
+  transcription_id: number;
+  segment_index: number;
+  speaker_key: string;
+  source_speaker: string;
+  speaker_scope: string;
+  speaker_resolution: string;
+  chunk_index: number;
+  start_seconds: number;
+  end_seconds: number;
+  text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TranscriptTurn {
+  id: number;
+  transcription_id: number;
+  turn_index: number;
+  speaker_key: string;
+  start_seconds: number;
+  end_seconds: number;
+  text: string;
+  corrected_text: string;
+  evidence_segment_indexes: number[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TranscriptSummary {
+  transcription_id: number;
+  one_liner: string;
+  overview: string;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TranscriptSummaryItemType = 'chapter' | 'speaker_viewpoint' | 'highlight';
+
+export interface TranscriptSummaryItem {
+  id: number;
+  transcription_id: number;
+  item_type: TranscriptSummaryItemType;
+  sort_order: number;
+  speaker_key: string;
+  title: string;
+  content: string;
+  evidence_start_index: number;
+  evidence_end_index: number;
+  start_seconds: number;
+  end_seconds: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TranscriptDetail {
+  record: TranscriptionRecord;
+  speakers: TranscriptSpeaker[];
+  segments: TranscriptSegment[];
+  turns: TranscriptTurn[];
+  summary: TranscriptSummary | null;
+  summaryItems: TranscriptSummaryItem[];
+}
+
+export interface TranscriptSummaryProgress {
+  phase: 'idle' | 'queued' | 'summarizing-batches' | 'synthesizing' | 'completed' | 'failed';
+  percent: number;
+  current: number;
+  total: number;
+  message: string;
 }
 
 export interface TranscriptionStats {
@@ -195,6 +303,11 @@ export interface TranscriptionProgress {
   current: number;
   total: number;
   message: string;
+}
+
+export interface TranscriptionChunkPreview {
+  index: number;
+  text: string;
 }
 
 export type BatchTranscriptionItemStatus = 'pending' | 'transcribing' | 'completed' | 'failed';
@@ -258,6 +371,7 @@ export interface AppState {
   isMerging: boolean;
 
   transcriptionText: string;
+  transcriptionChunks: TranscriptionChunkPreview[];
   transcriptionRecord: TranscriptionRecord | null;
   transcriptionHistory: TranscriptionRecord[];
   transcriptionStats: TranscriptionStats;
@@ -266,6 +380,10 @@ export interface AppState {
   isLoadingTranscriptionStats: boolean;
   isDeletingTranscriptionResult: boolean;
   transcribeProgress: TranscriptionProgress;
+  transcriptDetail: TranscriptDetail | null;
+  isLoadingTranscriptDetail: boolean;
+  isSummarizingTranscript: boolean;
+  transcriptSummaryProgress: TranscriptSummaryProgress;
 
   batchTranscriptionItems: BatchTranscriptionItem[];
   isBatchTranscribing: boolean;
@@ -332,8 +450,11 @@ export interface AppState {
   fetchTranscriptionStats: () => Promise<TranscriptionStats>;
   deleteTranscriptionHistoryResult: (id: number) => Promise<void>;
   formatTranscriptionResult: (id: number, text: string) => Promise<TranscriptionRecord>;
-  setTranscriptionText: (text: string) => void;
   clearTranscription: () => void;
+  fetchTranscriptDetail: (id: number) => Promise<TranscriptDetail>;
+  renameTranscriptSpeaker: (transcriptionId: number, speakerId: number, displayName: string) => Promise<TranscriptSpeaker>;
+  correctTranscriptTurn: (transcriptionId: number, turnId: number, correctedText: string) => Promise<TranscriptTurn>;
+  summarizeTranscript: (transcriptionId: number) => Promise<void>;
   batchTranscribeMedia: (
     files: File[],
     language: AsrLanguage,

@@ -44,6 +44,7 @@ backend/src/
 │   ├── settings.js
 │   ├── schedule.js
 │   ├── transcribe.js       # ASR 上传转录（单文件 + 批量）
+│   ├── transcriptWorkspace.js # 播客详情、Speaker/Turn 校对与总结任务受理
 │   └── voicePresets.js
 ├── services/               # 服务层：外部 API 调用、业务逻辑、数据访问
 │   ├── aihot.js            # AI HOT API 客户端
@@ -64,6 +65,11 @@ backend/src/
 │   ├── broadcastStore.js   # DAL：broadcasts 表的 CRUD
 │   ├── segmentStore.js     # DAL：segments 表的 CRUD，待生成查询包含 stale generating 恢复
 │   ├── transcriptionResultStore.js # DAL：transcription_results 表的 CRUD 与删除
+│   ├── podcastTranscriptStore.js # DAL：Transcript 聚合事实、校对与 Summary Artifact
+│   ├── transcriptProcessor.js # Segment 规范化与可读 Turn 派生
+│   ├── transcriptionSummaryService.js # 分批总结、证据校验与全局合成
+│   ├── transcriptionSummaryRunner.js # 总结 lease、heartbeat 与 SSE 编排
+│   ├── transcriptionSummaryJobStore.js # DAL：总结任务租约
 │   ├── scheduleStore.js    # DAL：schedules 表的 CRUD 与运行时间更新
 │   └── scheduler.js        # 定时任务 cron 编排、业务校验与任务启停
 └── utils/                  # 共享工具函数

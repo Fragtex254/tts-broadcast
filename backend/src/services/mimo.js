@@ -1175,6 +1175,7 @@ module.exports = {
   fetchModelsForConfig: llmModels.fetchModelsForConfig,
   getApiKey,
   getLlmConfig,
+  createLlmMessage,
   formatTranscriptionText,
   inferVoiceDesignFromImage,
   rewriteToScript,

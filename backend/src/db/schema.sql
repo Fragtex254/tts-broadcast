@@ -83,12 +83,124 @@ CREATE TABLE IF NOT EXISTS transcription_results (
   file_size_bytes INTEGER DEFAULT 0,
   audio_duration_seconds REAL DEFAULT 0,
   processing_seconds REAL DEFAULT 0,
+  content_mode TEXT DEFAULT 'standard',
+  structure_status TEXT DEFAULT 'unavailable',
+  summary_status TEXT DEFAULT 'not_started',
+  summary_error TEXT DEFAULT '',
+  speaker_scope TEXT DEFAULT '',
+  diarization_status TEXT DEFAULT '',
+  speaker_count INTEGER DEFAULT 0,
+  diarization_conflicts INTEGER DEFAULT 0,
+  asr_diagnostics TEXT DEFAULT '{}',
+  asr_warnings TEXT DEFAULT '[]',
+  summary_model TEXT DEFAULT '',
+  summary_updated_at DATETIME DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_transcription_results_created_at ON transcription_results(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_transcription_results_task_id ON transcription_results(task_id);
+
+CREATE TABLE IF NOT EXISTS transcription_speakers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcription_id INTEGER NOT NULL,
+  speaker_key TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  speaker_scope TEXT DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE,
+  UNIQUE (transcription_id, speaker_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_speakers_transcription
+  ON transcription_speakers(transcription_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS transcription_segments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcription_id INTEGER NOT NULL,
+  segment_index INTEGER NOT NULL,
+  source_index INTEGER NOT NULL DEFAULT -1,
+  speaker_key TEXT NOT NULL,
+  source_speaker TEXT DEFAULT '',
+  speaker_scope TEXT DEFAULT '',
+  speaker_resolution TEXT DEFAULT '',
+  chunk_index INTEGER DEFAULT -1,
+  start_seconds REAL NOT NULL,
+  end_seconds REAL NOT NULL,
+  text TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE,
+  UNIQUE (transcription_id, segment_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_segments_transcription
+  ON transcription_segments(transcription_id, segment_index);
+
+CREATE TABLE IF NOT EXISTS transcription_turns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcription_id INTEGER NOT NULL,
+  turn_index INTEGER NOT NULL,
+  speaker_key TEXT NOT NULL,
+  start_seconds REAL NOT NULL,
+  end_seconds REAL NOT NULL,
+  text TEXT NOT NULL,
+  corrected_text TEXT NOT NULL DEFAULT '',
+  evidence_segment_indexes TEXT NOT NULL DEFAULT '[]',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE,
+  UNIQUE (transcription_id, turn_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_turns_transcription
+  ON transcription_turns(transcription_id, turn_index);
+
+CREATE TABLE IF NOT EXISTS transcription_summaries (
+  transcription_id INTEGER PRIMARY KEY,
+  one_liner TEXT NOT NULL DEFAULT '',
+  overview TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS transcription_summary_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcription_id INTEGER NOT NULL,
+  item_type TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  speaker_key TEXT DEFAULT '',
+  title TEXT DEFAULT '',
+  content TEXT NOT NULL,
+  evidence_start_index INTEGER NOT NULL,
+  evidence_end_index INTEGER NOT NULL,
+  start_seconds REAL NOT NULL,
+  end_seconds REAL NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_summary_items_transcription
+  ON transcription_summary_items(transcription_id, item_type, sort_order);
+
+CREATE TABLE IF NOT EXISTS transcription_summary_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcription_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running',
+  lease_expires_at_ms INTEGER NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_summary_jobs_active
+  ON transcription_summary_jobs(transcription_id, status, lease_expires_at_ms);
 
 CREATE TABLE IF NOT EXISTS api_rate_limit_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

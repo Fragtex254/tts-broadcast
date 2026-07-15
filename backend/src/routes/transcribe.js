@@ -8,6 +8,8 @@ const media = require('../services/media');
 const mimo = require('../services/mimo');
 const sseManager = require('../services/sseManager');
 const transcriptionResultStore = require('../services/transcriptionResultStore');
+const podcastTranscriptStore = require('../services/podcastTranscriptStore');
+const transcriptProcessor = require('../services/transcriptProcessor');
 const { createScopedLogger } = require('../services/logger');
 const { validateId } = require('../utils/validation');
 
@@ -102,11 +104,14 @@ function buildTranscribeOptions(req) {
   const wslModel = req.body.wslModel;
   const asrModel = req.body.asrModel;
   const context = req.body.context;
+  const contentMode = req.body.contentMode === 'podcast' ? 'podcast' : 'standard';
   return {
     asrEngine: typeof asrEngine === 'string' && asrEngine.trim() ? asrEngine.trim() : undefined,
     wslModel: typeof wslModel === 'string' && wslModel.trim() ? wslModel.trim() : undefined,
     asrModel: typeof asrModel === 'string' && asrModel.trim() ? asrModel.trim() : undefined,
-    context: typeof context === 'string' && context.trim() ? context.trim() : undefined
+    context: typeof context === 'string' && context.trim() ? context.trim() : undefined,
+    contentMode,
+    podcastMode: contentMode === 'podcast'
   };
 }
 
@@ -132,14 +137,33 @@ function resolveTranscribeMetadata({ provider, language, options }) {
   };
 }
 
-function saveTranscriptionResult({ fileName, relativePath, text, usage, taskId, metadata }) {
-  return transcriptionResultStore.create({
-    fileName,
-    relativePath,
-    text,
-    usage,
-    taskId,
-    ...metadata
+function saveTranscriptionResult({ fileName, relativePath, result, taskId, metadata, options }) {
+  const execution = result.execution && typeof result.execution === 'object' ? result.execution : {};
+  const diarization = result.diarization && typeof result.diarization === 'object' ? result.diarization : {};
+  const generation = result.generation && typeof result.generation === 'object' ? result.generation : {};
+  const speakerScope = String(diarization.speaker_scope || execution.speaker_scope || '');
+  const transcript = options.podcastMode
+    ? transcriptProcessor.processTranscript({ segments: result.segments, speakerScope })
+    : null;
+  const hasStructure = Boolean(transcript && transcript.segments.length > 0);
+  return podcastTranscriptStore.create({
+    record: {
+      fileName,
+      relativePath,
+      text: result.text,
+      usage: result.usage,
+      taskId,
+      ...metadata,
+      contentMode: options.contentMode,
+      structureStatus: hasStructure ? 'ready' : 'unavailable',
+      speakerScope,
+      diarizationStatus: String(diarization.status || ''),
+      speakerCount: Number(diarization.speaker_count || transcript?.speakers.length || 0),
+      diarizationConflicts: Number(diarization.conflicts || 0),
+      asrDiagnostics: { execution, diarization, generation },
+      asrWarnings: Array.isArray(result.warnings) ? result.warnings : []
+    },
+    transcript: hasStructure ? transcript : null
   });
 }
 
@@ -186,9 +210,10 @@ router.post('/', (req, res) => {
 
       const taskId = buildTaskId(req);
       const fileName = decodeFileName(req.file.originalname);
-      const language = req.body.language || 'auto';
+      const requestedLanguage = req.body.language || 'auto';
       const provider = buildAsrProvider(req);
       const options = buildTranscribeOptions(req);
+      const language = options.podcastMode ? 'auto' : requestedLanguage;
       const metadata = resolveTranscribeMetadata({ provider, language, options });
 
       if (taskId) {
@@ -216,9 +241,9 @@ router.post('/', (req, res) => {
       const transcriptionResult = saveTranscriptionResult({
         fileName,
         relativePath: fileName,
-        text: result.text,
-        usage: result.usage,
+        result,
         taskId,
+        options,
         metadata: {
           ...metadata,
           ...fileStats,
@@ -347,6 +372,7 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
                 percent: overallPercent,
                 current: progress.current,
                 chunkText: progress.chunkText,
+                chunks: progress.chunks,
                 text: progress.text,
                 message: progress.message,
                 timestamp: Date.now()
@@ -359,9 +385,9 @@ async function runBatchTranscription({ files, taskId, language, provider, relati
       const transcriptionResult = saveTranscriptionResult({
         fileName,
         relativePath,
-        text: result.text,
-        usage: result.usage,
+        result,
         taskId,
+        options,
         metadata: {
           ...metadata,
           ...fileStats,
@@ -448,9 +474,10 @@ router.post('/batch', (req, res) => {
     }
 
     const taskId = buildTaskId(req);
-    const language = req.body.language || 'auto';
+    const requestedLanguage = req.body.language || 'auto';
     const provider = buildAsrProvider(req);
     const options = buildTranscribeOptions(req);
+    const language = options.podcastMode ? 'auto' : requestedLanguage;
     const relativePaths = parseRelativePaths(req.body.relativePaths);
     const total = files.length;
 

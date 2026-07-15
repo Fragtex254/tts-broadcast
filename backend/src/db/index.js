@@ -146,6 +146,42 @@ try {
   db.exec('ALTER TABLE transcription_results ADD COLUMN processing_seconds REAL DEFAULT 0');
 }
 
+const transcriptionWorkspaceColumns = [
+  ['content_mode', "TEXT DEFAULT 'standard'"],
+  ['structure_status', "TEXT DEFAULT 'unavailable'"],
+  ['summary_status', "TEXT DEFAULT 'not_started'"],
+  ['summary_error', "TEXT DEFAULT ''"],
+  ['speaker_scope', "TEXT DEFAULT ''"],
+  ['diarization_status', "TEXT DEFAULT ''"],
+  ['speaker_count', 'INTEGER DEFAULT 0'],
+  ['diarization_conflicts', 'INTEGER DEFAULT 0'],
+  ['asr_diagnostics', "TEXT DEFAULT '{}'"],
+  ['asr_warnings', "TEXT DEFAULT '[]'"],
+  ['summary_model', "TEXT DEFAULT ''"],
+  ['summary_updated_at', 'DATETIME DEFAULT NULL']
+];
+
+for (const [column, definition] of transcriptionWorkspaceColumns) {
+  try {
+    db.prepare(`SELECT ${column} FROM transcription_results LIMIT 1`).get();
+  } catch {
+    db.exec(`ALTER TABLE transcription_results ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+try {
+  db.prepare('SELECT corrected_text FROM transcription_turns LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE transcription_turns ADD COLUMN corrected_text TEXT NOT NULL DEFAULT ''");
+}
+
+try {
+  db.prepare('SELECT source_index FROM transcription_segments LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE transcription_segments ADD COLUMN source_index INTEGER NOT NULL DEFAULT -1');
+  db.exec('UPDATE transcription_segments SET source_index = segment_index WHERE source_index = -1');
+}
+
 // 迁移：记录 WSL 内部使用的 ASR 引擎，并归并旧 MOSS provider 历史。
 try {
   db.prepare('SELECT engine FROM transcription_results LIMIT 1').get();
