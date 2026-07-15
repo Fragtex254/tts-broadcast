@@ -14,7 +14,8 @@ export interface SSEProgressEvent {
   total?: number;
   text?: string;
   chunkText?: string;
-  phase?: 'preparing' | 'transcribing';
+  chunks?: Array<{ index: number; text: string }>;
+  phase?: 'preparing' | 'transcribing' | 'summarizing-batches' | 'synthesizing' | 'completed';
   percent?: number;
   message?: string;
   timestamp?: number;
@@ -48,6 +49,7 @@ export interface SSECompleteEvent {
   text?: string;
   usage?: Record<string, unknown> | null;
   transcriptionResult?: TranscriptionRecord;
+  transcript?: import('../store/types').TranscriptDetail;
   timestamp: number;
 }
 

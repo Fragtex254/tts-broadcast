@@ -35,6 +35,7 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/schedules', require('./routes/schedule'));
 app.use('/api/voice-presets', require('./routes/voicePresets'));
 app.use('/api/transcribe', require('./routes/transcribe'));
+app.use('/api/transcribe', require('./routes/transcriptWorkspace'));
 app.use('/api/sse', require('./routes/sse'));
 
 // 错误处理中间件

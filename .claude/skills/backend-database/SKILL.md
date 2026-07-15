@@ -91,6 +91,7 @@ SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"
 - 路由层不直接调用 `db.prepare()`（settings 表除外）
 - store 函数接收/返回纯 JS 对象，不依赖 `req`/`res`
 - 新增业务表必须同步补对应 `*Store.js`，而不是在路由里散写 SQL
+- Transcript 表族按“聚合根 → 不可变 Segment 事实 → 可校对 Turn → 可重建 Summary Artifact”分层。用户校对只写 `transcription_turns.corrected_text` 并把已完成摘要标记 `stale`，不得覆盖 `transcription_segments`；删除 `transcription_results` 时依赖外键级联清理子表。
 
 ## Checklist
 

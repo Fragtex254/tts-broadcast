@@ -104,6 +104,65 @@ describe('转录 API', () => {
     }));
   });
 
+  test('播客整理持久化结构化事实并可从详情接口读取', async () => {
+    asr.getAsrConfig.mockReturnValue({
+      provider: 'wsl_asr',
+      wslEngine: 'moss',
+      qwenModel: 'Qwen/Qwen3-ASR-1.7B',
+      wslModel: 'structured-asr'
+    });
+    asr.transcribeMedia.mockResolvedValue({
+      text: '欢迎。\n谢谢。',
+      usage: { audio_seconds: 12 },
+      segments: [
+        { start: 0.2, end: 4.8, speaker: 'speaker-0001', source_speaker: 'chunk-0000:S01', text: '欢迎。' },
+        { start: 5.1, end: 8.4, speaker: 'speaker-0002', source_speaker: 'chunk-0000:S02', text: '谢谢。' }
+      ],
+      execution: { mode: 'native_long_form', speaker_scope: 'global', automatic_chunk_fallback: false },
+      diarization: { method: 'moss_anchor_replay', status: 'complete', speaker_scope: 'global', speaker_count: 2, unresolved_segments: 0, conflicts: 0 },
+      generation: { segment_coverage_ratio: 0.99, truncated: false },
+      warnings: []
+    });
+
+    const created = await request(app)
+      .post('/api/transcribe')
+      .field('language', 'auto')
+      .field('provider', 'wsl_asr')
+      .field('asrEngine', 'moss')
+      .field('asrModel', 'structured-asr')
+      .field('contentMode', 'podcast')
+      .attach('media', Buffer.from('fake-wav'), 'podcast.wav');
+
+    expect(created.status).toBe(200);
+    expect(asr.transcribeMedia).toHaveBeenCalledWith(expect.objectContaining({
+      podcastMode: true,
+      language: 'auto'
+    }));
+    expect(created.body.transcriptionResult).toMatchObject({
+      content_mode: 'podcast',
+      structure_status: 'ready',
+      summary_status: 'not_started',
+      speaker_scope: 'global',
+      diarization_status: 'complete',
+      speaker_count: 2,
+      diarization_conflicts: 0
+    });
+
+    const detail = await request(app)
+      .get(`/api/transcribe/results/${created.body.transcriptionResult.id}`);
+
+    expect(detail.status).toBe(200);
+    expect(detail.body.transcript.speakers).toEqual([
+      expect.objectContaining({ speaker_key: 'speaker-0001', display_name: '说话人 1' }),
+      expect.objectContaining({ speaker_key: 'speaker-0002', display_name: '说话人 2' })
+    ]);
+    expect(detail.body.transcript.segments).toEqual([
+      expect.objectContaining({ segment_index: 0, start_seconds: 0.2, end_seconds: 4.8, text: '欢迎。' }),
+      expect.objectContaining({ segment_index: 1, start_seconds: 5.1, end_seconds: 8.4, text: '谢谢。' })
+    ]);
+    expect(detail.body.transcript.turns).toHaveLength(2);
+  });
+
   test('POST /api/transcribe 透传 ASR provider', async () => {
     const res = await request(app)
       .post('/api/transcribe')
@@ -231,7 +290,8 @@ describe('转录 API', () => {
         total: 2,
         percent: 60,
         text: '第一段。',
-        chunkText: '第一段。'
+        chunkText: '第一段。',
+        chunks: [{ index: 1, text: '第一段。' }]
       });
       return { text: '第一段。\n第二段。', usage: { total_tokens: 12 } };
     });
@@ -251,7 +311,8 @@ describe('转录 API', () => {
       phase: 'transcribing',
       current: 1,
       total: 2,
-      text: '第一段。'
+      text: '第一段。',
+      chunks: [{ index: 1, text: '第一段。' }]
     }));
     expect(sseManager.sendComplete).toHaveBeenCalledWith('transcribe-test', expect.objectContaining({
       phase: 'completed',
@@ -455,7 +516,15 @@ describe('批量转录 API', () => {
   test('通过 SSE 推送文件级进度事件', async () => {
     asr.transcribeMedia.mockImplementation(async ({ onProgress }) => {
       if (typeof onProgress === 'function') {
-        onProgress({ phase: 'transcribing', current: 1, total: 2, percent: 50, text: '片段' });
+        onProgress({
+          phase: 'transcribing',
+          current: 1,
+          total: 2,
+          percent: 50,
+          text: '片段',
+          chunkText: '片段',
+          chunks: [{ index: 1, text: '片段' }]
+        });
       }
       return { text: '文件结果', usage: { total_tokens: 3 } };
     });
@@ -481,7 +550,8 @@ describe('批量转录 API', () => {
     expect(sseManager.sendProgress).toHaveBeenCalledWith('batch-progress', expect.objectContaining({
       phase: 'file-progress',
       index: 0,
-      filePercent: 50
+      filePercent: 50,
+      chunks: [{ index: 1, text: '片段' }]
     }));
     expect(sseManager.sendProgress).toHaveBeenCalledWith('batch-progress', expect.objectContaining({
       phase: 'file-complete',

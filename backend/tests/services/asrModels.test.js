@@ -88,4 +88,36 @@ describe('ASR 模型发现服务', () => {
 
     expect(result.models).toEqual([{ id: 'moss-transcribe-diarize-0.9b' }]);
   });
+
+  test('保留服务端声明的模型能力供客户端约束任务配置', async () => {
+    axios.get.mockResolvedValue({
+      data: {
+        data: [{
+          id: 'structured-asr',
+          capabilities: {
+            transcription: true,
+            diarization: true,
+            segment_timestamps: true,
+            languages: ['auto'],
+            speaker_resolution_modes: ['off', 'auto', 'required']
+          }
+        }]
+      }
+    });
+
+    const result = await asrModels.fetchAsrModelsForConfig({
+      baseUrl: 'http://192.168.31.137:18080/v1'
+    });
+
+    expect(result.models[0]).toEqual({
+      id: 'structured-asr',
+      capabilities: {
+        transcription: true,
+        diarization: true,
+        segment_timestamps: true,
+        languages: ['auto'],
+        speaker_resolution_modes: ['off', 'auto', 'required']
+      }
+    });
+  });
 });

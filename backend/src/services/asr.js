@@ -108,10 +108,11 @@ function mergeUsage(usages) {
  * @param {string} [params.wslModel] - 旧 WSL ASR 模型参数，保留兼容
  * @param {string} [params.asrModel] - ASR 模型 ID
  * @param {string} [params.context] - WSL ASR 上下文提示词
+ * @param {boolean} [params.podcastMode=false] - 是否请求播客结构化结果
  * @param {Function} [params.onProgress] - 转录进度回调
  * @returns {Promise<{text: string, usage: Object|null}>}
  */
-async function transcribeMedia({ file, language = 'auto', provider, asrEngine, wslModel, asrModel, context, onProgress }) {
+async function transcribeMedia({ file, language = 'auto', provider, asrEngine, wslModel, asrModel, context, podcastMode = false, onProgress }) {
   if (!SUPPORTED_LANGUAGES.has(language)) {
     throw new Error('语言参数无效，请选择自动、中文或英文');
   }
@@ -124,13 +125,15 @@ async function transcribeMedia({ file, language = 'auto', provider, asrEngine, w
         ? wslModel.trim()
         : config.wslModel;
     const adapter = config.wslEngine === 'moss' ? mossAsr : wslAsr;
+    const requestLanguage = config.wslEngine === 'moss' && podcastMode ? 'auto' : language;
     return adapter.transcribeFile({
       file,
-      language,
+      language: requestLanguage,
       baseUrl: config.wslBaseUrl,
       model: requestedModel,
       apiKey: config.wslApiKey,
       context,
+      ...(config.wslEngine === 'moss' && podcastMode ? { podcastMode: true } : {}),
       onProgress
     });
   }

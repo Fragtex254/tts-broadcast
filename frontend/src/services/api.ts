@@ -227,6 +227,14 @@ export const transcribeApi = {
     api.get('/transcribe/stats'),
   deleteResult: (id: number) =>
     api.delete(`/transcribe/results/${id}`),
+  getDetail: (id: number) =>
+    api.get(`/transcribe/results/${id}`),
+  renameSpeaker: (transcriptionId: number, speakerId: number, displayName: string) =>
+    api.patch(`/transcribe/results/${transcriptionId}/speakers/${speakerId}`, { displayName }),
+  correctTurn: (transcriptionId: number, turnId: number, correctedText: string) =>
+    api.patch(`/transcribe/results/${transcriptionId}/turns/${turnId}`, { correctedText }),
+  summarize: (id: number, taskId: string) =>
+    api.post(`/transcribe/results/${id}/summarize`, { taskId }),
   fetchModels: (data: { provider: AsrProvider; engine?: AsrEngine; baseUrl?: string; apiKey?: string }) =>
     api.post('/transcribe/models', data),
 };

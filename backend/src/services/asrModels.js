@@ -48,6 +48,19 @@ function extractModels(responseData) {
   throw new Error('模型列表响应格式不正确');
 }
 
+function extractCapabilities(model) {
+  if (model.capabilities && typeof model.capabilities === 'object') return model.capabilities;
+  const keys = [
+    'transcription', 'diarization', 'segment_timestamps', 'languages',
+    'speaker_resolution_modes', 'execution_modes', 'speaker_scopes'
+  ];
+  const capabilities = {};
+  for (const key of keys) {
+    if (model[key] !== undefined) capabilities[key] = model[key];
+  }
+  return Object.keys(capabilities).length > 0 ? capabilities : null;
+}
+
 /**
  * 探测 OpenAI-compatible ASR 模型列表。
  * @param {Object} params
@@ -76,10 +89,14 @@ async function fetchAsrModelsForConfig({ baseUrl, apiKey = '' }) {
 
       const models = extractModels(response.data)
         .filter(model => model && typeof model.id === 'string' && model.id.trim())
-        .map(model => ({
-          id: model.id,
-          ...(model.owned_by ? { owned_by: model.owned_by } : {}),
-        }))
+        .map(model => {
+          const capabilities = extractCapabilities(model);
+          return {
+            id: model.id,
+            ...(model.owned_by ? { owned_by: model.owned_by } : {}),
+            ...(capabilities ? { capabilities } : {}),
+          };
+        })
         .sort((a, b) => a.id.localeCompare(b.id));
 
       if (models.length === 0) {

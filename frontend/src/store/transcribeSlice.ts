@@ -3,6 +3,10 @@ import { getApiErrorMessage } from '../services/apiError';
 import { createScopedLogger, toLogError } from '../services/logger';
 import {
   safeParseStrict,
+  TranscriptDetailResponseSchema,
+  TranscriptDetailSchema,
+  TranscriptSpeakerSchema,
+  TranscriptTurnSchema,
   TranscriptionRecordSchema,
   TranscriptionResultSchema,
   TranscriptionResultsResponseSchema,
@@ -20,8 +24,11 @@ import type {
   TranscriptionProgress,
   TranscriptionResult,
   TranscriptionStats,
+  TranscriptDetail,
+  TranscriptSummaryProgress,
 } from './types';
 import type { StoreSet } from './storeTypes';
+import { mergeTranscriptionChunk, mergeTranscriptionText } from './transcriptionProgressModel';
 
 const logger = createScopedLogger('transcribe-slice');
 
@@ -50,6 +57,14 @@ const EMPTY_TRANSCRIPTION_STATS: TranscriptionStats = {
   total_processing_seconds: 0,
 };
 
+const IDLE_SUMMARY_PROGRESS: TranscriptSummaryProgress = {
+  phase: 'idle',
+  percent: 0,
+  current: 0,
+  total: 0,
+  message: '等待总结',
+};
+
 interface BatchSSEProgress {
   phase?: string;
   index?: number;
@@ -60,6 +75,7 @@ interface BatchSSEProgress {
   percent?: number;
   text?: string;
   chunkText?: string;
+  chunks?: Array<{ index: number; text: string }>;
   usage?: Record<string, unknown> | null;
   resultId?: number;
   transcriptionResult?: TranscriptionRecord;
@@ -119,6 +135,9 @@ function appendTranscribeOptions(formData: FormData, options?: TranscribeOptions
   if (options?.context?.trim()) {
     formData.append('context', options.context.trim());
   }
+  if (options?.contentMode) {
+    formData.append('contentMode', options.contentMode);
+  }
 }
 
 function updateBatchItemRecord(item: BatchTranscriptionItem, record: TranscriptionRecord): BatchTranscriptionItem {
@@ -157,6 +176,7 @@ async function refreshTranscriptionStats(set: StoreSet): Promise<void> {
 export function createTranscribeSlice(set: StoreSet): Pick<
   AppState,
   | 'transcriptionText'
+  | 'transcriptionChunks'
   | 'transcriptionRecord'
   | 'transcriptionHistory'
   | 'transcriptionStats'
@@ -165,13 +185,20 @@ export function createTranscribeSlice(set: StoreSet): Pick<
   | 'isLoadingTranscriptionStats'
   | 'isDeletingTranscriptionResult'
   | 'transcribeProgress'
+  | 'transcriptDetail'
+  | 'isLoadingTranscriptDetail'
+  | 'isSummarizingTranscript'
+  | 'transcriptSummaryProgress'
   | 'transcribeMedia'
   | 'fetchTranscriptionHistory'
   | 'fetchTranscriptionStats'
   | 'deleteTranscriptionHistoryResult'
   | 'formatTranscriptionResult'
-  | 'setTranscriptionText'
   | 'clearTranscription'
+  | 'fetchTranscriptDetail'
+  | 'renameTranscriptSpeaker'
+  | 'correctTranscriptTurn'
+  | 'summarizeTranscript'
   | 'batchTranscriptionItems'
   | 'isBatchTranscribing'
   | 'batchTranscribeProgress'
@@ -180,6 +207,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
 > {
   return {
     transcriptionText: '',
+    transcriptionChunks: [],
     transcriptionRecord: null,
     transcriptionHistory: [],
     transcriptionStats: EMPTY_TRANSCRIPTION_STATS,
@@ -188,28 +216,38 @@ export function createTranscribeSlice(set: StoreSet): Pick<
     isLoadingTranscriptionStats: false,
     isDeletingTranscriptionResult: false,
     transcribeProgress: IDLE_PROGRESS,
+    transcriptDetail: null,
+    isLoadingTranscriptDetail: false,
+    isSummarizingTranscript: false,
+    transcriptSummaryProgress: IDLE_SUMMARY_PROGRESS,
 
     transcribeMedia: async (file: File, language: AsrLanguage, provider?: AsrProvider, options?: TranscribeOptions) => {
       const taskId = createTaskId();
       const sseClient = createSSEClient(taskId);
 
       sseClient.on<SSEProgressEvent>('progress', (progress) => {
-        set({
-          transcriptionText: progress.text ?? '',
+        set((state) => ({
+          transcriptionText: mergeTranscriptionText(state.transcriptionText, progress.text),
+          transcriptionChunks: mergeTranscriptionChunk(state.transcriptionChunks, progress),
           transcribeProgress: {
-            phase: progress.phase ?? 'transcribing',
+            phase: progress.phase === 'preparing' ? 'preparing' : 'transcribing',
             percent: progress.percent ?? 0,
             current: progress.current ?? 0,
             total: progress.total ?? 0,
             message: progressMessage(progress),
           },
-        });
+        }));
       });
 
       sseClient.on<SSECompleteEvent>('complete', (result) => {
-        set({
+        set((state) => ({
           transcriptionText: result.text ?? '',
+          transcriptionChunks: [],
           transcriptionRecord: result.transcriptionResult ?? null,
+          isTranscribing: false,
+          transcriptionHistory: result.transcriptionResult
+            ? upsertTranscriptionHistory(state.transcriptionHistory, result.transcriptionResult)
+            : state.transcriptionHistory,
           transcribeProgress: {
             phase: 'completed',
             percent: 100,
@@ -217,7 +255,8 @@ export function createTranscribeSlice(set: StoreSet): Pick<
             total: 0,
             message: '转录完成',
           },
-        });
+        }));
+        void refreshTranscriptionStats(set);
       });
 
       sseClient.on<SSEErrorEvent>('error', (event) => {
@@ -237,6 +276,8 @@ export function createTranscribeSlice(set: StoreSet): Pick<
       set({
         isTranscribing: true,
         transcriptionText: '',
+        transcriptionChunks: [],
+        transcriptionRecord: null,
         transcribeProgress: {
           phase: 'uploading',
           percent: 0,
@@ -272,6 +313,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         const result = safeParseStrict(TranscriptionResultSchema, response.data) as TranscriptionResult;
         set((state) => ({
           transcriptionText: result.text,
+          transcriptionChunks: [],
           transcriptionRecord: result.transcriptionResult ?? null,
           isTranscribing: false,
           transcriptionHistory: result.transcriptionResult
@@ -305,12 +347,124 @@ export function createTranscribeSlice(set: StoreSet): Pick<
       }
     },
 
-    setTranscriptionText: (text) => {
-      set({ transcriptionText: text });
+    clearTranscription: () => {
+      set({ transcriptionText: '', transcriptionChunks: [], transcriptionRecord: null, transcribeProgress: IDLE_PROGRESS });
     },
 
-    clearTranscription: () => {
-      set({ transcriptionText: '', transcriptionRecord: null, transcribeProgress: IDLE_PROGRESS });
+    fetchTranscriptDetail: async (id) => {
+      set({ isLoadingTranscriptDetail: true });
+      try {
+        const response = await transcribeApi.getDetail(id);
+        const data = safeParseStrict(TranscriptDetailResponseSchema, response.data);
+        set({ transcriptDetail: data.transcript, isLoadingTranscriptDetail: false });
+        return data.transcript;
+      } catch (error) {
+        set({ isLoadingTranscriptDetail: false });
+        logger.error({ err: toLogError(error), transcriptionId: id }, '获取 Transcript 详情失败');
+        throw new Error(getApiErrorMessage(error, '获取内容详情失败'), { cause: error });
+      }
+    },
+
+    renameTranscriptSpeaker: async (transcriptionId, speakerId, displayName) => {
+      try {
+        const response = await transcribeApi.renameSpeaker(transcriptionId, speakerId, displayName);
+        const speaker = safeParseStrict(TranscriptSpeakerSchema, response.data.speaker);
+        set((state) => ({
+          transcriptDetail: state.transcriptDetail?.record.id === transcriptionId
+            ? {
+                ...state.transcriptDetail,
+                speakers: state.transcriptDetail.speakers.map((item) => item.id === speaker.id ? speaker : item),
+              }
+            : state.transcriptDetail,
+        }));
+        return speaker;
+      } catch (error) {
+        logger.error({ err: toLogError(error), transcriptionId, speakerId }, '更新 Speaker 名称失败');
+        throw new Error(getApiErrorMessage(error, '更新说话人名称失败'), { cause: error });
+      }
+    },
+
+    correctTranscriptTurn: async (transcriptionId, turnId, correctedText) => {
+      try {
+        const response = await transcribeApi.correctTurn(transcriptionId, turnId, correctedText);
+        const turn = safeParseStrict(TranscriptTurnSchema, response.data.turn);
+        const record = safeParseStrict(TranscriptionRecordSchema, response.data.record);
+        set((state) => ({
+          transcriptDetail: state.transcriptDetail?.record.id === transcriptionId
+            ? {
+                ...state.transcriptDetail,
+                record,
+                turns: state.transcriptDetail.turns.map((item) => item.id === turn.id ? turn : item),
+              }
+            : state.transcriptDetail,
+        }));
+        return turn;
+      } catch (error) {
+        logger.error({ err: toLogError(error), transcriptionId, turnId }, '校对逐字稿失败');
+        throw new Error(getApiErrorMessage(error, '校对逐字稿失败'), { cause: error });
+      }
+    },
+
+    summarizeTranscript: async (transcriptionId) => {
+      const taskId = createTaskId().replace('transcribe-', 'summary-');
+      const sseClient = createSSEClient(taskId);
+      sseClient.on<SSEProgressEvent>('progress', (progress) => {
+        const phase = progress.phase === 'synthesizing' ? 'synthesizing' : 'summarizing-batches';
+        set({
+          transcriptSummaryProgress: {
+            phase,
+            percent: progress.percent ?? 0,
+            current: progress.current ?? 0,
+            total: progress.total ?? 0,
+            message: phase === 'synthesizing' ? '正在合并全局摘要' : '正在分批阅读逐字稿',
+          },
+        });
+      });
+      sseClient.on<SSECompleteEvent>('complete', (event) => {
+        if (!event.transcript) return;
+        const transcript: TranscriptDetail = safeParseStrict(TranscriptDetailSchema, event.transcript);
+        set((state) => ({
+          transcriptDetail: transcript,
+          isSummarizingTranscript: false,
+          transcriptionHistory: state.transcriptionHistory.map((record) =>
+            record.id === transcript.record.id ? transcript.record : record
+          ),
+          transcriptSummaryProgress: {
+            phase: 'completed', percent: 100, current: 0, total: 0, message: '总结完成',
+          },
+        }));
+        sseClient.close();
+      });
+      sseClient.on<SSEErrorEvent>('error', (event) => {
+        if (event.error === 'SSE 连接错误') return;
+        set({
+          isSummarizingTranscript: false,
+          transcriptSummaryProgress: {
+            phase: 'failed', percent: 0, current: 0, total: 0, message: event.error || '总结失败',
+          },
+        });
+        sseClient.close();
+      });
+      set({
+        isSummarizingTranscript: true,
+        transcriptSummaryProgress: {
+          phase: 'queued', percent: 0, current: 0, total: 0, message: '总结任务已进入队列',
+        },
+      });
+      sseClient.connect();
+      try {
+        await transcribeApi.summarize(transcriptionId, taskId);
+      } catch (error) {
+        sseClient.close();
+        set({
+          isSummarizingTranscript: false,
+          transcriptSummaryProgress: {
+            phase: 'failed', percent: 0, current: 0, total: 0,
+            message: getApiErrorMessage(error, '无法开始总结'),
+          },
+        });
+        throw new Error(getApiErrorMessage(error, '无法开始总结'), { cause: error });
+      }
     },
 
     fetchTranscriptionHistory: async (params) => {
@@ -439,7 +593,12 @@ export function createTranscribeSlice(set: StoreSet): Pick<
         }
 
         if (phase === 'file-progress') {
-          set({
+          set((state) => ({
+            batchTranscriptionItems: state.batchTranscriptionItems.map((item, itemIndex) =>
+              itemIndex === idx
+                ? { ...item, text: mergeTranscriptionText(item.text, progress.text) }
+                : item
+            ),
             batchTranscribeProgress: {
               phase: 'file-progress',
               percent: progress.percent ?? 0,
@@ -448,7 +607,7 @@ export function createTranscribeSlice(set: StoreSet): Pick<
               currentFileName: progress.fileName ?? '',
               message: progress.message ?? `正在转录 ${idx + 1}/${totalCount}`,
             },
-          });
+          }));
           return;
         }
 

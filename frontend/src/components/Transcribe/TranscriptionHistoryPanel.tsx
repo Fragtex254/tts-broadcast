@@ -140,11 +140,12 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
                       {formatRecordDate(record.created_at)} · {formatAsrSource(record)} · {record.model || '默认模型'}
                     </p>
                   </div>
-                  {record.formatted_text.trim() && (
-                    <span className="shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-body font-medium uppercase tracking-wider bg-sage/25 text-ink">
-                      已排版
-                    </span>
-                  )}
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                    {record.content_mode === 'podcast' && <span className="inline-flex items-center rounded-full bg-lilac/30 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">播客整理</span>}
+                    {record.summary_status === 'completed' && <span className="inline-flex items-center rounded-full bg-sage/30 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">已总结</span>}
+                    {record.summary_status === 'running' || record.summary_status === 'queued' ? <span className="inline-flex items-center rounded-full bg-lemon/30 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">总结中</span> : null}
+                    {record.formatted_text.trim() && <span className="inline-flex items-center rounded-full bg-sage/25 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">已排版</span>}
+                  </div>
                 </div>
 
                 <p className="font-body text-[12px] leading-[1.8] text-ink-soft/75 line-clamp-3">
@@ -161,7 +162,7 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
                       onClick={() => onOpen(record)}
                       className={ACTION_BUTTON_FORMAT}
                     >
-                      查看 / 排版
+                      {record.content_mode === 'podcast' && record.structure_status === 'ready' ? '打开内容工作区' : '查看 / 排版'}
                     </button>
                     <button
                       type="button"

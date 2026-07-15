@@ -74,27 +74,44 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function partialTextFields(progress) {
+  const text = typeof progress.text === 'string' ? progress.text.trim() : '';
+  const chunkText = typeof progress.chunk_text === 'string' ? progress.chunk_text.trim() : '';
+  const chunks = Array.isArray(progress.chunks)
+    ? progress.chunks.filter((chunk) => Number.isInteger(chunk?.index) && typeof chunk?.text === 'string')
+    : [];
+  return {
+    ...(text ? { text } : {}),
+    ...(chunkText ? { chunkText } : {}),
+    ...(chunks.length > 0 ? { chunks } : {})
+  };
+}
+
 function mapProgress(job) {
   const progress = job?.progress || {};
   const status = job?.status;
   const phase = progress.phase || status || 'transcribing';
   const total = Number(progress.total_chunks || 0);
   const current = Number(progress.completed_chunks || 0);
+  const partialText = partialTextFields(progress);
 
   if (status === 'queued' || phase === 'queued') {
-    return { phase: 'preparing', percent: 15, current: 0, total, text: '', message: '等待 WSL ASR 队列' };
+    return { phase: 'preparing', percent: 15, current: 0, total, ...partialText, message: '等待 WSL ASR 队列' };
   }
   if (phase === 'preprocessing') {
-    return { phase: 'preparing', percent: 20, current: 0, total, text: '', message: 'WSL ASR 正在预处理音频' };
+    return { phase: 'preparing', percent: 20, current: 0, total, ...partialText, message: 'WSL ASR 正在预处理音频' };
   }
   if (phase === 'splitting') {
-    return { phase: 'preparing', percent: 30, current: 0, total, text: '', message: 'WSL ASR 正在切分音频' };
+    return { phase: 'preparing', percent: 30, current: 0, total, ...partialText, message: 'WSL ASR 正在切分音频' };
   }
   if (phase === 'loading_model') {
-    return { phase: 'preparing', percent: 40, current: 0, total, text: '', message: 'WSL ASR 正在加载模型' };
+    return { phase: 'preparing', percent: 40, current: 0, total, ...partialText, message: 'WSL ASR 正在加载模型' };
   }
   if (phase === 'merging') {
-    return { phase: 'transcribing', percent: 98, current: total, total, text: '', message: 'WSL ASR 正在合并结果' };
+    return { phase: 'transcribing', percent: 98, current, total, ...partialText, message: 'WSL ASR 正在合并结果' };
+  }
+  if (status === 'completed' || phase === 'completed') {
+    return { phase: 'transcribing', percent: 99, current, total, ...partialText, message: 'WSL ASR 正在整理最终结果' };
   }
 
   const rawPercent = typeof progress.percent === 'number' ? progress.percent : 0;
@@ -104,7 +121,7 @@ function mapProgress(job) {
     percent,
     current,
     total,
-    text: '',
+    ...partialText,
     message: total > 0 ? `WSL ASR 正在转录 ${current}/${total}` : 'WSL ASR 正在转录'
   };
 }
@@ -221,7 +238,7 @@ async function transcribeFile({
 }) {
   const headers = buildHeaders(apiKey);
   if (typeof onProgress === 'function') {
-    onProgress({ phase: 'preparing', percent: 10, current: 0, total: 0, text: '', message: '正在提交 WSL ASR 任务' });
+    onProgress({ phase: 'preparing', percent: 10, current: 0, total: 0, message: '正在提交 WSL ASR 任务' });
   }
 
   try {
@@ -236,11 +253,17 @@ async function transcribeFile({
     );
     const jobId = extractJobId(response.data);
     const startedAt = Date.now();
+    let lastProgressSnapshot = '';
 
     while (Date.now() - startedAt < WSL_ASR_TIMEOUT_MS) {
       const job = await fetchJob({ baseUrl, jobId, headers });
       if (typeof onProgress === 'function') {
-        onProgress(mapProgress(job));
+        const mappedProgress = mapProgress(job);
+        const snapshot = JSON.stringify(mappedProgress);
+        if (snapshot !== lastProgressSnapshot) {
+          lastProgressSnapshot = snapshot;
+          onProgress(mappedProgress);
+        }
       }
       if (job.status === 'completed') {
         return extractCompletedResult(job);

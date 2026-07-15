@@ -13,6 +13,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "axios": "^1.16.1",
     "jszip": "^3.10.1",
     "pino": "^10.3.1",

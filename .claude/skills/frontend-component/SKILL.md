@@ -23,6 +23,7 @@ description: 新增或修改 React 组件、页面时使用。涵盖组件文件
 8. MiMo 方括号标签编辑统一用 `components/Dashboard/AudioTagTextEditor.tsx`；设计/克隆试听和口播分段编辑都走这个复杂标签面板，不再新增只覆盖少量标签的局部插入器。
 9. 非首屏页面用 `React.lazy()` + `Suspense`；新增页面三步：建组件 → `App.tsx` 加 `<Route>` → `Sidebar` 加导航项，并确认 `NotFound` 兜底仍在。
 10. 新增/改完跑 `npm run lint && npm run build && npm run test`。
+11. 转录过程与普通结果使用 `components/Transcribe/LiveTranscriptionPreview.tsx` 和 `TranscriptionPreviewModal.tsx` 的只读视图；播客完成结果进入 `TranscriptConversationModal`。业务页面不得再用可编辑 `<textarea>` 冒充实时结果或文稿阅读器。
 
 ## 模式与模板
 
@@ -72,7 +73,8 @@ export default MyComponent;
 2. **Props 下传，Events 上抛** — 子组件通过 props 接收数据，通过回调函数通知父组件。
 3. **不要在组件内直接调 API** — 通过 store action 间接调用。
 4. **共享交互模块优先** — 弹窗用 `ModalShell`，播放条用 `AudioPlaybackBar` / `AudioPlayer` / `MiniAudioPlayer`，MiMo 方括号标签编辑用 `AudioTagTextEditor`；需要新增变体时先扩展共享模块的清晰 props，而不是在调用处复制实现。
-5. **导出方式** — 同时提供具名导出和默认导出：
+5. **转录结果只读** — 实时预览复用 `LiveTranscriptionPreview`，展开文稿复用 `TranscriptionPreviewModal`，播客结构化完成后复用 `TranscriptConversationModal`；不要回退到双 textarea 排版弹窗。
+6. **导出方式** — 同时提供具名导出和默认导出：
    ```tsx
    export const MyComponent: React.FC<Props> = (props) => { ... };
    export default MyComponent;
@@ -152,6 +154,7 @@ export default MyComponent;
 | `/editor` | `ScriptEditor` | 口播稿编辑 |
 | `/transcribe` | `Transcribe` | 音视频上传转录 |
 | `/history` | `ContentLibrary` | 内容库（播报 / 转录稿） |
+| `/history/transcriptions/:id` | `TranscriptWorkspace` | 播客阅读、校对与一键总结上下文页 |
 | `/automation` | `Automation` | 自动化任务 |
 | `/voice-presets` | `VoicePresets` | 音色库 |
 | `/settings` | `Settings` | 系统设置 |
@@ -167,6 +170,7 @@ export default MyComponent;
 6. 新增用户可访问路径时，确认 `NotFound` 兜底仍存在。
 7. 导航使用 `<NavLink>`（不是 `<Link>`），以支持 `isActive` 高亮。
 8. 顶级导航只展示工作台、内容库、音色库、自动化和设置；编辑器与转录页由任务入口进入，不在 Sidebar 重复展示。
+9. 播客时间码当前只读展示，不挂载音频播放、seek 或“回到现场”交互；未来接入时仍必须复用统一 `AudioPlaybackBar`。
 
 ### TypeScript
 

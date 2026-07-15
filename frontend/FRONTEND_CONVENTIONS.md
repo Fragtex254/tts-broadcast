@@ -43,6 +43,7 @@ frontend/src/
 │   ├── ScriptEditor.tsx
 │   ├── VoicePresets.tsx
 │   ├── Transcribe.tsx
+│   ├── TranscriptWorkspace.tsx     # 播客详情、校对与一键总结编排
 │   ├── ContentLibrary.tsx
 │   ├── Automation.tsx
 │   ├── Settings.tsx
@@ -53,7 +54,7 @@ frontend/src/
 │   ├── Layout/                 # 布局组件（Sidebar, Header）
 │   ├── Library/                # 内容库子面板（播报、转录稿）
 │   ├── Dashboard/              # Dashboard 子组件（含统一音频播放条 AudioPlaybackBar）
-│   └── Transcribe/             # 转录页子组件（统计、Provider 控件、历史结果查看、导入、下载、删除）
+│   └── Transcribe/             # 转录与播客工作区子组件（Provider、历史、Speaker、Summary、Turn）
 ├── hooks/                       # 可复用 hooks（useDebounce, useSSE）
 ├── services/
 │   ├── api.ts                  # Axios API 封装
@@ -84,6 +85,7 @@ frontend/src/
 - `components/ModalShell.tsx` 是二级界面、确认弹窗、全屏编辑面板的统一外壳，集中处理 `role="dialog"`、Esc 关闭、backdrop 关闭、标题区、footer 和尺寸变体。业务组件不得重复手写固定遮罩与对话框基础逻辑。
 - `components/Dashboard/AudioPlaybackBar.tsx` 是音频播放条唯一底层实现，集中处理 `<audio>` 生命周期、播放/暂停、时长、seek、波形、进度条、播放失败和倍速保音高。整篇/历史播放器通过 `AudioPlayer`，试听小播放器通过 `MiniAudioPlayer` 接入；业务组件不得重新实现播放控制。
 - 与播放条相关的纯函数放在 `components/Dashboard/audioPlaybackUtils.ts`，保持组件文件只导出 React 组件，符合 Vite Fast Refresh 规则。
+- 播客详情使用独立上下文路由 `/history/transcriptions/:id`；`TranscriptWorkspace` 只负责编排，Speaker、Summary、Turn 分为展示组件。时间码当前仅作只读事实展示，不绑定播放或 seek。
 
 ---
 

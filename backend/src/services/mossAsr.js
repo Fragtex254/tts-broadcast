@@ -55,7 +55,7 @@ function buildHeaders(apiKey) {
   return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 }
 
-async function buildFormData({ file, language, model, context }) {
+async function buildFormData({ file, language, model, context, podcastMode }) {
   const trimmedModel = typeof model === 'string' ? model.trim() : '';
   if (!trimmedModel) {
     throw new Error('请选择 MOSS ASR 模型');
@@ -64,8 +64,13 @@ async function buildFormData({ file, language, model, context }) {
   const formData = new FormData();
   formData.append('file', await blobForFile(file), file.originalname || 'upload.bin');
   formData.append('model', trimmedModel);
-  formData.append('response_format', 'json');
-  if (language && language !== 'auto') {
+  formData.append('response_format', podcastMode ? 'verbose_json' : 'json');
+  if (podcastMode) {
+    formData.append('split_strategy', 'auto');
+    formData.append('preserve_segments', 'true');
+    formData.append('speaker_resolution', 'auto');
+  }
+  if (!podcastMode && language && language !== 'auto') {
     formData.append('language', language);
   }
   if (typeof context === 'string' && context.trim()) {
@@ -76,6 +81,19 @@ async function buildFormData({ file, language, model, context }) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function partialTextFields(progress) {
+  const text = typeof progress.text === 'string' ? progress.text.trim() : '';
+  const chunkText = typeof progress.chunk_text === 'string' ? progress.chunk_text.trim() : '';
+  const chunks = Array.isArray(progress.chunks)
+    ? progress.chunks.filter((chunk) => Number.isInteger(chunk?.index) && typeof chunk?.text === 'string')
+    : [];
+  return {
+    ...(text ? { text } : {}),
+    ...(chunkText ? { chunkText } : {}),
+    ...(chunks.length > 0 ? { chunks } : {})
+  };
 }
 
 function extractJobId(responseData) {
@@ -92,21 +110,25 @@ function mapJobProgress(job) {
   const phase = progress.phase || status || 'transcribing';
   const total = Number(progress.total_chunks || 0);
   const current = Number(progress.completed_chunks || 0);
+  const partialText = partialTextFields(progress);
 
   if (status === 'queued' || phase === 'queued') {
-    return { phase: 'preparing', percent: 15, current: 0, total, text: '', message: '等待 MOSS ASR 队列' };
+    return { phase: 'preparing', percent: 15, current: 0, total, ...partialText, message: '等待 MOSS ASR 队列' };
   }
   if (phase === 'preprocessing') {
-    return { phase: 'preparing', percent: 20, current: 0, total, text: '', message: 'MOSS ASR 正在预处理音频' };
+    return { phase: 'preparing', percent: 20, current: 0, total, ...partialText, message: 'MOSS ASR 正在预处理音频' };
   }
   if (phase === 'splitting') {
-    return { phase: 'preparing', percent: 30, current: 0, total, text: '', message: 'MOSS ASR 正在切分音频' };
+    return { phase: 'preparing', percent: 30, current: 0, total, ...partialText, message: 'MOSS ASR 正在切分音频' };
   }
   if (phase === 'loading_model') {
-    return { phase: 'preparing', percent: 40, current: 0, total, text: '', message: 'MOSS ASR 正在加载模型' };
+    return { phase: 'preparing', percent: 40, current: 0, total, ...partialText, message: 'MOSS ASR 正在加载模型' };
   }
   if (phase === 'merging') {
-    return { phase: 'transcribing', percent: 98, current: total, total, text: '', message: 'MOSS ASR 正在合并结果' };
+    return { phase: 'transcribing', percent: 98, current, total, ...partialText, message: 'MOSS ASR 正在合并结果' };
+  }
+  if (status === 'completed' || phase === 'completed') {
+    return { phase: 'transcribing', percent: 99, current, total, ...partialText, message: 'MOSS ASR 正在整理最终结果' };
   }
 
   const rawPercent = typeof progress.percent === 'number' ? progress.percent : 0;
@@ -116,24 +138,35 @@ function mapJobProgress(job) {
     percent,
     current,
     total,
-    text: '',
+    ...partialText,
     message: total > 0 ? `MOSS ASR 正在转录 ${current}/${total}` : 'MOSS ASR 正在转录'
   };
 }
 
-function extractCompletedJob(job) {
-  const result = job?.result;
+function extractMossResult(result) {
   if (!result || typeof result.text !== 'string') {
     throw new Error('MOSS ASR 未返回转录结果');
   }
   return {
     text: result.text.trim(),
-    usage: result.usage || null
+    usage: result.usage || null,
+    ...(Array.isArray(result.segments) ? { segments: result.segments } : {}),
+    ...(Array.isArray(result.chunks) ? { chunks: result.chunks } : {}),
+    ...(result.execution && typeof result.execution === 'object' ? { execution: result.execution } : {}),
+    ...(result.diarization && typeof result.diarization === 'object' ? { diarization: result.diarization } : {}),
+    ...(result.generation && typeof result.generation === 'object' ? { generation: result.generation } : {}),
+    ...(Array.isArray(result.warnings) ? { warnings: result.warnings } : {})
   };
+}
+
+function extractCompletedJob(job) {
+  const result = job?.result;
+  return extractMossResult(result);
 }
 
 async function pollJob({ baseUrl, jobId, headers, onProgress, pollIntervalMs }) {
   const startedAt = Date.now();
+  let lastProgressSnapshot = '';
   while (Date.now() - startedAt < MOSS_ASR_TIMEOUT_MS) {
     const response = await axios.get(createMossAsrUrl(baseUrl, `/jobs/${encodeURIComponent(jobId)}`), {
       headers,
@@ -142,7 +175,12 @@ async function pollJob({ baseUrl, jobId, headers, onProgress, pollIntervalMs }) 
     });
     const job = response.data;
     if (typeof onProgress === 'function') {
-      onProgress(mapJobProgress(job));
+      const mappedProgress = mapJobProgress(job);
+      const snapshot = JSON.stringify(mappedProgress);
+      if (snapshot !== lastProgressSnapshot) {
+        lastProgressSnapshot = snapshot;
+        onProgress(mappedProgress);
+      }
     }
     if (job?.status === 'completed') {
       return extractCompletedJob(job);
@@ -209,6 +247,7 @@ function mapMossError(error) {
  * @param {string} [params.apiKey] - 可选 Bearer Token
  * @param {string} [params.language='auto'] - auto/zh/en
  * @param {string} [params.context] - 转录提示词
+ * @param {boolean} [params.podcastMode=false] - 是否请求播客结构化事实
  * @param {Function} [params.onProgress] - 进度回调
  * @param {number} [params.pollIntervalMs] - job 轮询间隔，测试可覆盖
  * @returns {Promise<{text: string, usage: Object|null}>}
@@ -220,18 +259,19 @@ async function transcribeFile({
   apiKey = '',
   language = 'auto',
   context = '',
+  podcastMode = false,
   onProgress,
   pollIntervalMs = MOSS_ASR_POLL_INTERVAL_MS
 }) {
   if (typeof onProgress === 'function') {
-    onProgress({ phase: 'preparing', percent: 10, current: 0, total: 0, text: '', message: '正在提交 MOSS ASR 任务' });
+    onProgress({ phase: 'preparing', percent: 10, current: 0, total: 0, message: '正在提交 MOSS ASR 任务' });
   }
 
   try {
     const headers = buildHeaders(apiKey);
     const response = await axios.post(
       createMossAsrUrl(baseUrl, '/audio/transcriptions'),
-      await buildFormData({ file, language, model, context }),
+      await buildFormData({ file, language, model, context, podcastMode }),
       {
         headers,
         proxy: false,
@@ -250,9 +290,12 @@ async function transcribeFile({
     }
 
     if (typeof onProgress === 'function') {
-      onProgress({ phase: 'transcribing', percent: 95, current: 1, total: 1, text: '', message: 'MOSS ASR 正在返回结果' });
+      onProgress({ phase: 'transcribing', percent: 95, current: 1, total: 1, message: 'MOSS ASR 正在返回结果' });
     }
 
+    if (podcastMode) {
+      return extractMossResult(response.data);
+    }
     return { text: extractText(response.data).trim(), usage: response.data?.usage || null };
   } catch (error) {
     throw mapMossError(error);

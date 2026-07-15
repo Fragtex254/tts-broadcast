@@ -127,6 +127,18 @@ export const TranscriptionRecordSchema = z.object({
   file_size_bytes: z.number(),
   audio_duration_seconds: z.number(),
   processing_seconds: z.number(),
+  content_mode: z.enum(['standard', 'podcast']),
+  structure_status: z.enum(['unavailable', 'ready']),
+  summary_status: z.enum(['not_started', 'queued', 'running', 'completed', 'failed', 'stale']),
+  summary_error: z.string(),
+  speaker_scope: z.union([z.literal(''), z.enum(['global', 'mixed', 'chunk'])]),
+  diarization_status: z.string(),
+  speaker_count: z.number(),
+  diarization_conflicts: z.number(),
+  asr_diagnostics: z.record(z.string(), z.unknown()),
+  asr_warnings: z.array(z.string()),
+  summary_model: z.string(),
+  summary_updated_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -152,6 +164,46 @@ export const TranscriptionStatsSchema = z.object({
 export const TranscriptionStatsResponseSchema = z.object({
   stats: TranscriptionStatsSchema,
 });
+
+export const TranscriptSpeakerSchema = z.object({
+  id: z.number(), transcription_id: z.number(), speaker_key: z.string(), display_name: z.string(),
+  sort_order: z.number(), speaker_scope: z.string(), created_at: z.string(), updated_at: z.string(),
+});
+
+export const TranscriptSegmentSchema = z.object({
+  id: z.number(), transcription_id: z.number(), segment_index: z.number(), speaker_key: z.string(),
+  source_speaker: z.string(), speaker_scope: z.string(), speaker_resolution: z.string(), chunk_index: z.number(),
+  start_seconds: z.number(), end_seconds: z.number(), text: z.string(), created_at: z.string(), updated_at: z.string(),
+});
+
+export const TranscriptTurnSchema = z.object({
+  id: z.number(), transcription_id: z.number(), turn_index: z.number(), speaker_key: z.string(),
+  start_seconds: z.number(), end_seconds: z.number(), text: z.string(), corrected_text: z.string(), evidence_segment_indexes: z.array(z.number()),
+  created_at: z.string(), updated_at: z.string(),
+});
+
+export const TranscriptSummarySchema = z.object({
+  transcription_id: z.number(), one_liner: z.string(), overview: z.string(), model: z.string(),
+  created_at: z.string(), updated_at: z.string(),
+});
+
+export const TranscriptSummaryItemSchema = z.object({
+  id: z.number(), transcription_id: z.number(), item_type: z.enum(['chapter', 'speaker_viewpoint', 'highlight']),
+  sort_order: z.number(), speaker_key: z.string(), title: z.string(), content: z.string(),
+  evidence_start_index: z.number(), evidence_end_index: z.number(), start_seconds: z.number(), end_seconds: z.number(),
+  created_at: z.string(), updated_at: z.string(),
+});
+
+export const TranscriptDetailSchema = z.object({
+  record: TranscriptionRecordSchema,
+  speakers: z.array(TranscriptSpeakerSchema),
+  segments: z.array(TranscriptSegmentSchema),
+  turns: z.array(TranscriptTurnSchema),
+  summary: TranscriptSummarySchema.nullable(),
+  summaryItems: z.array(TranscriptSummaryItemSchema),
+});
+
+export const TranscriptDetailResponseSchema = z.object({ transcript: TranscriptDetailSchema });
 
 // === API 响应包装 ===
 
