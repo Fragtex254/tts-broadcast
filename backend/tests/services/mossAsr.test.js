@@ -181,6 +181,47 @@ describe('MOSS ASR 服务', () => {
     }));
   });
 
+  test('长音频超过一小时但服务端任务仍在运行时继续轮询', async () => {
+    axios.post.mockResolvedValue({
+      status: 202,
+      data: { id: 'job_moss_4h', status: 'queued' }
+    });
+    axios.get
+      .mockResolvedValueOnce({
+        data: {
+          status: 'running',
+          progress: { phase: 'transcribing', percent: 20, completed_chunks: 1, total_chunks: 8 }
+        }
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'completed',
+          progress: { phase: 'completed', percent: 100, completed_chunks: 8, total_chunks: 8 },
+          result: { text: '四小时播客转录结果', usage: { audio_seconds: 4 * 60 * 60 } }
+        }
+      });
+    const dateNow = jest.spyOn(Date, 'now')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(60 * 60 * 1000 + 1);
+
+    try {
+      await expect(mossAsr.transcribeFile({
+        file: { originalname: 'podcast-4h.mp4', mimetype: 'video/mp4', buffer: Buffer.from('mp4') },
+        baseUrl: 'http://192.168.31.137:18080/v1',
+        model: 'moss-transcribe-diarize-0.9b',
+        pollIntervalMs: 1
+      })).resolves.toEqual({
+        text: '四小时播客转录结果',
+        usage: { audio_seconds: 4 * 60 * 60 }
+      });
+    } finally {
+      dateNow.mockRestore();
+    }
+
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
   test('缺少模型时抛出中文错误且不发送请求', async () => {
     await expect(mossAsr.transcribeFile({
       file: { originalname: 'sample.wav', buffer: Buffer.from('wav') },
