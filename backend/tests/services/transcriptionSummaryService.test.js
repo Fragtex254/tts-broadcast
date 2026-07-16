@@ -99,18 +99,19 @@ describe('Transcript 总结服务', () => {
         ]
       }
     });
+    const invalidFinalResult = JSON.stringify({
+      one_liner: '伪造证据',
+      overview: '试图引用未进入笔记的片段。',
+      chapters: [{ title: '错误章节', content: '错误', evidence_start_index: 1, evidence_end_index: 1 }],
+      speaker_viewpoints: [],
+      highlights: []
+    });
     const generateText = jest.fn()
       .mockResolvedValueOnce(JSON.stringify({
         digest: '只声明了片段 0',
         claims: [{ content: '唯一事实', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
       }))
-      .mockResolvedValueOnce(JSON.stringify({
-        one_liner: '伪造证据',
-        overview: '试图引用未进入笔记的片段。',
-        chapters: [{ title: '错误章节', content: '错误', evidence_start_index: 1, evidence_end_index: 1 }],
-        speaker_viewpoints: [],
-        highlights: []
-      }));
+      .mockResolvedValue(invalidFinalResult);
     podcastTranscriptStore.replaceSummary(record.id, {
       oneLiner: '旧摘要',
       overview: '已经验证过的旧内容。',
@@ -201,5 +202,108 @@ describe('Transcript 总结服务', () => {
     expect(generateText).toHaveBeenCalledTimes(3);
     expect(generateText.mock.calls[1][0].prompt).toContain('修复下面这个语法损坏的 JSON');
     expect(generateText.mock.calls[1][0].prompt).toContain('{"digest": 损坏}');
+  });
+
+  test('批次 JSON 缺少摘要时反馈校验错误并只重试当前批次', async () => {
+    const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
+    const record = podcastTranscriptStore.create({
+      record: { fileName: 'missing-digest.wav', text: '事实', contentMode: 'podcast', structureStatus: 'ready' },
+      transcript: {
+        speakers: [{ speakerKey: 'speaker-0001', displayName: '说话人 1', sortOrder: 0, speakerScope: 'global' }],
+        segments: [{ sourceIndex: 0, segmentIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '事实' }],
+        turns: [{ turnIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '事实', evidenceSegmentIndexes: [0] }]
+      }
+    });
+    const generateText = jest.fn()
+      .mockResolvedValueOnce(JSON.stringify({
+        claims: [{ content: '事实', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '有效批次摘要',
+        claims: [{ content: '事实', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        one_liner: '有效摘要', overview: '只有事实。',
+        chapters: [{ title: '事实', content: '事实', evidence_start_index: 0, evidence_end_index: 0 }],
+        speaker_viewpoints: [], highlights: []
+      }));
+
+    const detail = await transcriptionSummaryService.generate({ transcriptionId: record.id, generateText, model: 'test-model' });
+
+    expect(detail.record.summary_status).toBe('completed');
+    expect(generateText).toHaveBeenCalledTimes(3);
+    expect(generateText.mock.calls[1][0].prompt).toContain('播客总结缺少批次摘要');
+    expect(generateText.mock.calls[1][0].prompt).toContain('<transcript>');
+  });
+
+  test('最终汇总缺少必填字段时保留分批笔记并重试合成', async () => {
+    const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
+    const record = podcastTranscriptStore.create({
+      record: { fileName: 'missing-overview.wav', text: '事实', contentMode: 'podcast', structureStatus: 'ready' },
+      transcript: {
+        speakers: [{ speakerKey: 'speaker-0001', displayName: '说话人 1', sortOrder: 0, speakerScope: 'global' }],
+        segments: [{ sourceIndex: 0, segmentIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '事实' }],
+        turns: [{ turnIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '事实', evidenceSegmentIndexes: [0] }]
+      }
+    });
+    const validItems = {
+      chapters: [{ title: '事实', content: '事实', evidence_start_index: 0, evidence_end_index: 0 }],
+      speaker_viewpoints: [], highlights: []
+    };
+    const generateText = jest.fn()
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '有效批次摘要',
+        claims: [{ content: '事实', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({ one_liner: '缺少 overview', ...validItems }))
+      .mockResolvedValueOnce(JSON.stringify({ one_liner: '有效摘要', overview: '只有事实。', ...validItems }));
+
+    const detail = await transcriptionSummaryService.generate({ transcriptionId: record.id, generateText, model: 'test-model' });
+
+    expect(detail.record.summary_status).toBe('completed');
+    expect(generateText).toHaveBeenCalledTimes(3);
+    expect(generateText.mock.calls[2][0].prompt).toContain('播客总结缺少完整摘要');
+    expect(generateText.mock.calls[2][0].prompt).toContain('分批笔记');
+  });
+
+  test('批次 claim 跨 Speaker 时在当前批次内纠正', async () => {
+    const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
+    const record = podcastTranscriptStore.create({
+      record: { fileName: 'cross-speaker.wav', text: '主持人。嘉宾。', contentMode: 'podcast', structureStatus: 'ready' },
+      transcript: {
+        speakers: [
+          { speakerKey: 'speaker-0001', displayName: '主持人', sortOrder: 0, speakerScope: 'global' },
+          { speakerKey: 'speaker-0002', displayName: '嘉宾', sortOrder: 1, speakerScope: 'global' }
+        ],
+        segments: [
+          { sourceIndex: 0, segmentIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '主持人。' },
+          { sourceIndex: 1, segmentIndex: 1, speakerKey: 'speaker-0002', startSeconds: 3, endSeconds: 5, text: '嘉宾。' }
+        ],
+        turns: [
+          { turnIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '主持人。', evidenceSegmentIndexes: [0] },
+          { turnIndex: 1, speakerKey: 'speaker-0002', startSeconds: 3, endSeconds: 5, text: '嘉宾。', evidenceSegmentIndexes: [1] }
+        ]
+      }
+    });
+    const generateText = jest.fn()
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '错误归因',
+        claims: [{ content: '混合观点', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 1 }]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '正确归因',
+        claims: [{ content: '主持人观点', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        one_liner: '有效摘要', overview: '主持人与嘉宾对谈。',
+        chapters: [{ title: '对谈', content: '双方发言。', evidence_start_index: 0, evidence_end_index: 0 }],
+        speaker_viewpoints: [], highlights: []
+      }));
+
+    const detail = await transcriptionSummaryService.generate({ transcriptionId: record.id, generateText, model: 'test-model' });
+
+    expect(detail.record.summary_status).toBe('completed');
+    expect(generateText).toHaveBeenCalledTimes(3);
+    expect(generateText.mock.calls[1][0].prompt).toContain('其他 Speaker');
   });
 });
