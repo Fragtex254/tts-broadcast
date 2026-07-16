@@ -30,6 +30,8 @@ function normalize(row) {
     usage: parseUsage(row.usage),
     asr_diagnostics: parseJson(row.asr_diagnostics, {}),
     asr_warnings: parseJson(row.asr_warnings, []),
+    guest_names: parseJson(row.guest_names, []),
+    topic_tags: parseJson(row.topic_tags, []),
     file_size_bytes: Number(row.file_size_bytes || 0),
     audio_duration_seconds: Number(row.audio_duration_seconds || 0),
     processing_seconds: Number(row.processing_seconds || 0)
@@ -96,9 +98,9 @@ function create({
       file_name, relative_path, text, formatted_text, language, provider, engine, model, context, usage, task_id,
       file_size_bytes, audio_duration_seconds, processing_seconds, content_mode, structure_status,
       summary_status, summary_error, speaker_scope, diarization_status, speaker_count,
-      diarization_conflicts, asr_diagnostics, asr_warnings
+      diarization_conflicts, asr_diagnostics, asr_warnings, episode_title
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fileName,
     relativePath || fileName,
@@ -123,9 +125,34 @@ function create({
     Number(speakerCount || 0),
     Number(diarizationConflicts || 0),
     JSON.stringify(asrDiagnostics || {}),
-    JSON.stringify(Array.isArray(asrWarnings) ? asrWarnings : [])
+    JSON.stringify(Array.isArray(asrWarnings) ? asrWarnings : []),
+    fileName
   );
   return getById(result.lastInsertRowid);
+}
+
+/**
+ * 更新播客研究元数据。
+ * @param {number} id - 转录结果 ID
+ * @param {Object} metadata - 已校验的元数据
+ * @returns {Object|undefined} 更新后的记录
+ */
+function updateMetadata(id, metadata) {
+  const result = db.prepare(`
+    UPDATE transcription_results
+    SET podcast_name = ?, episode_title = ?, guest_names = ?, source_url = ?,
+        published_at = ?, topic_tags = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    metadata.podcastName,
+    metadata.episodeTitle,
+    JSON.stringify(metadata.guestNames),
+    metadata.sourceUrl,
+    metadata.publishedAt,
+    JSON.stringify(metadata.topicTags),
+    id
+  );
+  return result.changes > 0 ? getById(id) : undefined;
 }
 
 /**
@@ -198,6 +225,7 @@ module.exports = {
   getById,
   getRecent,
   getStats,
+  updateMetadata,
   updateTextAndFormatted,
   remove
 };

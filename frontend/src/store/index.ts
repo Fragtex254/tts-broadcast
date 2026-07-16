@@ -6,6 +6,7 @@ import { createSegmentSlice } from './segmentSlice';
 import { createSettingsSlice } from './settingsSlice';
 import { createVoiceConfigSlice } from './voiceConfigSlice';
 import { createTranscribeSlice } from './transcribeSlice';
+import { createResearchSlice } from './researchSlice';
 import type { AppState } from './types';
 
 export type {
@@ -21,7 +22,11 @@ export type {
   BatchTranscriptionPhase,
   BatchTranscriptionProgress,
   Broadcast,
+  ClaimRelationAnalysis,
+  ClaimSearchResult,
   ConfirmDialogProps,
+  ContentProject,
+  ContentTargetPlatform,
   LlmApiFormat,
   LlmModelOption,
   Schedule,
@@ -35,6 +40,7 @@ export type {
   TranscriptionProgress,
   TranscriptionStats,
   TranscriptDetail,
+  TranscriptClaim,
   TranscriptSegment,
   TranscriptSpeaker,
   TranscriptSummary,
@@ -50,6 +56,7 @@ export const useStore = create<AppState>((set, get) => ({
   ...createVoiceConfigSlice(set),
   ...createSegmentSlice(set, get),
   ...createTranscribeSlice(set),
+  ...createResearchSlice(set),
   ...createSettingsSlice(set),
   ...createScheduleSlice(set),
   ...createPresetSlice(set),

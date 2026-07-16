@@ -9,6 +9,7 @@ const app = require('../../src/app');
 const db = require('../../src/db');
 const podcastTranscriptStore = require('../../src/services/podcastTranscriptStore');
 const summaryRunner = require('../../src/services/transcriptionSummaryRunner');
+const researchStore = require('../../src/services/researchStore');
 
 describe('Transcript 内容详情 API', () => {
   let record;
@@ -46,6 +47,37 @@ describe('Transcript 内容详情 API', () => {
     expect(refreshed.body.transcript.segments[0].speaker_key).toBe('speaker-0001');
   });
 
+  test('更新播客元数据并返回结构化数组', async () => {
+    const response = await request(app)
+      .patch(`/api/transcribe/results/${record.id}/metadata`)
+      .send({
+        podcastName: '开发者圆桌',
+        episodeTitle: 'AI 与程序员岗位',
+        guestNames: ['小明', '小红'],
+        sourceUrl: 'https://example.com/episode',
+        publishedAt: '2026-07-16',
+        topicTags: ['AI 编程', '职业'],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.record).toMatchObject({
+      podcast_name: '开发者圆桌',
+      episode_title: 'AI 与程序员岗位',
+      guest_names: ['小明', '小红'],
+      source_url: 'https://example.com/episode',
+      published_at: '2026-07-16',
+      topic_tags: ['AI 编程', '职业'],
+    });
+  });
+
+  test('拒绝非法播客元数据数组', async () => {
+    const response = await request(app)
+      .patch(`/api/transcribe/results/${record.id}/metadata`)
+      .send({ guestNames: '不是数组' });
+
+    expect(response.status).toBe(400);
+  });
+
   test('开始总结返回 202 并把任务交给幂等运行器', async () => {
     const response = await request(app)
       .post(`/api/transcribe/results/${record.id}/summarize`)
@@ -71,6 +103,11 @@ describe('Transcript 内容详情 API', () => {
     const detail = podcastTranscriptStore.getDetail(record.id);
     const turnId = detail.turns[0].id;
     podcastTranscriptStore.updateSummaryStatus(record.id, { status: 'completed', model: 'old-model' });
+    researchStore.replaceClaims(record.id, { model: 'old-model', claims: [{
+      speakerKey: 'speaker-0001', question: '测试问题', claim: '测试观点', reasoning: '', evidenceExcerpt: '测试内容',
+      evidenceStartIndex: 0, evidenceEndIndex: 0, startSeconds: 0, endSeconds: 2,
+      topicTags: [], contentValue: 50, confidence: 0.8,
+    }] });
 
     const response = await request(app)
       .patch(`/api/transcribe/results/${record.id}/turns/${turnId}`)
@@ -83,5 +120,7 @@ describe('Transcript 内容详情 API', () => {
     expect(refreshed.turns[0].corrected_text).toBe('校对后的内容');
     expect(refreshed.segments[0].text).toBe('测试内容');
     expect(refreshed.record.summary_status).toBe('stale');
+    expect(refreshed.record.claims_status).toBe('stale');
+    expect(refreshed.claims[0].status).toBe('stale');
   });
 });

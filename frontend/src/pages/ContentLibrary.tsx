@@ -3,17 +3,20 @@ import { useSearchParams } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { BroadcastLibrary } from '../components/Library/BroadcastLibrary';
 import { TranscriptionLibrary } from '../components/Library/TranscriptionLibrary';
+import { ClaimResearchWorkbench } from '../components/Research/ClaimResearchWorkbench';
 
-type LibraryTab = 'broadcasts' | 'transcriptions';
+type LibraryTab = 'broadcasts' | 'transcriptions' | 'research';
 
 const LIBRARY_TABS: { value: LibraryTab; label: string; description: string }[] = [
   { value: 'broadcasts', label: '播报', description: '已保存的稿件与音频' },
   { value: 'transcriptions', label: '转录稿', description: '音视频转成的可编辑文本' },
+  { value: 'research', label: '观点研究', description: '跨播客搜索、比较并组织观点' },
 ];
 
 export const ContentLibrary: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab: LibraryTab = searchParams.get('tab') === 'transcriptions' ? 'transcriptions' : 'broadcasts';
+  const requestedTab = searchParams.get('tab');
+  const activeTab: LibraryTab = requestedTab === 'transcriptions' || requestedTab === 'research' ? requestedTab : 'broadcasts';
 
   const handleTabChange = (tab: LibraryTab) => {
     setSearchParams(tab === 'broadcasts' ? {} : { tab });
@@ -25,7 +28,7 @@ export const ContentLibrary: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-6xl space-y-4">
-          <nav aria-label="内容库分类" className="grid grid-cols-1 gap-2 rounded-card border border-card-border bg-white/55 p-2 shadow-card sm:grid-cols-2">
+          <nav aria-label="内容库分类" className="grid grid-cols-1 gap-2 rounded-card border border-card-border bg-white/55 p-2 shadow-card sm:grid-cols-3">
             {LIBRARY_TABS.map((tab) => (
               <button
                 key={tab.value}
@@ -44,7 +47,7 @@ export const ContentLibrary: React.FC = () => {
             ))}
           </nav>
 
-          {activeTab === 'broadcasts' ? <BroadcastLibrary /> : <TranscriptionLibrary />}
+          {activeTab === 'broadcasts' ? <BroadcastLibrary /> : activeTab === 'transcriptions' ? <TranscriptionLibrary /> : <ClaimResearchWorkbench />}
         </div>
       </main>
     </div>

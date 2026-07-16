@@ -485,6 +485,20 @@ export const Settings: React.FC = () => {
 
                 <div className="border-t border-dashed border-card-border" />
 
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div><label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">Embedding 搜索</label><p className="mt-0.5 font-body text-[10px] text-ink-soft/70">用于跨播客语义搜索；关闭或连接失败时自动使用关键词检索</p></div>
+                    <label className="flex cursor-pointer items-center gap-2 font-body text-[11px] text-ink-soft"><input type="checkbox" checked={formData.embedding_enabled} onChange={(event) => void handleImmediateSettingChange('embedding_enabled', event.target.checked)} />启用</label>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label className="font-body text-[10px] text-ink-soft">OpenAI-compatible Base URL<input value={formData.embedding_base_url} onChange={(event) => handleChange('embedding_base_url', event.target.value)} onBlur={() => handleAutoSave('embedding_base_url')} placeholder="https://api.openai.com/v1" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
+                    <label className="font-body text-[10px] text-ink-soft">Embedding 模型<input value={formData.embedding_model} onChange={(event) => handleChange('embedding_model', event.target.value)} onBlur={() => handleAutoSave('embedding_model')} placeholder="text-embedding-3-small" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
+                  </div>
+                  <div><label className="mb-1 block font-body text-[10px] text-ink-soft">Embedding API Key</label><PasswordField value={formData.embedding_api_key} onChange={(value) => handleChange('embedding_api_key', value)} onBlur={() => handleAutoSave('embedding_api_key')} placeholder="输入 Embedding API Key" /></div>
+                </div>
+
+                <div className="border-t border-dashed border-card-border" />
+
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">TTS API Key</label>

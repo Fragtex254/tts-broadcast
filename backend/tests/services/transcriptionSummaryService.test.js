@@ -72,6 +72,10 @@ describe('Transcript 总结服务', () => {
         end_seconds: 35
       })
     ]));
+    expect(detail.claims).toEqual(expect.arrayContaining([
+      expect.objectContaining({ speaker_key: 'speaker-0001', claim: '产品观点', start_seconds: 10, end_seconds: 20 }),
+      expect.objectContaining({ speaker_key: 'speaker-0002', claim: '市场观点', start_seconds: 21, end_seconds: 35 })
+    ]));
     expect(generateText).toHaveBeenCalledTimes(2);
   });
 

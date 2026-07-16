@@ -106,6 +106,9 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `transcription_speakers` / `transcription_segments` / `transcription_turns`：播客的匿名说话人映射、不可变 ASR 片段事实和可校对阅读轮次；Turn 通过 Segment index 数组保留证据关系
 - `transcription_summaries` / `transcription_summary_items`：可重新生成的总览、章节、说话人观点和重点内容；每个条目的时间只由证据 Segment 派生
 - `transcription_summary_jobs`：播客总结任务 lease，防止刷新、多标签页和 HTTP 重试重复调用 LLM
+- `transcription_claims` / `transcription_claim_jobs`：可重建观点卡与分析任务 lease；观点绑定合法 Speaker/Segment，证据摘录和时间由后端派生，Embedding 直接保存在 SQLite
+- `claim_relations`：用户选中的 Top N 候选观点关系缓存，不做全库两两比较
+- `content_projects` / `content_project_claims`：内容创作项目与有序观点引用；重新分析时已引用旧观点保留为 stale 快照
 - `api_rate_limit_events` / `api_rate_limit_state`：外部模型限速账本，保存最近窗口的真实请求/token/payload 观测、429 backoff、自适应安全并发和熔断状态，用于跨后端进程重启延续 MiMo/MiniMax 账户侧限速记忆
 - `generation_jobs`：长生成任务 lease 表，当前用于分段批量 TTS，防止同一播报在刷新、多标签页或 HTTP 重试下重复入队
 
@@ -138,6 +141,9 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `transcription_segments.segment_index/source_index`：前者是聚合内按时间排序的稳定证据索引，后者保留 ASR 原始数组顺序；Segment 文本与时间属于不可变事实
 - `transcription_turns.text/corrected_text`：阅读层原文与用户校对文本；总结优先读取非空 `corrected_text`，但证据时间始终来自 Segment
 - `transcription_results.summary_status`：`not_started`、`queued`、`running`、`completed`、`failed` 或校对后派生物失效的 `stale`
+- `transcription_results.podcast_name/episode_title/guest_names/source_url/published_at/topic_tags`：播客研究元数据；旧数据以文件名回填单集标题，数组字段使用 JSON 存储
+- `transcription_results.claims_status`：观点分析生命周期；Turn 校对后由 `completed` 转为 `stale`
+- `transcription_claims.status`：当前观点为 `active`；逐字稿校对或被新一代观点替换后为 `stale`
 - `api_rate_limit_events.scope`：限速范围（如 `mimo-tts`），同一 scope 共享 RPM/TPM/payload 窗口
 - `api_rate_limit_events.request_cost/token_cost/payload_cost`：一次外部模型请求的加权成本；MiMo voiceclone 会按 base64 payload 额外增加 request/payload/concurrency 成本
 - `api_rate_limit_state.backoff_until_ms`：429 后持久化退避截止时间
@@ -159,6 +165,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `llm_base_url`：LLM baseURL，默认 MiMo Anthropic 地址
 - `llm_model`：LLM 模型 ID，默认 `mimo-v2.5`
 - `llm_rewrite_system_prompt` / `llm_split_system_prompt`：改写与切分分别使用的 system prompt
+- `embedding_enabled/embedding_base_url/embedding_api_key/embedding_model`：OpenAI-compatible Embedding 配置；关闭、未配置或请求失败时跨播客搜索自动降级关键词模式
 - `llm_rewrite_thinking_enabled` / `llm_split_thinking_enabled`：Anthropic 兼容格式下的 thinking 开关
 - `ui_font_preset`：界面字体方案，`modern`（现代）、`system`（系统字体）或 `editorial`（标题出版感）
 - `ui_font_scale`：界面字号尺度，`compact`、`comfortable`、`large` 或 `extra_large`
@@ -171,6 +178,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 - **Qwen 本地 ASR（Mac MLX）**：通过 `services/qwenAsr.js` 调用本机或局域网内 OpenAI-compatible `/v1/audio/transcriptions`；由 `asr_provider=qwen_mlx` 启用，复用项目现有 ffmpeg 切片与 SSE 进度机制，不依赖 `mimo_tts_api_key`；本地请求禁用代理，默认超时 30 分钟（`QWEN_ASR_TIMEOUT_MS` 可调）。实测 `mlx-qwen3-asr 0.3.5` 官方 `serve` 可能因 `asyncio.to_thread()` 触发 MLX `There is no Stream(gpu, 1) in current thread.`，当前推荐使用同步兼容服务在主线程调用 `Session.transcribe()`
 - **WSL ASR 网关（Windows GPU）**：由 `asr_provider=wsl_asr` 表示统一的局域网服务位置，共享 `wsl_asr_base_url` 与 API Key；`asr_engine=qwen` 时通过 `services/wslAsr.js` 调用 `/v1/audio/transcription-jobs` 和 `/v1/jobs/{job_id}`，由网关负责预处理、切片、队列与 chunk 进度；`asr_engine=moss` 时通过 `services/mossAsr.js` 调用同一连接下的 OpenAI-compatible `/v1/audio/transcriptions`，短音频直接解析同步结果，长音频收到 `202 + job id` 后自动轮询 `/v1/jobs/{job_id}`。chunked job 每完成一块会返回累计 `progress.text`、最新 `progress.chunk_text` 与有序 `progress.chunks` 快照，BFF 通过 SSE 透传；native long-form 没有真实中间块时只报告阶段。模型列表通过 `/models` 动态发现。两种引擎都直接转发上传文件，不走本项目本地切片；协议差异只存在于后端适配层，不在产品层拆成两个服务
 - **播客整理模式**：当前只在 WSL/MOSS 模型声明 `diarization` 与 `segment_timestamps` 能力时开放，强制自动语言并请求结构化结果；保存 Speaker/Segment/Turn 后可一键生成分层摘要。当前明确不保存用户上传源音频、不提供时间码跳转或片段播放；未来若启用“回到现场”，先评估 Qwen Forced Alignment 并另行设计音频资产生命周期。
+- **播客观点研究**：一键总结会把分批 claims 升级为永久观点卡；也可从内容详情独立重新分析。模型不得提供可信时间码或摘录，后端验证完整同 Speaker Segment 范围后再派生证据。观点文本生成与关系判断经 `llmQueue`，Embedding 请求也经同一全局队列；SQLite 保存向量并在 Node.js 计算余弦相似度，配置缺失时使用关键词检索。内容库的「观点研究」只对搜索 Top N 中用户选择的 2–10 条观点做关系分析。
 - **LLM API**（默认 `https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写、文本切分、转录排版、音色/段落标签优化，通过 `settings` 中的 `llm_api_format`、`llm_base_url`、`llm_model` 配置，可选择 Anthropic 兼容或 OpenAI 兼容格式；模型发现通过 `POST /api/settings/llm-models` 探测 OpenAI-compatible `/models` 端点；OpenAI 兼容格式接入 MiniMax/MiMo `minimax` 域名时，请求体会显式禁用 thinking，结构化返回会剥离 `<think>` 和 Markdown code fence 后再解析 JSON，避免切分口播稿时因推理文本污染 JSON 失败；所有 `createLlmMessage()` / 视觉 LLM 请求经 `services/llmQueue.js` 全局 RPM/TPM 队列限速
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 

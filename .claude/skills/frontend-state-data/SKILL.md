@@ -1,6 +1,6 @@
 ---
 name: frontend-state-data
-description: 修改前端状态管理、数据流、API 调用时使用。涵盖 Zustand store 按领域拆 slice、store/index.ts 只组合、强制 selector 禁无 selector useStore、store/types.ts 共享类型、services/api.ts 只封装 HTTP、Zod schema 运行时校验、safeParseArray 用法、useDebounce 高频防抖、Settings draft+dirtyFields 自动保存、SSE 长任务进度状态。触发场景：改 store、加 slice、selector、Zustand、调 api.ts、Zod、schemas、防抖、debounce、Settings 保存、SSE 进度、loading 状态。
+description: 修改前端状态管理、数据流、API 调用时使用。涵盖 Zustand store 按领域拆 slice、观点研究 researchSlice、store/index.ts 只组合、强制 selector 禁无 selector useStore、store/types.ts 共享类型、services/api.ts 只封装 HTTP、Zod schema 运行时校验、safeParseArray 用法、useDebounce 高频防抖、Settings draft+dirtyFields 自动保存、SSE 长任务进度状态。触发场景：改 store、加 slice、观点搜索、内容项目、selector、Zustand、调 api.ts、Zod、schemas、防抖、debounce、Settings 保存、SSE 进度、loading 状态。
 ---
 
 # 前端状态管理与数据流
@@ -20,6 +20,7 @@ description: 修改前端状态管理、数据流、API 调用时使用。涵盖
 5. 长任务进度放对应领域 slice（如 `transcribeProgress`）；SSE 收到失败事件必须落到可重试状态。
 6. 高频状态（slider/resize）用 `useDebounce`；Settings 用 draft + dirtyFields + onBlur/debounce 自动保存 + 顶部批量兜底。
 7. 转录 SSE 的阶段事件可能不带文字：必须保留已有累计文本；优先用 `chunks` 有序快照恢复轮询间隔内跨过的分片，旧服务只有 `chunkText` 时再按已完成 chunk 序号 upsert，不能因重复事件而重复追加。最终 `complete.text` 才替换临时结果。
+8. 观点研究状态放 `researchSlice.ts`；搜索结果区分 `embedding` / `keyword` 降级模式，关系分析只提交显式选中的 claim ID，内容项目详情始终以服务端返回为准。观点分析 SSE 与总结 SSE 分开维护 loading/error，刷新后以 `claims_status` 收敛。
 
 ## 模式与模板
 

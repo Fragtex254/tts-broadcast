@@ -5,6 +5,8 @@ import { TranscriptSpeakerPanel } from '../components/Transcribe/TranscriptSpeak
 import { TranscriptSummaryPanel } from '../components/Transcribe/TranscriptSummaryPanel';
 import { TranscriptConversationModal } from '../components/Transcribe/TranscriptConversationModal';
 import { TranscriptTurnList } from '../components/Transcribe/TranscriptTurnList';
+import { PodcastMetadataEditor } from '../components/Research/PodcastMetadataEditor';
+import { TranscriptClaimsPanel } from '../components/Research/TranscriptClaimsPanel';
 import useStore from '../store';
 
 export const TranscriptWorkspace: React.FC = () => {
@@ -19,8 +21,15 @@ export const TranscriptWorkspace: React.FC = () => {
   const renameSpeaker = useStore((state) => state.renameTranscriptSpeaker);
   const correctTurn = useStore((state) => state.correctTranscriptTurn);
   const summarize = useStore((state) => state.summarizeTranscript);
+  const updateMetadata = useStore((state) => state.updateTranscriptMetadata);
+  const analyzeClaims = useStore((state) => state.analyzeTranscriptClaims);
+  const updateClaim = useStore((state) => state.updateTranscriptClaim);
+  const deleteClaim = useStore((state) => state.deleteTranscriptClaim);
+  const isAnalyzingClaims = useStore((state) => state.isAnalyzingClaims);
+  const claimProgress = useStore((state) => state.transcriptClaimProgress);
   const [error, setError] = useState<string | null>(null);
   const [isConversationOpen, setIsConversationOpen] = useState(false);
+  const [conversationEvidenceIndex, setConversationEvidenceIndex] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(transcriptionId) || transcriptionId <= 0) {
@@ -111,17 +120,32 @@ export const TranscriptWorkspace: React.FC = () => {
               )}
 
               <TranscriptSummaryPanel transcript={currentTranscript} isSummarizing={summaryIsActive} progress={remoteSummaryActive ? { phase: 'queued', percent: 0, current: 0, total: 0, message: '后台总结仍在进行' } : summaryProgress} onSummarize={handleSummarize} />
+              <PodcastMetadataEditor key={currentTranscript.record.id} record={currentTranscript.record} onSave={async (metadata) => { await updateMetadata(transcriptionId, metadata); }} />
+              <TranscriptClaimsPanel
+                claims={currentTranscript.claims}
+                speakers={currentTranscript.speakers}
+                isAnalyzing={isAnalyzingClaims || ['queued', 'running'].includes(currentTranscript.record.claims_status)}
+                progress={claimProgress}
+                claimsStatus={currentTranscript.record.claims_status}
+                claimsError={currentTranscript.record.claims_error}
+                onAnalyze={() => void analyzeClaims(transcriptionId).catch((claimError) => setError(claimError instanceof Error ? claimError.message : '无法开始观点分析'))}
+                onUpdate={async (claimId, update) => { await updateClaim(claimId, update); }}
+                onDelete={deleteClaim}
+                onLocate={(evidenceIndex) => { setConversationEvidenceIndex(evidenceIndex); setIsConversationOpen(true); }}
+              />
               <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <TranscriptSpeakerPanel speakers={currentTranscript.speakers} onRename={handleRename} />
-                <TranscriptTurnList turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => setIsConversationOpen(true)} onCorrect={handleCorrectTurn} />
+                <TranscriptTurnList turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => { setConversationEvidenceIndex(null); setIsConversationOpen(true); }} onCorrect={handleCorrectTurn} />
               </div>
               <TranscriptConversationModal
+                key={`${currentTranscript.record.id}-${conversationEvidenceIndex ?? 'browse'}`}
                 isOpen={isConversationOpen}
                 title={currentTranscript.record.relative_path || currentTranscript.record.file_name}
                 turns={currentTranscript.turns}
                 speakers={currentTranscript.speakers}
                 onClose={() => setIsConversationOpen(false)}
                 onCorrect={handleCorrectTurn}
+                initialEvidenceSegmentIndex={conversationEvidenceIndex}
               />
             </>
           )}
