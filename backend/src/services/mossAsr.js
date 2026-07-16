@@ -165,9 +165,8 @@ function extractCompletedJob(job) {
 }
 
 async function pollJob({ baseUrl, jobId, headers, onProgress, pollIntervalMs }) {
-  const startedAt = Date.now();
   let lastProgressSnapshot = '';
-  while (Date.now() - startedAt < MOSS_ASR_TIMEOUT_MS) {
+  while (true) {
     const response = await axios.get(createMossAsrUrl(baseUrl, `/jobs/${encodeURIComponent(jobId)}`), {
       headers,
       proxy: false,
@@ -198,7 +197,6 @@ async function pollJob({ baseUrl, jobId, headers, onProgress, pollIntervalMs }) 
     }
     await sleep(pollIntervalMs);
   }
-  throw new Error('MOSS ASR 处理超时，请尝试更短音频或调大 MOSS_ASR_TIMEOUT_MS');
 }
 
 function extractText(responseData) {

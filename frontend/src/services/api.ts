@@ -213,6 +213,8 @@ export const transcribeApi = {
     api.post('/transcribe', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: options?.onUploadProgress,
+      // 单文件本地 ASR 通过 SSE 持续报告进度，不能用请求总耗时中断仍在运行的长任务。
+      timeout: 0,
     }),
   batchTranscribe: (formData: FormData, options?: { onUploadProgress?: (event: AxiosProgressEvent) => void }) =>
     api.post('/transcribe/batch', formData, {
