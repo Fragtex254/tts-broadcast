@@ -24,6 +24,7 @@ interface ModalShellProps {
   footerClassName?: string;
   panelClassName?: string;
   panelStyle?: React.CSSProperties;
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 const SIZE_CLASS: Record<ModalSize, string> = {
@@ -61,6 +62,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   footerClassName = '',
   panelClassName = '',
   panelStyle,
+  initialFocusRef,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -81,8 +83,9 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     const focusFrame = window.requestAnimationFrame(() => {
       const panel = panelRef.current;
       if (!panel) return;
+      const requestedFocus = initialFocusRef?.current;
       const firstFocusable = panel.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])');
-      (firstFocusable || panel).focus({ preventScroll: true });
+      (requestedFocus && panel.contains(requestedFocus) ? requestedFocus : firstFocusable || panel).focus({ preventScroll: true });
     });
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && closeOnEscapeRef.current) {
@@ -116,7 +119,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       previousFocusRef.current?.focus({ preventScroll: true });
       previousFocusRef.current = null;
     };
-  }, [isOpen]);
+  }, [initialFocusRef, isOpen]);
 
   if (!isOpen) return null;
 

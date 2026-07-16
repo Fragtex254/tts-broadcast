@@ -554,6 +554,7 @@ export interface AppState {
   currentContentProject: ContentProject | null;
   isLoadingContentProjects: boolean;
   searchClaims: (query: string) => Promise<ClaimSearchResult[]>;
+  clearResearchContext: () => void;
   fetchClaimDetail: (claimId: number) => Promise<TranscriptClaim>;
   clearClaimDetail: () => void;
   updateClaimDetail: (claimId: number, update: { userNote?: string; isStarred?: boolean }) => Promise<TranscriptClaim>;

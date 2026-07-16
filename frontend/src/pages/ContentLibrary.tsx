@@ -27,7 +27,7 @@ export const ContentLibrary: React.FC = () => {
       <Header title="内容库" subtitle="统一管理播报成品与转录文稿" />
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
-        <div className="mx-auto max-w-6xl space-y-4">
+        <div className={`mx-auto w-full min-w-0 space-y-4 ${activeTab === 'research' ? 'max-w-[1440px]' : 'max-w-6xl'}`}>
           <nav aria-label="内容库分类" className="grid grid-cols-1 gap-2 rounded-card border border-card-border bg-white/55 p-2 shadow-card sm:grid-cols-3">
             {LIBRARY_TABS.map((tab) => (
               <button

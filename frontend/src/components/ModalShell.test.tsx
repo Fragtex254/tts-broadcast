@@ -1,3 +1,4 @@
+import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { ModalShell } from './ModalShell';
@@ -26,5 +27,12 @@ describe('ModalShell', () => {
 
     rerender(<ModalShell isOpen={false} title="测试弹窗" showCloseButton={false} onClose={vi.fn()}>{content}</ModalShell>);
     expect(document.activeElement).toBe(trigger);
+  });
+
+  test('支持业务弹窗指定初始焦点', async () => {
+    const inputRef = React.createRef<HTMLInputElement>();
+    render(<ModalShell isOpen title="新建项目" initialFocusRef={inputRef} onClose={vi.fn()}><input ref={inputRef} aria-label="项目标题" /></ModalShell>);
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('项目标题')));
   });
 });

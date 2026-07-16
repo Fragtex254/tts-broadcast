@@ -5,12 +5,29 @@ import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
 
 let claimDetailRequestSequence = 0;
+let claimSearchRequestSequence = 0;
+let claimRelationRequestSequence = 0;
+let contentProjectsFetchSequence = 0;
+let contentProjectFetchSequence = 0;
+const contentProjectMutationQueues = new Map<number, Promise<void>>();
+
+const enqueueContentProjectMutation = async <T>(projectId: number, action: () => Promise<T>): Promise<T> => {
+  const previous = contentProjectMutationQueues.get(projectId) || Promise.resolve();
+  const result = previous.catch(() => undefined).then(action);
+  const marker = result.then(() => undefined, () => undefined);
+  contentProjectMutationQueues.set(projectId, marker);
+  try {
+    return await result;
+  } finally {
+    if (contentProjectMutationQueues.get(projectId) === marker) contentProjectMutationQueues.delete(projectId);
+  }
+};
 
 export function createResearchSlice(set: StoreSet): Pick<
   AppState,
   | 'claimSearchResults' | 'isSearchingClaims' | 'claimDetail' | 'isLoadingClaimDetail' | 'claimRelationAnalysis' | 'isAnalyzingRelations'
   | 'contentProjects' | 'currentContentProject' | 'isLoadingContentProjects'
-  | 'searchClaims' | 'fetchClaimDetail' | 'clearClaimDetail' | 'updateClaimDetail' | 'deleteClaimDetail'
+  | 'searchClaims' | 'clearResearchContext' | 'fetchClaimDetail' | 'clearClaimDetail' | 'updateClaimDetail' | 'deleteClaimDetail'
   | 'analyzeClaimRelations' | 'fetchContentProjects' | 'createContentProject'
   | 'fetchContentProject' | 'updateContentProject' | 'deleteContentProject' | 'addClaimToContentProject'
   | 'reorderContentProjectClaims' | 'removeClaimFromContentProject' | 'exportContentProject'
@@ -27,16 +44,24 @@ export function createResearchSlice(set: StoreSet): Pick<
     isLoadingContentProjects: false,
 
     searchClaims: async (query) => {
+      const requestSequence = ++claimSearchRequestSequence;
       set({ isSearchingClaims: true, claimRelationAnalysis: null });
       try {
         const response = await researchApi.searchClaims(query);
         const results = safeParseStrict(ClaimSearchResultSchema.array(), response.data.results);
+        if (requestSequence !== claimSearchRequestSequence) return [];
         set({ claimSearchResults: results, isSearchingClaims: false });
         return results;
       } catch (error) {
-        set({ isSearchingClaims: false });
+        if (requestSequence === claimSearchRequestSequence) set({ isSearchingClaims: false });
         throw new Error(getApiErrorMessage(error, '搜索观点失败'), { cause: error });
       }
+    },
+
+    clearResearchContext: () => {
+      claimSearchRequestSequence += 1;
+      claimRelationRequestSequence += 1;
+      set({ claimSearchResults: [], isSearchingClaims: false, claimRelationAnalysis: null, isAnalyzingRelations: false });
     },
 
     fetchClaimDetail: async (claimId) => {
@@ -105,27 +130,29 @@ export function createResearchSlice(set: StoreSet): Pick<
     },
 
     analyzeClaimRelations: async (claimIds) => {
+      const requestSequence = ++claimRelationRequestSequence;
       set({ isAnalyzingRelations: true });
       try {
         const response = await researchApi.analyzeRelations(claimIds);
         const analysis = safeParseStrict(ClaimRelationAnalysisSchema, response.data.analysis);
-        set({ claimRelationAnalysis: analysis, isAnalyzingRelations: false });
+        if (requestSequence === claimRelationRequestSequence) set({ claimRelationAnalysis: analysis, isAnalyzingRelations: false });
         return analysis;
       } catch (error) {
-        set({ isAnalyzingRelations: false });
+        if (requestSequence === claimRelationRequestSequence) set({ isAnalyzingRelations: false });
         throw new Error(getApiErrorMessage(error, '分析观点关系失败'), { cause: error });
       }
     },
 
     fetchContentProjects: async () => {
+      const requestSequence = ++contentProjectsFetchSequence;
       set({ isLoadingContentProjects: true });
       try {
         const response = await contentProjectApi.getAll();
         const projects = safeParseStrict(ContentProjectSchema.array(), response.data.projects);
-        set({ contentProjects: projects, isLoadingContentProjects: false });
+        if (requestSequence === contentProjectsFetchSequence) set({ contentProjects: projects, isLoadingContentProjects: false });
         return projects;
       } catch (error) {
-        set({ isLoadingContentProjects: false });
+        if (requestSequence === contentProjectsFetchSequence) set({ isLoadingContentProjects: false });
         throw new Error(getApiErrorMessage(error, '获取内容项目失败'), { cause: error });
       }
     },
@@ -133,47 +160,75 @@ export function createResearchSlice(set: StoreSet): Pick<
     createContentProject: async (data) => {
       const response = await contentProjectApi.create(data);
       const project = safeParseStrict(ContentProjectSchema, response.data.project);
-      set((state) => ({ contentProjects: [project, ...state.contentProjects], currentContentProject: project }));
+      contentProjectsFetchSequence += 1;
+      contentProjectFetchSequence += 1;
+      set((state) => ({ contentProjects: [project, ...state.contentProjects], currentContentProject: project, isLoadingContentProjects: false }));
       return project;
     },
 
     fetchContentProject: async (id) => {
+      const requestSequence = ++contentProjectFetchSequence;
       const response = await contentProjectApi.getById(id);
       const project = safeParseStrict(ContentProjectSchema, response.data.project);
-      set({ currentContentProject: project });
+      if (requestSequence === contentProjectFetchSequence) set({ currentContentProject: project });
       return project;
     },
 
-    updateContentProject: async (id, data) => {
+    updateContentProject: (id, data) => enqueueContentProjectMutation(id, async () => {
       const response = await contentProjectApi.update(id, data);
       const project = safeParseStrict(ContentProjectSchema, response.data.project);
-      set((state) => ({ currentContentProject: project, contentProjects: state.contentProjects.map((item) => item.id === id ? project : item) }));
+      set((state) => ({
+        currentContentProject: state.currentContentProject?.id === id ? project : state.currentContentProject,
+        contentProjects: state.contentProjects.map((item) => item.id === id ? project : item),
+      }));
       return project;
-    },
+    }),
 
     deleteContentProject: async (id) => {
       await contentProjectApi.delete(id);
-      set((state) => ({ contentProjects: state.contentProjects.filter((item) => item.id !== id), currentContentProject: state.currentContentProject?.id === id ? null : state.currentContentProject }));
+      contentProjectsFetchSequence += 1;
+      contentProjectFetchSequence += 1;
+      set((state) => ({
+        contentProjects: state.contentProjects.filter((item) => item.id !== id),
+        currentContentProject: state.currentContentProject?.id === id ? null : state.currentContentProject,
+        isLoadingContentProjects: false,
+      }));
     },
 
-    addClaimToContentProject: async (projectId, claimId, usageNote = '') => {
+    addClaimToContentProject: (projectId, claimId, usageNote = '') => enqueueContentProjectMutation(projectId, async () => {
       const response = await contentProjectApi.addClaim(projectId, claimId, usageNote);
       const project = safeParseStrict(ContentProjectSchema, response.data.project);
-      set((state) => ({ currentContentProject: project, contentProjects: state.contentProjects.map((item) => item.id === projectId ? project : item) }));
+      set((state) => ({
+        currentContentProject: state.currentContentProject?.id === projectId ? project : state.currentContentProject,
+        contentProjects: state.contentProjects.map((item) => item.id === projectId ? project : item),
+      }));
       return project;
-    },
+    }),
 
-    reorderContentProjectClaims: async (projectId, claimIds) => {
+    reorderContentProjectClaims: (projectId, claimIds) => enqueueContentProjectMutation(projectId, async () => {
       const response = await contentProjectApi.reorderClaims(projectId, claimIds);
       const project = safeParseStrict(ContentProjectSchema, response.data.project);
-      set({ currentContentProject: project });
+      set((state) => ({
+        currentContentProject: state.currentContentProject?.id === projectId ? project : state.currentContentProject,
+        contentProjects: state.contentProjects.map((item) => item.id === projectId ? project : item),
+      }));
       return project;
-    },
+    }),
 
-    removeClaimFromContentProject: async (projectId, claimId) => {
+    removeClaimFromContentProject: (projectId, claimId) => enqueueContentProjectMutation(projectId, async () => {
       await contentProjectApi.removeClaim(projectId, claimId);
-      set((state) => state.currentContentProject?.id === projectId ? { currentContentProject: { ...state.currentContentProject, claims: state.currentContentProject.claims.filter((item) => item.claim_id !== claimId) } } : {});
-    },
+      set((state) => {
+        const update = (project: AppState['currentContentProject']) => project ? {
+          ...project,
+          claim_count: Math.max(0, (project.claim_count ?? project.claims.length) - (project.claims.some((item) => item.claim_id === claimId) ? 1 : 0)),
+          claims: project.claims.filter((item) => item.claim_id !== claimId),
+        } : null;
+        return {
+          currentContentProject: state.currentContentProject?.id === projectId ? update(state.currentContentProject) : state.currentContentProject,
+          contentProjects: state.contentProjects.map((project) => project.id === projectId ? update(project) || project : project),
+        };
+      });
+    }),
 
     exportContentProject: async (projectId, platform) => {
       const response = await contentProjectApi.export(projectId, platform);
