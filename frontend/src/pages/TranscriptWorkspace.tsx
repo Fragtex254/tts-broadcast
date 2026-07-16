@@ -1,17 +1,20 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { TranscriptSpeakerPanel } from '../components/Transcribe/TranscriptSpeakerPanel';
 import { TranscriptSummaryPanel } from '../components/Transcribe/TranscriptSummaryPanel';
 import { TranscriptConversationModal } from '../components/Transcribe/TranscriptConversationModal';
 import { TranscriptTurnList } from '../components/Transcribe/TranscriptTurnList';
 import { PodcastMetadataEditor } from '../components/Research/PodcastMetadataEditor';
+import { ClaimDetailModal } from '../components/Research/ClaimDetailModal';
 import { TranscriptClaimsPanel } from '../components/Research/TranscriptClaimsPanel';
+import type { TranscriptClaim } from '../store';
 import useStore from '../store';
 
 export const TranscriptWorkspace: React.FC = () => {
   const navigate = useNavigate();
   const params = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const transcriptionId = Number(params.id);
   const transcript = useStore((state) => state.transcriptDetail);
   const isLoading = useStore((state) => state.isLoadingTranscriptDetail);
@@ -29,7 +32,12 @@ export const TranscriptWorkspace: React.FC = () => {
   const claimProgress = useStore((state) => state.transcriptClaimProgress);
   const [error, setError] = useState<string | null>(null);
   const [isConversationOpen, setIsConversationOpen] = useState(false);
-  const [conversationEvidenceIndex, setConversationEvidenceIndex] = useState<number | null>(null);
+  const claimOpenedFromListRef = useRef(false);
+  const evidenceOpenedFromDetailRef = useRef(false);
+  const hasClaimParam = searchParams.has('claim');
+  const requestedClaimId = Number(searchParams.get('claim'));
+  const claimId = Number.isInteger(requestedClaimId) && requestedClaimId > 0 ? requestedClaimId : null;
+  const isEvidenceMode = searchParams.get('evidence') === '1';
 
   const load = useCallback(async () => {
     if (!Number.isInteger(transcriptionId) || transcriptionId <= 0) {
@@ -65,6 +73,7 @@ export const TranscriptWorkspace: React.FC = () => {
   };
 
   const currentTranscript = transcript?.record.id === transcriptionId ? transcript : null;
+  const selectedClaim = claimId === null ? null : currentTranscript?.claims.find((claim) => claim.id === claimId) || null;
   const shouldWarnSpeaker = currentTranscript
     && (currentTranscript.record.speaker_scope === 'mixed' || currentTranscript.record.diarization_conflicts > 0);
   const remoteSummaryActive = Boolean(currentTranscript
@@ -80,6 +89,44 @@ export const TranscriptWorkspace: React.FC = () => {
         : summaryIsActive
           ? '总结中'
           : '待总结';
+
+  const updateQuery = (updates: { claim?: number | null; evidence?: boolean }, replace = false) => {
+    const next = new URLSearchParams(searchParams);
+    if (updates.claim === null) next.delete('claim');
+    else if (updates.claim !== undefined) next.set('claim', String(updates.claim));
+    if (updates.evidence === false) next.delete('evidence');
+    else if (updates.evidence === true) next.set('evidence', '1');
+    setSearchParams(next, { replace });
+  };
+
+  const openClaim = (claim: TranscriptClaim) => {
+    claimOpenedFromListRef.current = true;
+    updateQuery({ claim: claim.id, evidence: false });
+  };
+  const closeClaim = () => {
+    if (claimOpenedFromListRef.current) {
+      claimOpenedFromListRef.current = false;
+      navigate(-1);
+      return;
+    }
+    updateQuery({ claim: null, evidence: false }, true);
+  };
+  const openClaimEvidence = async (claim: TranscriptClaim) => {
+    evidenceOpenedFromDetailRef.current = true;
+    updateQuery({ claim: claim.id, evidence: true });
+  };
+  const closeConversation = () => {
+    if (!isEvidenceMode) {
+      setIsConversationOpen(false);
+      return;
+    }
+    if (evidenceOpenedFromDetailRef.current) {
+      evidenceOpenedFromDetailRef.current = false;
+      navigate(-1);
+      return;
+    }
+    updateQuery({ evidence: false }, true);
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -129,23 +176,36 @@ export const TranscriptWorkspace: React.FC = () => {
                 claimsStatus={currentTranscript.record.claims_status}
                 claimsError={currentTranscript.record.claims_error}
                 onAnalyze={() => void analyzeClaims(transcriptionId).catch((claimError) => setError(claimError instanceof Error ? claimError.message : '无法开始观点分析'))}
-                onUpdate={async (claimId, update) => { await updateClaim(claimId, update); }}
-                onDelete={deleteClaim}
-                onLocate={(evidenceIndex) => { setConversationEvidenceIndex(evidenceIndex); setIsConversationOpen(true); }}
+                onOpenClaim={openClaim}
               />
               <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
                 <TranscriptSpeakerPanel speakers={currentTranscript.speakers} onRename={handleRename} />
-                <TranscriptTurnList turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => { setConversationEvidenceIndex(null); setIsConversationOpen(true); }} onCorrect={handleCorrectTurn} />
+                <TranscriptTurnList turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => setIsConversationOpen(true)} onCorrect={handleCorrectTurn} />
               </div>
+              <ClaimDetailModal
+                key={selectedClaim ? `claim-${selectedClaim.id}` : `missing-${searchParams.get('claim') || 'claim'}`}
+                isOpen={hasClaimParam && (!isEvidenceMode || selectedClaim === null)}
+                claim={selectedClaim}
+                error={claimId === null
+                  ? '观点链接无效，请关闭后重新选择。'
+                  : !selectedClaim
+                    ? '当前转录稿中找不到这条观点，它可能属于其他转录稿、已被重新分析或删除。'
+                    : null}
+                onClose={closeClaim}
+                onUpdate={updateClaim}
+                onDelete={async (selectedClaimId) => { await deleteClaim(selectedClaimId); }}
+                onOpenEvidence={openClaimEvidence}
+              />
               <TranscriptConversationModal
-                key={`${currentTranscript.record.id}-${conversationEvidenceIndex ?? 'browse'}`}
-                isOpen={isConversationOpen}
+                key={`${currentTranscript.record.id}-${selectedClaim?.evidence_start_index ?? 'browse'}-${selectedClaim?.evidence_end_index ?? 'browse'}-${isEvidenceMode ? 'evidence' : 'closed'}`}
+                isOpen={isConversationOpen || (isEvidenceMode && selectedClaim !== null)}
                 title={currentTranscript.record.relative_path || currentTranscript.record.file_name}
                 turns={currentTranscript.turns}
                 speakers={currentTranscript.speakers}
-                onClose={() => setIsConversationOpen(false)}
+                onClose={closeConversation}
                 onCorrect={handleCorrectTurn}
-                initialEvidenceSegmentIndex={conversationEvidenceIndex}
+                initialEvidenceSegmentIndex={selectedClaim?.evidence_start_index ?? null}
+                evidenceEndSegmentIndex={selectedClaim?.evidence_end_index ?? null}
               />
             </>
           )}

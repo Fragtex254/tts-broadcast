@@ -248,6 +248,7 @@ export const transcribeApi = {
 
 export const researchApi = {
   searchClaims: (query: string, limit = 20) => api.get('/research/claims/search', { params: { q: query, limit } }),
+  getClaim: (id: number) => api.get(`/research/claims/${id}`),
   analyzeRelations: (claimIds: number[]) => api.post('/research/claims/relations', { claimIds }),
 };
 

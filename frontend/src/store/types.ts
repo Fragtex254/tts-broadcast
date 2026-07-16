@@ -546,12 +546,18 @@ export interface AppState {
 
   claimSearchResults: ClaimSearchResult[];
   isSearchingClaims: boolean;
+  claimDetail: TranscriptClaim | null;
+  isLoadingClaimDetail: boolean;
   claimRelationAnalysis: ClaimRelationAnalysis | null;
   isAnalyzingRelations: boolean;
   contentProjects: ContentProject[];
   currentContentProject: ContentProject | null;
   isLoadingContentProjects: boolean;
   searchClaims: (query: string) => Promise<ClaimSearchResult[]>;
+  fetchClaimDetail: (claimId: number) => Promise<TranscriptClaim>;
+  clearClaimDetail: () => void;
+  updateClaimDetail: (claimId: number, update: { userNote?: string; isStarred?: boolean }) => Promise<TranscriptClaim>;
+  deleteClaimDetail: (claimId: number) => Promise<void>;
   analyzeClaimRelations: (claimIds: number[]) => Promise<ClaimRelationAnalysis>;
   fetchContentProjects: () => Promise<ContentProject[]>;
   createContentProject: (data: { title: string; topic?: string; targetPlatform?: ContentTargetPlatform; thesis?: string }) => Promise<ContentProject>;

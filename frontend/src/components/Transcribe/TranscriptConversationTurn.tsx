@@ -10,6 +10,7 @@ interface TranscriptConversationTurnProps {
   tone: TranscriptSpeakerTone;
   isActive: boolean;
   isMuted: boolean;
+  isEvidence?: boolean;
   isSearchTarget?: boolean;
   isEditing: boolean;
   editingDraft: string;
@@ -30,6 +31,7 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
   tone,
   isActive,
   isMuted,
+  isEvidence = false,
   isSearchTarget = false,
   isEditing,
   editingDraft,
@@ -98,8 +100,10 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
       className={`relative rounded-r-2xl border border-l-[3px] px-4 py-4 outline-none transition-all duration-200 sm:px-5 ${tone.border} ${
         isActive || isEditing
           ? `${tone.strongSurface} ${tone.mutedBorder} shadow-card`
-          : 'border-transparent hover:border-card-border hover:bg-white/55 focus:border-card-border focus:bg-white/55'
-      } ${isSearchTarget ? 'ring-2 ring-lilac/70 ring-offset-2 ring-offset-paper' : ''} ${isMuted && !isEditing ? 'opacity-45' : 'opacity-100'}`}
+          : isEvidence
+            ? 'border-lemon/55 bg-lemon/10'
+            : 'border-transparent hover:border-card-border hover:bg-white/55 focus:border-card-border focus:bg-white/55'
+      } ${isSearchTarget ? 'ring-2 ring-lilac/70 ring-offset-2 ring-offset-paper' : isEvidence ? 'ring-2 ring-lemon/60 ring-offset-2 ring-offset-paper' : ''} ${isMuted && !isEditing ? 'opacity-45' : 'opacity-100'}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -108,9 +112,9 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
             {formatTranscriptTime(turn.start_seconds)}–{formatTranscriptTime(turn.end_seconds)}
           </span>
         </div>
-        {(isActive || isEditing) && (
+        {(isActive || isEditing || isEvidence) && (
           <span className={`shrink-0 rounded-full px-2.5 py-1 font-body text-[9px] font-medium tracking-wide text-ink ${tone.badge}`}>
-            当前悬浮区域
+            {isEvidence ? '观点证据' : '当前悬浮区域'}
           </span>
         )}
       </div>

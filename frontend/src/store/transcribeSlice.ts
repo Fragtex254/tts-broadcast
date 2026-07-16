@@ -531,7 +531,15 @@ export function createTranscribeSlice(set: StoreSet): Pick<
       try {
         const response = await transcribeApi.updateClaim(claimId, update);
         const claim = safeParseStrict(TranscriptClaimSchema, response.data.claim);
-        set((state) => ({ transcriptDetail: state.transcriptDetail ? { ...state.transcriptDetail, claims: state.transcriptDetail.claims.map((item) => item.id === claim.id ? claim : item) } : null }));
+        set((state) => ({
+          transcriptDetail: state.transcriptDetail ? { ...state.transcriptDetail, claims: state.transcriptDetail.claims.map((item) => item.id === claim.id ? claim : item) } : null,
+          claimDetail: state.claimDetail?.id === claim.id ? claim : state.claimDetail,
+          claimSearchResults: state.claimSearchResults.map((item) => item.claim.id === claim.id ? { ...item, claim } : item),
+          currentContentProject: state.currentContentProject ? {
+            ...state.currentContentProject,
+            claims: state.currentContentProject.claims.map((item) => item.claim_id === claim.id ? { ...item, claim } : item),
+          } : null,
+        }));
         return claim;
       } catch (error) {
         throw new Error(getApiErrorMessage(error, '更新观点失败'), { cause: error });
@@ -541,7 +549,25 @@ export function createTranscribeSlice(set: StoreSet): Pick<
     deleteTranscriptClaim: async (claimId) => {
       try {
         await transcribeApi.deleteClaim(claimId);
-        set((state) => ({ transcriptDetail: state.transcriptDetail ? { ...state.transcriptDetail, claims: state.transcriptDetail.claims.filter((item) => item.id !== claimId) } : null }));
+        set((state) => {
+          const currentProjectHadClaim = Boolean(state.currentContentProject?.claims.some((item) => item.claim_id === claimId));
+          return {
+            transcriptDetail: state.transcriptDetail ? { ...state.transcriptDetail, claims: state.transcriptDetail.claims.filter((item) => item.id !== claimId) } : null,
+            claimDetail: state.claimDetail?.id === claimId ? null : state.claimDetail,
+            claimSearchResults: state.claimSearchResults.filter((item) => item.claim.id !== claimId),
+            claimRelationAnalysis: null,
+            currentContentProject: state.currentContentProject ? {
+              ...state.currentContentProject,
+              claim_count: Math.max(0, (state.currentContentProject.claim_count ?? state.currentContentProject.claims.length) - (currentProjectHadClaim ? 1 : 0)),
+              claims: state.currentContentProject.claims.filter((item) => item.claim_id !== claimId),
+            } : null,
+            contentProjects: currentProjectHadClaim && state.currentContentProject
+              ? state.contentProjects.map((project) => project.id === state.currentContentProject?.id
+                ? { ...project, claim_count: Math.max(0, (project.claim_count ?? project.claims.length) - 1) }
+                : project)
+              : state.contentProjects,
+          };
+        });
       } catch (error) {
         throw new Error(getApiErrorMessage(error, '删除观点失败'), { cause: error });
       }

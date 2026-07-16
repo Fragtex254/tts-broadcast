@@ -1,6 +1,8 @@
 const express = require('express');
 const researchService = require('../services/researchService');
+const researchStore = require('../services/researchStore');
 const { createScopedLogger } = require('../services/logger');
+const { validateId } = require('../utils/validation');
 
 const router = express.Router();
 const logger = createScopedLogger('research-route');
@@ -17,6 +19,20 @@ router.get('/claims/search', async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, '搜索观点失败');
     res.status(500).json({ error: error.message || '搜索观点失败' });
+  }
+});
+
+/** GET /api/research/claims/:id - 获取单条观点详情 */
+router.get('/claims/:id', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '观点 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+    const claim = researchStore.getClaim(idCheck.id);
+    if (!claim) return res.status(404).json({ error: '观点不存在' });
+    res.json({ claim });
+  } catch (error) {
+    logger.error({ err: error }, '获取观点详情失败');
+    res.status(500).json({ error: error.message || '获取观点详情失败' });
   }
 });
 

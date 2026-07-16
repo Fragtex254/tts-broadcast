@@ -48,6 +48,7 @@ interface TranscriptConversationModalProps {
   onClose: () => void;
   onCorrect: (turnId: number, correctedText: string) => Promise<void>;
   initialEvidenceSegmentIndex?: number | null;
+  evidenceEndSegmentIndex?: number | null;
 }
 
 export const TranscriptConversationModal: React.FC<TranscriptConversationModalProps> = ({
@@ -58,10 +59,23 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
   onClose,
   onCorrect,
   initialEvidenceSegmentIndex = null,
+  evidenceEndSegmentIndex = null,
 }) => {
+  const requestedEvidenceEnd = evidenceEndSegmentIndex ?? initialEvidenceSegmentIndex;
+  const evidenceRangeStart = initialEvidenceSegmentIndex === null || requestedEvidenceEnd === null
+    ? null
+    : Math.min(initialEvidenceSegmentIndex, requestedEvidenceEnd);
+  const evidenceRangeEnd = initialEvidenceSegmentIndex === null || requestedEvidenceEnd === null
+    ? null
+    : Math.max(initialEvidenceSegmentIndex, requestedEvidenceEnd);
+  const evidenceTurnIds = useMemo(() => new Set(turns.filter((turn) => (
+    evidenceRangeStart !== null
+    && evidenceRangeEnd !== null
+    && turn.evidence_segment_indexes.some((index) => index >= evidenceRangeStart && index <= evidenceRangeEnd)
+  )).map((turn) => turn.id)), [evidenceRangeEnd, evidenceRangeStart, turns]);
   const initialTurnId = initialEvidenceSegmentIndex === null
     ? null
-    : turns.find((turn) => turn.evidence_segment_indexes.includes(initialEvidenceSegmentIndex))?.id || null;
+    : turns.find((turn) => evidenceTurnIds.has(turn.id))?.id || null;
   const [query, setQuery] = useState('');
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [activeTurnId, setActiveTurnId] = useState<number | null>(initialTurnId);
@@ -356,7 +370,8 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
                     speakerName={speakerName}
                     tone={getTranscriptSpeakerTone(speakerIndex)}
                     isActive={activeTurnId === turn.id}
-                    isMuted={activeTurnId !== null && activeTurnId !== turn.id}
+                    isMuted={activeTurnId !== null && activeTurnId !== turn.id && !evidenceTurnIds.has(turn.id)}
+                    isEvidence={evidenceTurnIds.has(turn.id)}
                     isSearchTarget={hasQuery && searchTargetTurnId === turn.id}
                     isEditing={editingTurnId === turn.id}
                     editingDraft={editingTurnId === turn.id ? editingDraft : ''}
