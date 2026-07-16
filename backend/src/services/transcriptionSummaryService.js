@@ -147,32 +147,44 @@ function normalizeBatchSummary({ parsed, batch }) {
   const evidenceSpeakerKeys = new Map(batch.flatMap((turn) => (
     turn.evidence_segment_indexes.map((index) => [index, turn.speaker_key])
   )));
-  const claims = parsed.claims.map((claim) => {
-    if (!claim || typeof claim !== 'object') throw new Error('播客总结批次 claim 格式无效');
-    const startIndex = Number(claim.evidence_start_index);
-    const endIndex = Number(claim.evidence_end_index);
-    if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex) || endIndex < startIndex) {
-      throw new Error('播客总结批次包含无效的证据片段范围');
+  const claims = [];
+  const invalidClaims = [];
+  for (const claim of parsed.claims) {
+    try {
+      if (!claim || typeof claim !== 'object') throw new Error('播客总结批次 claim 格式无效');
+      const startIndex = Number(claim.evidence_start_index);
+      const endIndex = Number(claim.evidence_end_index);
+      if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex) || endIndex < startIndex) {
+        throw new Error('播客总结批次包含无效的证据片段范围');
+      }
+      const speakerKey = requireString(claim.speaker_key, 'claim 说话人', 200);
+      if (!allowedSpeakerKeys.has(speakerKey)) throw new Error('播客总结批次引用了输入之外的 Speaker');
+      for (let index = startIndex; index <= endIndex; index++) {
+        if (!allowedEvidenceIndexes.has(index)) throw new Error('播客总结批次引用了输入之外的证据片段');
+        if (evidenceSpeakerKeys.get(index) !== speakerKey) {
+          throw new Error(`播客总结批次 claim 证据范围包含其他 Speaker：${speakerKey} ${startIndex}-${endIndex}`);
+        }
+      }
+      claims.push({
+        content: requireString(claim.claim || claim.content, 'claim 内容', 2000),
+        question: typeof claim.question === 'string' && claim.question.trim() ? claim.question.trim() : '这段发言表达了什么观点？',
+        claim: requireString(claim.claim || claim.content, 'claim 内容', 2000),
+        reasoning: typeof claim.reasoning === 'string' ? claim.reasoning.trim() : '',
+        speaker_key: speakerKey,
+        evidence_start_index: startIndex,
+        evidence_end_index: endIndex,
+        topic_tags: Array.isArray(claim.topic_tags) ? claim.topic_tags : [],
+        content_value: Number.isFinite(Number(claim.content_value)) ? Number(claim.content_value) : 50,
+        confidence: Number.isFinite(Number(claim.confidence)) ? Number(claim.confidence) : 0.7
+      });
+    } catch (error) {
+      invalidClaims.push(error);
     }
-    const speakerKey = requireString(claim.speaker_key, 'claim 说话人', 200);
-    if (!allowedSpeakerKeys.has(speakerKey)) throw new Error('播客总结批次引用了输入之外的 Speaker');
-    for (let index = startIndex; index <= endIndex; index++) {
-      if (!allowedEvidenceIndexes.has(index)) throw new Error('播客总结批次引用了输入之外的证据片段');
-      if (evidenceSpeakerKeys.get(index) !== speakerKey) throw new Error('播客总结批次 claim 证据范围包含其他 Speaker');
-    }
-    return {
-      content: requireString(claim.claim || claim.content, 'claim 内容', 2000),
-      question: typeof claim.question === 'string' && claim.question.trim() ? claim.question.trim() : '这段发言表达了什么观点？',
-      claim: requireString(claim.claim || claim.content, 'claim 内容', 2000),
-      reasoning: typeof claim.reasoning === 'string' ? claim.reasoning.trim() : '',
-      speaker_key: speakerKey,
-      evidence_start_index: startIndex,
-      evidence_end_index: endIndex,
-      topic_tags: Array.isArray(claim.topic_tags) ? claim.topic_tags : [],
-      content_value: Number.isFinite(Number(claim.content_value)) ? Number(claim.content_value) : 50,
-      confidence: Number.isFinite(Number(claim.confidence)) ? Number(claim.confidence) : 0.7
-    };
-  });
+  }
+  if (claims.length === 0) throw invalidClaims[0] || new Error('播客总结批次没有可用 claim');
+  if (invalidClaims.length > 0) {
+    logger.warn({ validClaimCount: claims.length, invalidClaimCount: invalidClaims.length }, '播客总结批次忽略未通过证据校验的观点');
+  }
   return { digest, claims };
 }
 
@@ -182,7 +194,7 @@ async function summarizeBatch({ batch, batchIndex, batchCount, generateText }) {
 只输出 JSON 对象：
 {"digest":"本批次摘要","claims":[{"question":"正在回答的问题","claim":"明确判断","reasoning":"理由、案例或推导","speaker_key":"speaker key","evidence_start_index":0,"evidence_end_index":1,"topic_tags":["主题"],"content_value":80,"confidence":0.9}]}
 
-要求：不得创造逐字稿之外的事实；证据范围必须来自输入中的 segment index；保留分歧和不确定性。
+要求：不得创造逐字稿之外的事实；保留分歧和不确定性。每条 claim 的证据必须来自同一发言行且同一 Speaker，起止 index 之间不得跨过其他 Speaker；跨多轮表达时请选择最能独立支撑判断的一段连续发言，不要把主持人问题与嘉宾回答合并为一个证据范围。
 批次：${batchIndex + 1}/${batchCount}
 
 <transcript>

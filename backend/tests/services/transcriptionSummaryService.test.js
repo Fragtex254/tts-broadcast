@@ -306,4 +306,47 @@ describe('Transcript 总结服务', () => {
     expect(generateText).toHaveBeenCalledTimes(3);
     expect(generateText.mock.calls[1][0].prompt).toContain('其他 Speaker');
   });
+
+  test('批次包含合法与跨 Speaker claim 时丢弃坏观点并保留合法观点', async () => {
+    const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
+    const record = podcastTranscriptStore.create({
+      record: { fileName: 'mixed-claims.wav', text: '主持人。嘉宾。', contentMode: 'podcast', structureStatus: 'ready' },
+      transcript: {
+        speakers: [
+          { speakerKey: 'speaker-0001', displayName: '主持人', sortOrder: 0, speakerScope: 'global' },
+          { speakerKey: 'speaker-0002', displayName: '嘉宾', sortOrder: 1, speakerScope: 'global' }
+        ],
+        segments: [
+          { sourceIndex: 0, segmentIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '主持人。' },
+          { sourceIndex: 1, segmentIndex: 1, speakerKey: 'speaker-0002', startSeconds: 3, endSeconds: 5, text: '嘉宾。' }
+        ],
+        turns: [
+          { turnIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '主持人。', evidenceSegmentIndexes: [0] },
+          { turnIndex: 1, speakerKey: 'speaker-0002', startSeconds: 3, endSeconds: 5, text: '嘉宾。', evidenceSegmentIndexes: [1] }
+        ]
+      }
+    });
+    const generateText = jest.fn()
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '混合质量观点',
+        claims: [
+          { content: '主持人观点', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 },
+          { content: '错误混合观点', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 1 }
+        ]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        one_liner: '有效摘要', overview: '主持人与嘉宾对谈。',
+        chapters: [{ title: '主持人观点', content: '主持人发言。', evidence_start_index: 0, evidence_end_index: 0 }],
+        speaker_viewpoints: [], highlights: []
+      }));
+
+    const detail = await transcriptionSummaryService.generate({ transcriptionId: record.id, generateText, model: 'test-model' });
+
+    expect(detail.record.summary_status).toBe('completed');
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(detail.claims).toEqual([
+      expect.objectContaining({ claim: '主持人观点', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 })
+    ]);
+    expect(generateText.mock.calls[0][0].prompt).toContain('同一发言行且同一 Speaker');
+  });
 });
