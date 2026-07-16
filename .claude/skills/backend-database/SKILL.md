@@ -1,6 +1,6 @@
 ---
 name: backend-database
-description: 修改 SQLite schema、写数据库迁移、新增或修改 DAL（services/*Store.js）时使用。涵盖 better-sqlite3 同步 API、try-catch 探测列迁移模式、schema.sql 同步、参数化 SQL 防注入、事务、IN 子句占位符、segments.index 保留字双引号转义、NODE_ENV=test 内存库隔离。触发场景：加字段、加表、ALTER TABLE、写迁移、改 schema.sql、新建 Store、DAL、SQL 注入、事务。
+description: 修改 SQLite schema、写数据库迁移、新增或修改 DAL（services/*Store.js）时使用。涵盖 better-sqlite3 同步 API、try-catch 探测列迁移模式、schema.sql 同步、参数化 SQL防注入、事务、观点/内容项目引用生命周期、IN 子句占位符、segments.index 保留字双引号转义、NODE_ENV=test 内存库隔离。触发场景：加字段、加表、观点表、内容项目表、ALTER TABLE、写迁移、改 schema.sql、新建 Store、DAL、SQL 注入、事务。
 ---
 
 # 后端数据库与 DAL 开发
@@ -19,6 +19,7 @@ description: 修改 SQLite schema、写数据库迁移、新增或修改 DAL（s
 4. `segments` 表的 `index` 是 SQL 保留字，**必须用双引号转义** `ORDER BY "index"`。
 5. 路由层不直接 `db.prepare()`（settings 表除外），走 `*Store.js` DAL；store 函数收/返纯 JS 对象，不依赖 `req`/`res`。
 6. `NODE_ENV=test` 必须用 SQLite 内存库，测试不得读写 `backend/data/broadcast.db`。
+7. 可重建观点被内容项目引用后不得在重新分析时级联删除：旧观点保留为 `stale` 快照，当前 Transcript 只展示新一代 `active` 观点；未被项目引用的旧观点可在替换事务中清理。
 
 ## 模式与模板
 

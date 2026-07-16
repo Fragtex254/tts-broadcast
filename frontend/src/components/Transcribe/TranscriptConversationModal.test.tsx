@@ -56,6 +56,24 @@ const turns: TranscriptTurn[] = [
 ];
 
 describe('TranscriptConversationModal', () => {
+  test('观点证据区间内的所有发言都保持高亮', () => {
+    render(
+      <TranscriptConversationModal
+        isOpen
+        title="AI时代是谁的黄金时代？"
+        turns={turns}
+        speakers={speakers}
+        onClose={vi.fn()}
+        onCorrect={vi.fn().mockResolvedValue(undefined)}
+        initialEvidenceSegmentIndex={0}
+        evidenceEndSegmentIndex={1}
+      />,
+    );
+
+    expect(within(screen.getByLabelText('发言 1，主持人，0:07 到 0:29')).getByText('观点证据')).toBeTruthy();
+    expect(within(screen.getByLabelText('发言 2，Zara，0:29 到 1:07')).getByText('观点证据')).toBeTruthy();
+  });
+
   test('悬浮发言时同步强调发言、说话人与当前定位', () => {
     render(
       <TranscriptConversationModal

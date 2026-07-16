@@ -31,6 +31,10 @@ export const SettingsSchema = z.object({
   llm_split_system_prompt: z.string(),
   llm_rewrite_thinking_enabled: z.boolean(),
   llm_split_thinking_enabled: z.boolean(),
+  embedding_enabled: z.boolean(),
+  embedding_base_url: z.string(),
+  embedding_api_key: z.string(),
+  embedding_model: z.string(),
   asr_provider: AsrProviderSchema,
   qwen_asr_base_url: z.string(),
   qwen_asr_model: z.string(),
@@ -139,6 +143,16 @@ export const TranscriptionRecordSchema = z.object({
   asr_warnings: z.array(z.string()),
   summary_model: z.string(),
   summary_updated_at: z.string().nullable(),
+  claims_status: z.enum(['not_started', 'queued', 'running', 'completed', 'failed', 'stale']),
+  claims_error: z.string(),
+  claims_model: z.string(),
+  claims_updated_at: z.string().nullable(),
+  podcast_name: z.string(),
+  episode_title: z.string(),
+  guest_names: z.array(z.string()),
+  source_url: z.string(),
+  published_at: z.string(),
+  topic_tags: z.array(z.string()),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -194,6 +208,16 @@ export const TranscriptSummaryItemSchema = z.object({
   created_at: z.string(), updated_at: z.string(),
 });
 
+export const TranscriptClaimSchema = z.object({
+  id: z.number(), transcription_id: z.number(), speaker_key: z.string(), speaker_name: z.string().nullable(),
+  question: z.string(), claim: z.string(), reasoning: z.string(), evidence_excerpt: z.string(),
+  evidence_start_index: z.number(), evidence_end_index: z.number(), start_seconds: z.number(), end_seconds: z.number(),
+  topic_tags: z.array(z.string()), content_value: z.number(), confidence: z.number(), user_note: z.string(),
+  is_starred: z.boolean(), status: z.enum(['active', 'stale']), analysis_model: z.string(), embedding: z.array(z.number()).nullable(),
+  podcast_name: z.string(), episode_title: z.string(), source_url: z.string(), published_at: z.string(),
+  created_at: z.string(), updated_at: z.string(),
+});
+
 export const TranscriptDetailSchema = z.object({
   record: TranscriptionRecordSchema,
   speakers: z.array(TranscriptSpeakerSchema),
@@ -201,9 +225,22 @@ export const TranscriptDetailSchema = z.object({
   turns: z.array(TranscriptTurnSchema),
   summary: TranscriptSummarySchema.nullable(),
   summaryItems: z.array(TranscriptSummaryItemSchema),
+  claims: z.array(TranscriptClaimSchema),
 });
 
 export const TranscriptDetailResponseSchema = z.object({ transcript: TranscriptDetailSchema });
+
+export const ClaimSearchResultSchema = z.object({ claim: TranscriptClaimSchema, similarity: z.number(), search_mode: z.enum(['embedding', 'keyword']) });
+export const ClaimRelationAnalysisSchema = z.object({
+  relations: z.array(z.object({ id: z.number(), claim_a_id: z.number(), claim_b_id: z.number(), relation_type: z.enum(['support', 'oppose', 'complement', 'different_scope', 'similar_example', 'unrelated']), explanation: z.string(), confidence: z.number(), analysis_model: z.string(), created_at: z.string(), updated_at: z.string() })),
+  synthesis: z.object({ consensus: z.array(z.string()), disagreements: z.array(z.string()), different_conditions: z.array(z.string()), practical_suggestions: z.array(z.string()), open_questions: z.array(z.string()) }),
+});
+export const ContentProjectSchema = z.object({
+  id: z.number(), title: z.string(), topic: z.string(), target_platform: z.enum(['xiaohongshu', 'wechat', 'twitter', 'general']), thesis: z.string(),
+  personal_practice: z.string(), personal_judgment: z.string(), discussion_question: z.string(), status: z.string(), claim_count: z.number().optional(),
+  claims: z.array(z.object({ id: z.number(), project_id: z.number(), claim_id: z.number(), sort_order: z.number(), usage_note: z.string(), claim: TranscriptClaimSchema })).default([]),
+  created_at: z.string(), updated_at: z.string(),
+});
 
 // === API 响应包装 ===
 

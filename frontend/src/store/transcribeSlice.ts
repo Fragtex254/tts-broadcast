@@ -5,6 +5,7 @@ import {
   safeParseStrict,
   TranscriptDetailResponseSchema,
   TranscriptDetailSchema,
+  TranscriptClaimSchema,
   TranscriptSpeakerSchema,
   TranscriptTurnSchema,
   TranscriptionRecordSchema,
@@ -26,6 +27,7 @@ import type {
   TranscriptionStats,
   TranscriptDetail,
   TranscriptSummaryProgress,
+  TranscriptClaim,
 } from './types';
 import type { StoreSet } from './storeTypes';
 import { mergeTranscriptionChunk, mergeTranscriptionText } from './transcriptionProgressModel';
@@ -189,6 +191,8 @@ export function createTranscribeSlice(set: StoreSet): Pick<
   | 'isLoadingTranscriptDetail'
   | 'isSummarizingTranscript'
   | 'transcriptSummaryProgress'
+  | 'isAnalyzingClaims'
+  | 'transcriptClaimProgress'
   | 'transcribeMedia'
   | 'fetchTranscriptionHistory'
   | 'fetchTranscriptionStats'
@@ -199,6 +203,10 @@ export function createTranscribeSlice(set: StoreSet): Pick<
   | 'renameTranscriptSpeaker'
   | 'correctTranscriptTurn'
   | 'summarizeTranscript'
+  | 'updateTranscriptMetadata'
+  | 'analyzeTranscriptClaims'
+  | 'updateTranscriptClaim'
+  | 'deleteTranscriptClaim'
   | 'batchTranscriptionItems'
   | 'isBatchTranscribing'
   | 'batchTranscribeProgress'
@@ -220,6 +228,8 @@ export function createTranscribeSlice(set: StoreSet): Pick<
     isLoadingTranscriptDetail: false,
     isSummarizingTranscript: false,
     transcriptSummaryProgress: IDLE_SUMMARY_PROGRESS,
+    isAnalyzingClaims: false,
+    transcriptClaimProgress: IDLE_SUMMARY_PROGRESS,
 
     transcribeMedia: async (file: File, language: AsrLanguage, provider?: AsrProvider, options?: TranscribeOptions) => {
       const taskId = createTaskId();
@@ -464,6 +474,102 @@ export function createTranscribeSlice(set: StoreSet): Pick<
           },
         });
         throw new Error(getApiErrorMessage(error, '无法开始总结'), { cause: error });
+      }
+    },
+
+    updateTranscriptMetadata: async (transcriptionId, metadata) => {
+      try {
+        const response = await transcribeApi.updateMetadata(transcriptionId, metadata);
+        const record = safeParseStrict(TranscriptionRecordSchema, response.data.record);
+        set((state) => ({
+          transcriptDetail: state.transcriptDetail?.record.id === transcriptionId ? { ...state.transcriptDetail, record } : state.transcriptDetail,
+          transcriptionHistory: state.transcriptionHistory.map((item) => item.id === transcriptionId ? record : item),
+        }));
+        return record;
+      } catch (error) {
+        logger.error({ err: toLogError(error), transcriptionId }, '更新播客元数据失败');
+        throw new Error(getApiErrorMessage(error, '更新播客元数据失败'), { cause: error });
+      }
+    },
+
+    analyzeTranscriptClaims: async (transcriptionId) => {
+      const taskId = createTaskId().replace('transcribe-', 'claims-');
+      const sseClient = createSSEClient(taskId);
+      sseClient.on<SSEProgressEvent>('progress', (progress) => {
+        const phase = progress.phase === 'embedding-claims' ? 'synthesizing' : 'summarizing-batches';
+        set({ transcriptClaimProgress: { phase, percent: progress.percent ?? 0, current: progress.current ?? 0, total: progress.total ?? 0, message: progress.phase === 'embedding-claims' ? '正在建立观点搜索索引' : '正在分批提取观点' } });
+      });
+      sseClient.on<SSECompleteEvent>('complete', (event) => {
+        const claims: TranscriptClaim[] = event.claims ?? [];
+        set((state) => ({
+          isAnalyzingClaims: false,
+          transcriptClaimProgress: { phase: 'completed', percent: 100, current: claims.length, total: claims.length, message: '观点分析完成' },
+          transcriptDetail: state.transcriptDetail?.record.id === transcriptionId ? {
+            ...state.transcriptDetail,
+            record: { ...state.transcriptDetail.record, claims_status: 'completed', claims_error: '' },
+            claims,
+          } : state.transcriptDetail,
+        }));
+        sseClient.close();
+      });
+      sseClient.on<SSEErrorEvent>('error', (event) => {
+        if (event.error === 'SSE 连接错误') return;
+        set({ isAnalyzingClaims: false, transcriptClaimProgress: { phase: 'failed', percent: 0, current: 0, total: 0, message: event.error || '观点分析失败' } });
+        sseClient.close();
+      });
+      set({ isAnalyzingClaims: true, transcriptClaimProgress: { phase: 'queued', percent: 0, current: 0, total: 0, message: '观点分析任务已进入队列' } });
+      sseClient.connect();
+      try { await transcribeApi.analyzeClaims(transcriptionId, taskId); }
+      catch (error) {
+        sseClient.close();
+        set({ isAnalyzingClaims: false, transcriptClaimProgress: { phase: 'failed', percent: 0, current: 0, total: 0, message: getApiErrorMessage(error, '无法开始观点分析') } });
+        throw new Error(getApiErrorMessage(error, '无法开始观点分析'), { cause: error });
+      }
+    },
+
+    updateTranscriptClaim: async (claimId, update) => {
+      try {
+        const response = await transcribeApi.updateClaim(claimId, update);
+        const claim = safeParseStrict(TranscriptClaimSchema, response.data.claim);
+        set((state) => ({
+          transcriptDetail: state.transcriptDetail ? { ...state.transcriptDetail, claims: state.transcriptDetail.claims.map((item) => item.id === claim.id ? claim : item) } : null,
+          claimDetail: state.claimDetail?.id === claim.id ? claim : state.claimDetail,
+          claimSearchResults: state.claimSearchResults.map((item) => item.claim.id === claim.id ? { ...item, claim } : item),
+          currentContentProject: state.currentContentProject ? {
+            ...state.currentContentProject,
+            claims: state.currentContentProject.claims.map((item) => item.claim_id === claim.id ? { ...item, claim } : item),
+          } : null,
+        }));
+        return claim;
+      } catch (error) {
+        throw new Error(getApiErrorMessage(error, '更新观点失败'), { cause: error });
+      }
+    },
+
+    deleteTranscriptClaim: async (claimId) => {
+      try {
+        await transcribeApi.deleteClaim(claimId);
+        set((state) => {
+          const currentProjectHadClaim = Boolean(state.currentContentProject?.claims.some((item) => item.claim_id === claimId));
+          return {
+            transcriptDetail: state.transcriptDetail ? { ...state.transcriptDetail, claims: state.transcriptDetail.claims.filter((item) => item.id !== claimId) } : null,
+            claimDetail: state.claimDetail?.id === claimId ? null : state.claimDetail,
+            claimSearchResults: state.claimSearchResults.filter((item) => item.claim.id !== claimId),
+            claimRelationAnalysis: null,
+            currentContentProject: state.currentContentProject ? {
+              ...state.currentContentProject,
+              claim_count: Math.max(0, (state.currentContentProject.claim_count ?? state.currentContentProject.claims.length) - (currentProjectHadClaim ? 1 : 0)),
+              claims: state.currentContentProject.claims.filter((item) => item.claim_id !== claimId),
+            } : null,
+            contentProjects: currentProjectHadClaim && state.currentContentProject
+              ? state.contentProjects.map((project) => project.id === state.currentContentProject?.id
+                ? { ...project, claim_count: Math.max(0, (project.claim_count ?? project.claims.length) - 1) }
+                : project)
+              : state.contentProjects,
+          };
+        });
+      } catch (error) {
+        throw new Error(getApiErrorMessage(error, '删除观点失败'), { cause: error });
       }
     },
 

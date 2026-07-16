@@ -47,6 +47,14 @@ router.put('/', (req, res) => {
     if (updates.wsl_asr_engine && !['qwen', 'moss'].includes(updates.wsl_asr_engine)) {
       return res.status(400).json({ error: 'WSL ASR 引擎无效' });
     }
+    if (updates.embedding_enabled !== undefined && typeof updates.embedding_enabled !== 'boolean') {
+      return res.status(400).json({ error: 'Embedding 启用状态无效' });
+    }
+    for (const key of ['embedding_base_url', 'embedding_api_key', 'embedding_model']) {
+      if (updates[key] !== undefined && typeof updates[key] !== 'string') {
+        return res.status(400).json({ error: `${key} 必须是字符串` });
+      }
+    }
 
     const upsert = db.prepare(`
       INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)

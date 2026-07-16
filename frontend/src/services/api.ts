@@ -1,5 +1,5 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
-import type { AsrEngine, AsrProvider, NewsItem, Settings, VoiceConfig } from '../store/types';
+import type { AsrEngine, AsrProvider, ContentTargetPlatform, NewsItem, Settings, VoiceConfig } from '../store/types';
 import { createScopedLogger, toLogError } from './logger';
 
 const logger = createScopedLogger('api-client');
@@ -235,8 +235,33 @@ export const transcribeApi = {
     api.patch(`/transcribe/results/${transcriptionId}/turns/${turnId}`, { correctedText }),
   summarize: (id: number, taskId: string) =>
     api.post(`/transcribe/results/${id}/summarize`, { taskId }),
+  updateMetadata: (id: number, data: { podcastName: string; episodeTitle: string; guestNames: string[]; sourceUrl: string; publishedAt: string; topicTags: string[] }) =>
+    api.patch(`/transcribe/results/${id}/metadata`, data),
+  analyzeClaims: (id: number, taskId: string) =>
+    api.post(`/transcribe/results/${id}/analyze-claims`, { taskId }),
+  updateClaim: (claimId: number, data: { userNote?: string; isStarred?: boolean }) =>
+    api.patch(`/transcribe/claims/${claimId}`, data),
+  deleteClaim: (claimId: number) => api.delete(`/transcribe/claims/${claimId}`),
   fetchModels: (data: { provider: AsrProvider; engine?: AsrEngine; baseUrl?: string; apiKey?: string }) =>
     api.post('/transcribe/models', data),
+};
+
+export const researchApi = {
+  searchClaims: (query: string, limit = 20) => api.get('/research/claims/search', { params: { q: query, limit } }),
+  getClaim: (id: number) => api.get(`/research/claims/${id}`),
+  analyzeRelations: (claimIds: number[]) => api.post('/research/claims/relations', { claimIds }),
+};
+
+export const contentProjectApi = {
+  getAll: () => api.get('/content-projects'),
+  getById: (id: number) => api.get(`/content-projects/${id}`),
+  create: (data: { title: string; topic?: string; targetPlatform?: ContentTargetPlatform; thesis?: string }) => api.post('/content-projects', data),
+  update: (id: number, data: Partial<{ title: string; topic: string; targetPlatform: ContentTargetPlatform; thesis: string; personalPractice: string; personalJudgment: string; discussionQuestion: string; status: string }>) => api.patch(`/content-projects/${id}`, data),
+  delete: (id: number) => api.delete(`/content-projects/${id}`),
+  addClaim: (id: number, claimId: number, usageNote = '') => api.post(`/content-projects/${id}/claims`, { claimId, usageNote }),
+  reorderClaims: (id: number, claimIds: number[]) => api.patch(`/content-projects/${id}/claims/reorder`, { claimIds }),
+  removeClaim: (id: number, claimId: number) => api.delete(`/content-projects/${id}/claims/${claimId}`),
+  export: (id: number, platform: 'xiaohongshu' | 'wechat') => api.post(`/content-projects/${id}/export`, { platform }),
 };
 
 export type { NewsItem, Settings };

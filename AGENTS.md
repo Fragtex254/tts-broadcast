@@ -22,6 +22,7 @@
 | 调样式 / 套设计系统 | `.claude/skills/frontend-styling/SKILL.md` |
 | 改前端状态 / 数据流 | `.claude/skills/frontend-state-data/SKILL.md` |
 | 加贯穿前后端的字段 | `.claude/skills/add-persisted-field/SKILL.md` |
+| 改播客观点、关系搜索或内容项目 | `.claude/skills/backend-service/SKILL.md` + `.claude/skills/backend-database/SKILL.md` + `.claude/skills/frontend-state-data/SKILL.md` |
 | 新建/改/审查上述 skill | `.claude/skills/convention-skills/SKILL.md` |
 
 ## Hard Rules
@@ -41,6 +42,7 @@
 - 文件转录的中间文字只按已完成 chunk 推送：WSL job 的 `progress.text` 是累计临时文本，`progress.chunk_text` 是最新稳定 chunk，`progress.chunks` 是可恢复的有序已完成列表；前端遇到不带文字的阶段事件必须保留已有内容，并按 chunk index 去重。native long-form 单次推理不得伪造中间文字。
 - 播客结构化转录中，`transcription_segments` 是不可变 ASR 事实；去重、合并和用户校对只发生在派生 `transcription_turns`，不得反写 Segment。Summary 必须引用已验证的 Segment index，时间范围由后端事实派生；逐字稿校对后旧摘要标记 `stale`。当前不持久化上传源音频，也不实现点击时间码、seek 或“回到现场”。
 - 播客一键总结通过 `mimo.createLlmMessage()` 进入 `llmQueue`，长稿分批串行处理，并用 `transcription_summary_jobs` lease 防止刷新、多标签页或重试造成重复执行。
+- 播客观点是可重建派生物：`transcription_claims` 必须绑定当前 Transcript 的合法 Speaker 与连续同 Speaker Segment，摘录和时间由后端事实派生；Turn 校对后观点标记 `stale`。重新分析原子替换当前观点，但内容项目已引用的旧观点保留为 stale 快照，禁止级联丢失用户研究成果。Embedding 失败必须降级关键词搜索；关系分析只处理用户选中的 Top N 候选并复用缓存。
 - 开发引入新约定、新路由族、新组件类型或新持久化套路时，必须同步更新对应 skill 与本文件。
 
 ## Commands

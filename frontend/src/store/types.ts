@@ -94,6 +94,10 @@ export interface Settings {
   llm_split_system_prompt: string;
   llm_rewrite_thinking_enabled: boolean;
   llm_split_thinking_enabled: boolean;
+  embedding_enabled: boolean;
+  embedding_base_url: string;
+  embedding_api_key: string;
+  embedding_model: string;
   asr_provider: AsrProvider;
   qwen_asr_base_url: string;
   qwen_asr_model: string;
@@ -192,6 +196,16 @@ export interface TranscriptionRecord {
   asr_warnings: string[];
   summary_model: string;
   summary_updated_at: string | null;
+  claims_status: 'not_started' | 'queued' | 'running' | 'completed' | 'failed' | 'stale';
+  claims_error: string;
+  claims_model: string;
+  claims_updated_at: string | null;
+  podcast_name: string;
+  episode_title: string;
+  guest_names: string[];
+  source_url: string;
+  published_at: string;
+  topic_tags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -271,6 +285,67 @@ export interface TranscriptDetail {
   turns: TranscriptTurn[];
   summary: TranscriptSummary | null;
   summaryItems: TranscriptSummaryItem[];
+  claims: TranscriptClaim[];
+}
+
+export interface TranscriptClaim {
+  id: number;
+  transcription_id: number;
+  speaker_key: string;
+  speaker_name: string | null;
+  question: string;
+  claim: string;
+  reasoning: string;
+  evidence_excerpt: string;
+  evidence_start_index: number;
+  evidence_end_index: number;
+  start_seconds: number;
+  end_seconds: number;
+  topic_tags: string[];
+  content_value: number;
+  confidence: number;
+  user_note: string;
+  is_starred: boolean;
+  status: 'active' | 'stale';
+  analysis_model: string;
+  embedding: number[] | null;
+  podcast_name: string;
+  episode_title: string;
+  source_url: string;
+  published_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClaimSearchResult {
+  claim: TranscriptClaim;
+  similarity: number;
+  search_mode: 'embedding' | 'keyword';
+}
+
+export type ClaimRelationType = 'support' | 'oppose' | 'complement' | 'different_scope' | 'similar_example' | 'unrelated';
+
+export interface ClaimRelationAnalysis {
+  relations: Array<{ id: number; claim_a_id: number; claim_b_id: number; relation_type: ClaimRelationType; explanation: string; confidence: number; analysis_model: string; created_at: string; updated_at: string }>;
+  synthesis: { consensus: string[]; disagreements: string[]; different_conditions: string[]; practical_suggestions: string[]; open_questions: string[] };
+}
+
+export type ContentTargetPlatform = 'xiaohongshu' | 'wechat' | 'twitter' | 'general';
+
+export interface ContentProject {
+  id: number;
+  title: string;
+  topic: string;
+  target_platform: ContentTargetPlatform;
+  thesis: string;
+  personal_practice: string;
+  personal_judgment: string;
+  discussion_question: string;
+  status: string;
+  claim_count?: number;
+  claims: Array<{ id: number; project_id: number; claim_id: number; sort_order: number; usage_note: string; claim: TranscriptClaim }>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TranscriptSummaryProgress {
@@ -384,6 +459,8 @@ export interface AppState {
   isLoadingTranscriptDetail: boolean;
   isSummarizingTranscript: boolean;
   transcriptSummaryProgress: TranscriptSummaryProgress;
+  isAnalyzingClaims: boolean;
+  transcriptClaimProgress: TranscriptSummaryProgress;
 
   batchTranscriptionItems: BatchTranscriptionItem[];
   isBatchTranscribing: boolean;
@@ -455,6 +532,10 @@ export interface AppState {
   renameTranscriptSpeaker: (transcriptionId: number, speakerId: number, displayName: string) => Promise<TranscriptSpeaker>;
   correctTranscriptTurn: (transcriptionId: number, turnId: number, correctedText: string) => Promise<TranscriptTurn>;
   summarizeTranscript: (transcriptionId: number) => Promise<void>;
+  updateTranscriptMetadata: (transcriptionId: number, metadata: { podcastName: string; episodeTitle: string; guestNames: string[]; sourceUrl: string; publishedAt: string; topicTags: string[] }) => Promise<TranscriptionRecord>;
+  analyzeTranscriptClaims: (transcriptionId: number) => Promise<void>;
+  updateTranscriptClaim: (claimId: number, update: { userNote?: string; isStarred?: boolean }) => Promise<TranscriptClaim>;
+  deleteTranscriptClaim: (claimId: number) => Promise<void>;
   batchTranscribeMedia: (
     files: File[],
     language: AsrLanguage,
@@ -462,6 +543,32 @@ export interface AppState {
     options?: TranscribeOptions
   ) => Promise<BatchTranscriptionItem[]>;
   clearBatchTranscription: () => void;
+
+  claimSearchResults: ClaimSearchResult[];
+  isSearchingClaims: boolean;
+  claimDetail: TranscriptClaim | null;
+  isLoadingClaimDetail: boolean;
+  claimRelationAnalysis: ClaimRelationAnalysis | null;
+  isAnalyzingRelations: boolean;
+  contentProjects: ContentProject[];
+  currentContentProject: ContentProject | null;
+  isLoadingContentProjects: boolean;
+  searchClaims: (query: string) => Promise<ClaimSearchResult[]>;
+  clearResearchContext: () => void;
+  fetchClaimDetail: (claimId: number) => Promise<TranscriptClaim>;
+  clearClaimDetail: () => void;
+  updateClaimDetail: (claimId: number, update: { userNote?: string; isStarred?: boolean }) => Promise<TranscriptClaim>;
+  deleteClaimDetail: (claimId: number) => Promise<void>;
+  analyzeClaimRelations: (claimIds: number[]) => Promise<ClaimRelationAnalysis>;
+  fetchContentProjects: () => Promise<ContentProject[]>;
+  createContentProject: (data: { title: string; topic?: string; targetPlatform?: ContentTargetPlatform; thesis?: string }) => Promise<ContentProject>;
+  fetchContentProject: (id: number) => Promise<ContentProject>;
+  updateContentProject: (id: number, data: Partial<{ title: string; topic: string; targetPlatform: ContentTargetPlatform; thesis: string; personalPractice: string; personalJudgment: string; discussionQuestion: string; status: string }>) => Promise<ContentProject>;
+  deleteContentProject: (id: number) => Promise<void>;
+  addClaimToContentProject: (projectId: number, claimId: number, usageNote?: string) => Promise<ContentProject>;
+  reorderContentProjectClaims: (projectId: number, claimIds: number[]) => Promise<ContentProject>;
+  removeClaimFromContentProject: (projectId: number, claimId: number) => Promise<void>;
+  exportContentProject: (projectId: number, platform: 'xiaohongshu' | 'wechat') => Promise<string>;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;

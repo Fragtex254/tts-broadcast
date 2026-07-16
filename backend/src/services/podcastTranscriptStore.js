@@ -1,5 +1,6 @@
 const db = require('../db');
 const transcriptionResultStore = require('./transcriptionResultStore');
+const researchStore = require('./researchStore');
 
 function parseJson(raw, fallback) {
   if (!raw) return fallback;
@@ -111,7 +112,11 @@ function getDetail(transcriptionId) {
     SELECT * FROM transcription_summary_items
     WHERE transcription_id = ? ORDER BY item_type, sort_order, id
   `).all(transcriptionId);
-  return { record, speakers, segments, turns, summary, summaryItems };
+  const claims = researchStore.listClaims({
+    transcriptionId,
+    status: record.claims_status === 'stale' ? 'stale' : 'active'
+  });
+  return { record, speakers, segments, turns, summary, summaryItems, claims };
 }
 
 /**
@@ -219,6 +224,7 @@ function updateTurnCorrection(transcriptionId, turnId, correctedText) {
           summary_error = '', updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(transcriptionId);
+    researchStore.markClaimsStale(transcriptionId);
     const turn = db.prepare('SELECT * FROM transcription_turns WHERE id = ?').get(turnId);
     return {
       turn: { ...turn, evidence_segment_indexes: parseJson(turn.evidence_segment_indexes, []) },
@@ -228,11 +234,16 @@ function updateTurnCorrection(transcriptionId, turnId, correctedText) {
   return run();
 }
 
+function updateMetadata(transcriptionId, metadata) {
+  return transcriptionResultStore.updateMetadata(transcriptionId, metadata);
+}
+
 module.exports = {
   create,
   getDetail,
   renameSpeaker,
   replaceSummary,
   updateSummaryStatus,
+  updateMetadata,
   updateTurnCorrection
 };

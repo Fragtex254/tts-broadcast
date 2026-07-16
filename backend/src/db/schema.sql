@@ -95,6 +95,16 @@ CREATE TABLE IF NOT EXISTS transcription_results (
   asr_warnings TEXT DEFAULT '[]',
   summary_model TEXT DEFAULT '',
   summary_updated_at DATETIME DEFAULT NULL,
+  claims_status TEXT NOT NULL DEFAULT 'not_started',
+  claims_error TEXT NOT NULL DEFAULT '',
+  claims_model TEXT NOT NULL DEFAULT '',
+  claims_updated_at DATETIME DEFAULT NULL,
+  podcast_name TEXT NOT NULL DEFAULT '',
+  episode_title TEXT NOT NULL DEFAULT '',
+  guest_names TEXT NOT NULL DEFAULT '[]',
+  source_url TEXT NOT NULL DEFAULT '',
+  published_at TEXT NOT NULL DEFAULT '',
+  topic_tags TEXT NOT NULL DEFAULT '[]',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -201,6 +211,92 @@ CREATE TABLE IF NOT EXISTS transcription_summary_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_transcription_summary_jobs_active
   ON transcription_summary_jobs(transcription_id, status, lease_expires_at_ms);
+
+CREATE TABLE IF NOT EXISTS transcription_claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcription_id INTEGER NOT NULL,
+  speaker_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  claim TEXT NOT NULL,
+  reasoning TEXT NOT NULL DEFAULT '',
+  evidence_excerpt TEXT NOT NULL,
+  evidence_start_index INTEGER NOT NULL,
+  evidence_end_index INTEGER NOT NULL,
+  start_seconds REAL NOT NULL,
+  end_seconds REAL NOT NULL,
+  topic_tags TEXT NOT NULL DEFAULT '[]',
+  content_value INTEGER NOT NULL DEFAULT 0,
+  confidence REAL NOT NULL DEFAULT 0,
+  user_note TEXT NOT NULL DEFAULT '',
+  is_starred INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',
+  analysis_model TEXT NOT NULL DEFAULT '',
+  embedding TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_claims_transcription
+  ON transcription_claims(transcription_id, status, content_value DESC);
+
+CREATE TABLE IF NOT EXISTS transcription_claim_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transcription_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running',
+  lease_expires_at_ms INTEGER NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_claim_jobs_active
+  ON transcription_claim_jobs(transcription_id, status, lease_expires_at_ms);
+
+CREATE TABLE IF NOT EXISTS claim_relations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  claim_a_id INTEGER NOT NULL,
+  claim_b_id INTEGER NOT NULL,
+  relation_type TEXT NOT NULL,
+  explanation TEXT NOT NULL,
+  confidence REAL NOT NULL DEFAULT 0,
+  analysis_model TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (claim_a_id) REFERENCES transcription_claims(id) ON DELETE CASCADE,
+  FOREIGN KEY (claim_b_id) REFERENCES transcription_claims(id) ON DELETE CASCADE,
+  UNIQUE (claim_a_id, claim_b_id)
+);
+
+CREATE TABLE IF NOT EXISTS content_projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  target_platform TEXT NOT NULL DEFAULT 'general',
+  thesis TEXT NOT NULL DEFAULT '',
+  personal_practice TEXT NOT NULL DEFAULT '',
+  personal_judgment TEXT NOT NULL DEFAULT '',
+  discussion_question TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS content_project_claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  claim_id INTEGER NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  usage_note TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+  FOREIGN KEY (claim_id) REFERENCES transcription_claims(id) ON DELETE CASCADE,
+  UNIQUE (project_id, claim_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_project_claims_order
+  ON content_project_claims(project_id, sort_order, id);
 
 CREATE TABLE IF NOT EXISTS api_rate_limit_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
