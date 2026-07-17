@@ -409,6 +409,56 @@ describe('MiMo 服务', () => {
       .rejects.toThrow('LLM API Key 无效或已过期，请在设置中重新配置');
   });
 
+  test('OpenAI 422 输出涉敏错误映射为可恢复错误', async () => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
+    axios.post.mockRejectedValue({
+      message: 'Request failed with status code 422',
+      response: {
+        status: 422,
+        data: {
+          base_resp: {
+            status_code: 1027,
+            status_msg: 'output new_sensitive (1027)',
+          },
+        },
+      },
+    });
+
+    const error = await mimo.rewriteToScript({
+      items: [{ title: '标题', summary: '摘要', source: '来源' }],
+      opening: '开场白',
+      closing: '结束语',
+    }).catch((caught) => caught);
+
+    expect(error).toMatchObject({
+      message: 'LLM 输出触发内容安全过滤，正在尝试用中性表述重新生成',
+      code: 'LLM_OUTPUT_SENSITIVE',
+      providerStatusCode: 1027,
+    });
+  });
+
+  test('OpenAI 422 从服务商消息识别输入涉敏错误码', async () => {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
+    axios.post.mockRejectedValue({
+      message: 'Request failed with status code 422',
+      response: {
+        status: 422,
+        data: { base_resp: { status_msg: 'input new_sensitive (1026)' } },
+      },
+    });
+
+    const error = await mimo.rewriteToScript({
+      items: [{ title: '标题', summary: '摘要', source: '来源' }],
+      opening: '开场白',
+      closing: '结束语',
+    }).catch((caught) => caught);
+
+    expect(error).toMatchObject({
+      code: 'LLM_INPUT_SENSITIVE',
+      providerStatusCode: 1026,
+    });
+  });
+
   test('generateSpeech 函数存在', () => {
     expect(typeof mimo.generateSpeech).toBe('function');
   });
