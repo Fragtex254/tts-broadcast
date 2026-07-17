@@ -4,9 +4,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import useStore from '../../store';
 import type { TranscriptClaim } from '../../store';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { ModalShell } from '../ModalShell';
 import { TranscriptConversationModal } from '../Transcribe/TranscriptConversationModal';
 import { ClaimDetailModal } from './ClaimDetailModal';
-import { ContentProjectWorkspace } from './ContentProjectWorkspace';
+import { ContentProjectWorkspace, type RelationAppendRequest } from './ContentProjectWorkspace';
+import { buildRelationDraftAppend } from './contentProjectDraft';
 import { ResearchCandidateShelf } from './ResearchCandidateShelf';
 import { ResearchClaimPreview } from './ResearchClaimPreview';
 import { ResearchProjectBar } from './ResearchProjectBar';
@@ -46,12 +48,15 @@ export const ClaimResearchWorkbench: React.FC = () => {
   const [projectError, setProjectError] = useState<string | null>(null);
   const [isProjectDraftDirty, setIsProjectDraftDirty] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<number | null>(null);
+  const [isRelationImportOpen, setIsRelationImportOpen] = useState(false);
+  const [relationAppendRequest, setRelationAppendRequest] = useState<RelationAppendRequest | null>(null);
   const [detailError, setDetailError] = useState<{ claimId: number; message: string } | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const claimOpenedFromListRef = useRef(false);
   const evidenceOpenedFromDetailRef = useRef(false);
   const previousProjectIdRef = useRef<number | null>(null);
   const projectSelectionSequenceRef = useRef(0);
+  const relationAppendSequenceRef = useRef(0);
   const hasClaimParam = searchParams.has('claim');
   const isEvidenceMode = searchParams.get('evidence') === '1';
   const requestedClaimId = Number(searchParams.get('claim'));
@@ -64,6 +69,8 @@ export const ClaimResearchWorkbench: React.FC = () => {
   const evidenceTranscript = selectedClaim && transcriptDetail?.record.id === selectedClaim.transcription_id ? transcriptDetail : null;
   const previewClaim = useMemo(() => results.find((item) => item.claim.id === previewClaimId)?.claim || results[0]?.claim || null, [previewClaimId, results]);
   const projectClaimIds = useMemo(() => new Set(currentProject?.claims.map((item) => item.claim_id) || []), [currentProject]);
+  const relationDraftAppend = useMemo(() => analysis ? buildRelationDraftAppend(analysis) : null, [analysis]);
+  const hasRelationDraftContent = Boolean(relationDraftAppend && (relationDraftAppend.thesis || relationDraftAppend.personalJudgment || relationDraftAppend.discussionQuestion));
 
   useEffect(() => {
     let isCurrent = true;
@@ -301,6 +308,7 @@ export const ClaimResearchWorkbench: React.FC = () => {
           {analysis && <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {analysis.relations.map((relation) => <article key={relation.id} className="rounded-xl bg-white/65 p-3"><span className="rounded-full bg-pink/15 px-2.5 py-1 font-body text-[9px] text-ink">{RELATION_LABELS[relation.relation_type]}</span><p className="mt-2 font-body text-[11px] leading-relaxed text-ink-soft">{relation.explanation}</p></article>)}
           </div>}
+          {analysis && <div className="mt-3 flex justify-end"><button type="button" disabled={!currentProject || !hasRelationDraftContent} onClick={() => setIsRelationImportOpen(true)} className="rounded-xl bg-sage px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn disabled:opacity-40">写入当前项目</button></div>}
           {analysis && <details className="mt-3 rounded-xl border border-card-border bg-white/55 p-3">
             <summary className="cursor-pointer font-body text-[11px] font-medium text-ink-soft">查看综合判断</summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -310,8 +318,33 @@ export const ClaimResearchWorkbench: React.FC = () => {
         </section>}
       </section>
 
-      <ContentProjectWorkspace key={currentProject?.id || 0} project={currentProject} onOpenClaim={openClaim} onDirtyChange={setIsProjectDraftDirty} />
+      <ContentProjectWorkspace
+        key={currentProject?.id || 0}
+        project={currentProject}
+        relationAppendRequest={relationAppendRequest}
+        onRelationAppendApplied={(requestId) => setRelationAppendRequest((current) => current?.requestId === requestId ? null : current)}
+        onOpenClaim={openClaim}
+        onDirtyChange={setIsProjectDraftDirty}
+      />
     </div>
+
+    <ModalShell
+      isOpen={isRelationImportOpen}
+      title="预览写入内容"
+      subtitle="以下内容只会追加到现有草稿，不会覆盖你的原文"
+      onClose={() => setIsRelationImportOpen(false)}
+      accent="sage"
+      size="md"
+      footer={<><button type="button" onClick={() => setIsRelationImportOpen(false)} className="text-ink-soft hover:text-ink font-body text-[12px]">取消</button><button type="button" disabled={!currentProject || !relationDraftAppend || !hasRelationDraftContent} onClick={() => {
+        if (!currentProject || !relationDraftAppend) return;
+        setRelationAppendRequest({ requestId: ++relationAppendSequenceRef.current, projectId: currentProject.id, addition: relationDraftAppend });
+        setIsRelationImportOpen(false);
+      }} className="rounded-full bg-sage px-5 py-2 font-body text-[11px] font-medium text-ink shadow-btn disabled:opacity-40">确认追加</button></>}
+    >
+      <div className="space-y-3">
+        {relationDraftAppend && Object.entries({ '核心主张 / 共识': relationDraftAppend.thesis, '个人判断 / 分歧与条件': relationDraftAppend.personalJudgment, '讨论问题': relationDraftAppend.discussionQuestion }).map(([label, content]) => content && <section key={label} className="rounded-xl border border-card-border bg-paper/45 p-3"><h4 className="font-display text-[12px] font-medium text-ink">{label}</h4><p className="mt-2 whitespace-pre-wrap font-body text-[11px] leading-relaxed text-ink-soft">{content}</p></section>)}
+      </div>
+    </ModalShell>
 
     <ConfirmDialog
       isOpen={pendingProjectId !== null}
