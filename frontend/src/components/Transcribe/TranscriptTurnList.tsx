@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { TranscriptSpeaker, TranscriptTurn } from '../../store';
 import { formatTranscriptTime } from '../../pages/transcriptWorkspaceModel';
+import { ActionButton } from '../UI';
 
 const TURN_PAGE_SIZE = 60;
 
@@ -46,9 +47,9 @@ export const TranscriptTurnList: React.FC<TranscriptTurnListProps> = ({ turns, s
         <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-pink" /><h2 className="font-display italic text-[14px] font-medium text-ink-soft">逐字稿</h2></div>
         <div className="flex items-center gap-2">
           <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/55">{turns.length} 个发言轮次</span>
-          <button type="button" onClick={onOpenConversation} className="rounded-xl bg-lilac px-3.5 py-2 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0">
+          <ActionButton variant="edit" size="sm" onClick={onOpenConversation}>
             打开对话视图
-          </button>
+          </ActionButton>
         </div>
       </div>
       <div className="space-y-2">

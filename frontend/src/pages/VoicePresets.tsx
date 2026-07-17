@@ -46,7 +46,7 @@ const RecentPresetPanel: React.FC<RecentPresetPanelProps> = ({ onOpenSaved }) =>
             <button
               key={preset.id}
               onClick={onOpenSaved}
-              className="w-full text-left bg-white/60 hover:bg-white/85 border border-card-border hover:border-ink/15 rounded-card p-4 transition-all duration-150"
+              className="w-full text-left bg-white/60 hover:bg-white/85 border border-card-border hover:border-ink/15 rounded-card p-4 transition-ui duration-150"
             >
               <div className="flex items-center gap-2 mb-2">
                 <span className={`px-2.5 py-1 rounded-full font-body text-[12px] text-ink ${preset.type === 'design' ? 'bg-lilac/45' : 'bg-blush/55'}`}>
@@ -99,7 +99,6 @@ export const VoicePresets: React.FC = () => {
         <div className="max-w-7xl mx-auto space-y-5">
           <div
             className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-            style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both' }}
           >
             <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
               <div className="flex items-center gap-2">
@@ -111,7 +110,7 @@ export const VoicePresets: React.FC = () => {
                   <button
                     key={tab.value}
                     onClick={() => setActiveTab(tab.value)}
-                    className={`min-w-24 px-4 py-2.5 rounded-xl font-body text-[14px] font-medium transition-all duration-150 ${
+                    className={`min-w-24 px-4 py-2.5 rounded-xl font-body text-[14px] font-medium transition-ui duration-150 ${
                       activeTab === tab.value
                         ? 'bg-white text-ink shadow-card border border-card-border'
                         : 'text-ink-soft hover:text-ink hover:bg-white/50'

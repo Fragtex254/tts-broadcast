@@ -35,7 +35,7 @@ export const ContentLibrary: React.FC = () => {
                 type="button"
                 onClick={() => handleTabChange(tab.value)}
                 aria-current={activeTab === tab.value ? 'page' : undefined}
-                className={`rounded-2xl border px-4 py-3 text-left transition-all duration-150 ${
+                className={`rounded-2xl border px-4 py-3 text-left transition-ui duration-150 ${
                   activeTab === tab.value
                     ? 'border-ink/15 bg-white/90 shadow-card'
                     : 'border-transparent bg-transparent hover:border-card-border hover:bg-white/45'

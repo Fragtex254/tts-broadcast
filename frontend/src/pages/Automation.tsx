@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Header } from '../components/Layout/Header';
+import { ActionButton, WorkbenchCard } from '../components/UI';
 import { createScopedLogger, toLogError } from '../services/logger';
 import useStore from '../store';
 
@@ -85,11 +86,7 @@ export const Automation: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-5xl space-y-4">
-          <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-2 h-2 rounded-full bg-lemon" />
-              <h3 className="font-display italic text-[14px] font-medium text-ink-soft">新建自动任务</h3>
-            </div>
+          <WorkbenchCard heading="新建自动任务" accent="lemon">
             <p className="mb-4 max-w-2xl font-body text-[12px] leading-relaxed text-ink-soft/70">
               自动化是独立的生产任务，不再藏在系统设置里。创建后可随时暂停，不会影响手动工作流。
             </p>
@@ -130,28 +127,25 @@ export const Automation: React.FC = () => {
               <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">{error}</div>
             )}
             <div className="mt-4 flex justify-end">
-              <button
-                type="button"
+              <ActionButton
                 onClick={handleCreate}
-                disabled={isCreating}
-                className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none"
+                variant="primary"
+                shape="pill"
+                size="lg"
+                isUppercase
+                isLoading={isCreating}
+                loadingLabel="创建中..."
               >
-                {isCreating ? '创建中...' : '添加任务'}
-              </button>
+                添加任务
+              </ActionButton>
             </div>
-          </section>
+          </WorkbenchCard>
 
-          <section
-            className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-            style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both' }}
+          <WorkbenchCard
+            heading="任务列表"
+            accent="sage"
+            headerActions={<span className="rounded-full bg-white/60 px-3 py-1 font-body text-[10px] uppercase tracking-wider text-ink-soft">{schedules.length} 个任务</span>}
           >
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-sage" />
-                <h3 className="font-display italic text-[14px] font-medium text-ink-soft">任务列表</h3>
-              </div>
-              <span className="rounded-full bg-white/60 px-3 py-1 font-body text-[10px] uppercase tracking-wider text-ink-soft">{schedules.length} 个任务</span>
-            </div>
             {schedules.length === 0 ? (
               <div className="p-10 text-center animate-fade-in">
                 <p className="font-display italic text-[16px] text-ink-soft/70">暂无自动任务</p>
@@ -159,11 +153,10 @@ export const Automation: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {schedules.map((schedule, index) => (
+                {schedules.map((schedule) => (
                   <article
                     key={schedule.id}
-                    className={`flex flex-col gap-3 rounded-2xl border p-4 transition-all sm:flex-row sm:items-center sm:justify-between ${schedule.is_active ? 'border-card-border bg-white/55' : 'border-card-border bg-white/25 opacity-60'}`}
-                    style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.04}s both` }}
+                    className={`flex flex-col gap-3 rounded-2xl border p-4 transition-ui sm:flex-row sm:items-center sm:justify-between ${schedule.is_active ? 'border-card-border bg-white/55' : 'border-card-border bg-white/25 opacity-60'}`}
                   >
                     <div className="flex items-center gap-3">
                       <button
@@ -195,7 +188,7 @@ export const Automation: React.FC = () => {
                 ))}
               </div>
             )}
-          </section>
+          </WorkbenchCard>
         </div>
       </main>
 

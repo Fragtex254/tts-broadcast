@@ -291,7 +291,7 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
                   disabled={isBlockedByEditing}
                   title={isBlockedByEditing ? '请先保存或取消当前校对' : undefined}
                   onClick={() => toggleSpeakerFilter(speaker.speaker_key)}
-                  className={`min-w-[178px] rounded-2xl border p-3 text-left transition-all duration-200 disabled:opacity-40 lg:min-w-0 ${
+                  className={`min-w-[178px] rounded-2xl border p-3 text-left transition-ui duration-200 disabled:opacity-40 lg:min-w-0 ${
                     isCurrentSpeaker || isFiltered
                       ? `${tone.strongSurface} ${tone.mutedBorder} shadow-card`
                       : 'border-card-border bg-white/50 hover:bg-white/75'
@@ -345,7 +345,7 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
             <div className="mb-3 flex items-center gap-3 px-1 font-body text-[9px] text-ink-soft/55">
               <span className="shrink-0 tabular-nums">当前位置 {Math.min(visibleEndIndex + 1, displayedTurns.length)} / {displayedTurns.length}</span>
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-ink/5" role="progressbar" aria-label="逐字稿阅读进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} aria-valuetext={`当前位置 ${Math.min(visibleEndIndex + 1, displayedTurns.length)} / ${displayedTurns.length}`}>
-                <div className="h-full rounded-full bg-lilac transition-[width] duration-150" style={{ width: `${progressPercent}%` }} />
+                <div className="h-full w-full origin-left rounded-full bg-lilac transition-transform duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ transform: `scaleX(${progressPercent / 100})` }} />
               </div>
               <span className="w-8 text-right tabular-nums">{progressPercent}%</span>
             </div>

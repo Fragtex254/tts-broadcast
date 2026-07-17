@@ -265,7 +265,7 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
               <div
                 key={index}
                 data-waveform-bar="true"
-                className={`${styles.waveformBarWidth} rounded-full transition-all duration-100 ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
+                className={`${styles.waveformBarWidth} rounded-full transition-colors duration-100 ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
                 style={{
                   height: `${variant === 'regular' ? height : height * 0.7}px`,
                   ...(isPlaying && isPlayed ? { animation: `waveform-pulse 1.5s ease-in-out ${index * 0.05}s infinite` } : {}),
@@ -298,8 +298,8 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
       <div className="relative flex h-5 items-center">
         <div className="absolute left-0 right-0 h-1.5 overflow-hidden rounded-full bg-ink/10">
           <div
-            className="h-full rounded-full bg-pink transition-[width] duration-100"
-            style={{ width: `${progress * 100}%` }}
+            className="h-full w-full origin-left rounded-full bg-pink transition-transform duration-100 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{ transform: `scaleX(${progress})` }}
           />
         </div>
         <input

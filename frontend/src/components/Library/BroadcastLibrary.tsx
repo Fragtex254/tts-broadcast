@@ -208,7 +208,7 @@ export const BroadcastLibrary: React.FC = () => {
               <button
                 onClick={handleDeleteClick}
                 disabled={selectedIds.size === 0 || isBatchDeleting}
-                className="px-3 py-1.5 bg-pink text-ink font-body text-[11px] font-medium rounded-lg shadow-btn hover:brightness-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-pink text-ink font-body text-[11px] font-medium rounded-lg shadow-btn hover:brightness-105 transition-ui disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 🗑️ 删除
               </button>
@@ -222,7 +222,7 @@ export const BroadcastLibrary: React.FC = () => {
           ) : (
             <button
               onClick={handleEnterMultiSelect}
-              className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none"
+              className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-ui duration-150 hover:-translate-y-px active:scale-[0.97] active:shadow-none"
             >
               ✓ 多选
             </button>
@@ -259,20 +259,19 @@ export const BroadcastLibrary: React.FC = () => {
               </div>
             )}
 
-            {!isLoading && !error && broadcasts.map((broadcast, index) => {
+            {!isLoading && !error && broadcasts.map((broadcast) => {
               const isSelected = selectedBroadcast?.id === broadcast.id;
               const isChecked = selectedIds.has(broadcast.id);
               return (
                 <div
                   key={broadcast.id}
-                  className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border transition-all duration-200 ${
+                  className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border transition-ui duration-200 ${
                     isMultiSelectMode && isChecked
                       ? 'bg-sage/10'
                       : isSelected
                       ? 'bg-sage/10'
                       : 'hover:bg-white/30'
                   }`}
-                  style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.03}s both` }}
                 >
                   {isMultiSelectMode && (
                     <input
@@ -301,7 +300,7 @@ export const BroadcastLibrary: React.FC = () => {
                   {!isMultiSelectMode && (
                     <button
                       onClick={(e) => handleReEdit(broadcast, e)}
-                      className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none whitespace-nowrap"
+                      className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-ui duration-150 hover:-translate-y-px active:scale-[0.97] active:shadow-none whitespace-nowrap"
                     >
                       ✏️ 重新编辑
                     </button>

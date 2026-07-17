@@ -10,6 +10,7 @@ import { ContentProjectWorkspace } from './ContentProjectWorkspace';
 import { ResearchCandidateShelf } from './ResearchCandidateShelf';
 import { ResearchClaimPreview } from './ResearchClaimPreview';
 import { ResearchProjectBar } from './ResearchProjectBar';
+import { ActionButton } from '../UI';
 
 const RELATION_LABELS = { support: '相互支持', oppose: '相互反对', complement: '相互补充', different_scope: '条件不同', similar_example: '相似案例', unrelated: '实际无关' } as const;
 
@@ -247,7 +248,7 @@ export const ClaimResearchWorkbench: React.FC = () => {
     />
 
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(340px,0.9fr)]">
-      <section className="min-w-0 max-w-full overflow-hidden rounded-card border border-card-border bg-white/80 p-5 shadow-card" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22,1,0.36,1) both' }}>
+      <section className="min-w-0 max-w-full overflow-hidden rounded-card border border-card-border bg-white/80 p-5 shadow-card">
         <div className="flex items-center gap-2">
           <MagnifyingGlass aria-hidden="true" size={19} className="text-ink-soft" />
           <h2 className="font-display text-[16px] font-medium text-ink">研究候选</h2>
@@ -265,7 +266,7 @@ export const ClaimResearchWorkbench: React.FC = () => {
               className="w-full rounded-full border border-card-border bg-white/70 py-3 pl-11 pr-4 font-body text-[12px] text-ink outline-none focus:border-ink/20 disabled:opacity-45"
             />
           </label>
-          <button type="submit" disabled={!currentProject || isSearching || !query.trim()} className="rounded-full bg-lemon px-6 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 disabled:opacity-40">{isSearching ? '搜索中…' : '搜索观点'}</button>
+          <ActionButton type="submit" variant="primary" shape="pill" isLoading={isSearching} loadingLabel="搜索中…" disabled={!currentProject || !query.trim()}>搜索观点</ActionButton>
         </form>
 
         {error && <p role="alert" className="mt-3 animate-shake rounded-xl bg-pink/10 p-3 font-body text-[11px] text-ink">{error}</p>}
@@ -296,7 +297,7 @@ export const ClaimResearchWorkbench: React.FC = () => {
         {results.length > 0 && <section className="mt-4 rounded-2xl border border-card-border bg-paper/35 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h3 className="font-display text-[13px] font-medium text-ink">比较候选观点</h3><p className="mt-1 font-body text-[10px] text-ink-soft/50">勾选 2–10 条观点，判断共识、分歧和补充关系</p></div>
-            <button type="button" disabled={selectedIds.size < 2 || isAnalyzing} onClick={() => void run(() => analyzeRelations([...selectedIds]))} className="rounded-xl bg-lilac px-4 py-2.5 font-body text-[11px] text-ink shadow-btn disabled:opacity-40">{isAnalyzing ? '分析中…' : `分析关系（${selectedIds.size}）`}</button>
+            <ActionButton variant="edit" size="sm" isLoading={isAnalyzing} loadingLabel="分析中…" disabled={selectedIds.size < 2} onClick={() => void run(() => analyzeRelations([...selectedIds]))}>分析关系（{selectedIds.size}）</ActionButton>
           </div>
           {analysis && <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {analysis.relations.map((relation) => <article key={relation.id} className="rounded-xl bg-white/65 p-3"><span className="rounded-full bg-pink/15 px-2.5 py-1 font-body text-[9px] text-ink">{RELATION_LABELS[relation.relation_type]}</span><p className="mt-2 font-body text-[11px] leading-relaxed text-ink-soft">{relation.explanation}</p></article>)}

@@ -8,6 +8,7 @@ import { TagPicker } from './TagPicker';
 import { SegmentRefineModal } from './SegmentRefineModal';
 import { AudioPlaybackBar } from './AudioPlaybackBar';
 import { AudioTagTextEditor } from './AudioTagTextEditor';
+import { ActionButton } from '../UI';
 
 const PLAYBACK_RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -213,7 +214,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   }
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both' }}>
+    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-lilac" />
@@ -238,7 +239,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
             type="button"
             onClick={() => setIsRefineOpen(true)}
             disabled={hasLocalGenerating}
-            className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
+            className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn transition-ui duration-150 uppercase tracking-wider"
           >
             切分精修
           </button>
@@ -254,11 +255,18 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
               {segments.filter(s => s.status === 'generated').length} / {segments.length}
             </span>
           </div>
-          <div className="w-full h-1.5 bg-ink/10 rounded-full overflow-hidden">
+          <div
+            className="w-full h-1.5 bg-ink/10 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-label="语音生成进度"
+            aria-valuemin={0}
+            aria-valuemax={segments.length}
+            aria-valuenow={segments.filter(s => s.status === 'generated').length}
+          >
             <div
-              className="h-full bg-lilac rounded-full transition-all duration-300"
+              className="h-full w-full origin-left bg-lilac rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
               style={{
-                width: `${(segments.filter(s => s.status === 'generated').length / segments.length) * 100}%`
+                transform: `scaleX(${segments.filter(s => s.status === 'generated').length / Math.max(segments.length, 1)})`
               }}
             />
           </div>
@@ -266,14 +274,14 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
       )}
 
       <div className="space-y-2 mb-4">
-        {segments.map((seg, index) => (
+        {segments.map((seg) => (
           (() => {
             const segmentBusy = isSegmentBusy(seg);
             const displayStatus: Segment['status'] = seg.status === 'generating' && !segmentBusy ? 'pending' : seg.status;
             return (
           <div
             key={seg.id}
-            className={`bg-white/45 rounded-2xl p-3 border transition-all duration-300 ${
+            className={`bg-white/45 rounded-2xl p-3 border transition-ui duration-200 ${
               segmentBusy
                 ? 'border-lilac/40 bg-lilac/5 animate-pulse'
                 : seg.status === 'generated'
@@ -282,7 +290,6 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                 ? 'border-pink/30 bg-pink/5'
                 : 'border-card-border'
             }`}
-            style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both` }}
           >
             {/* 第一行：序号 + 文本 + 状态 + 音频 + 操作 */}
             <div className="flex items-start gap-3">
@@ -409,29 +416,32 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
         <button
           onClick={handleSuggestTags}
           disabled={isSuggestingTags || segments.length === 0}
-          className="flex-1 bg-lemon/30 hover:bg-lemon/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
+          className="flex-1 bg-lemon/30 hover:bg-lemon/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-ui duration-150 uppercase tracking-wider"
         >
           {isSuggestingTags ? '优化中...' : 'AI 标签优化'}
         </button>
-        <button
+        <ActionButton
           onClick={handleBatchGenerate}
-          disabled={!hasPendingOrFailed || isSuggestingTags || !canGenerateVoice || isBatchGenerating}
-          className="flex-1 bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
+          disabled={!hasPendingOrFailed || isSuggestingTags || !canGenerateVoice}
+          variant="confirm"
+          isUppercase
+          isLoading={isBatchGenerating}
+          loadingLabel="生成中..."
+          className="flex-1"
         >
-          {isBatchGenerating ? '生成中...' : canGenerateVoice ? '全部生成' : '先选音色'}
-        </button>
-        <button
+          {canGenerateVoice ? '全部生成' : '先选音色'}
+        </ActionButton>
+        <ActionButton
           onClick={handleMerge}
-          disabled={!allGenerated || isMerging}
-          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider flex items-center justify-center gap-2"
+          disabled={!allGenerated}
+          variant="edit"
+          isUppercase
+          isLoading={isMerging}
+          loadingLabel="合并中..."
+          className="flex-1"
         >
-          {isMerging ? (
-            <>
-              <div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>
-              合并中...
-            </>
-          ) : '合并音频'}
-        </button>
+          合并音频
+        </ActionButton>
       </div>
 
       {isRefineOpen && (

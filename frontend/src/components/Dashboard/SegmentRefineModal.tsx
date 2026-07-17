@@ -170,7 +170,7 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
               type="button"
               onClick={handleSave}
               disabled={isSaving || hasInvalidDraft}
-              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-ui duration-150"
             >
               {isSaving ? '保存中...' : '保存整理'}
             </button>

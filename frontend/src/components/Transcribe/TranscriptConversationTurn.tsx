@@ -97,7 +97,7 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
           onNavigate(event.key === 'ArrowUp' ? -1 : 1);
         }
       }}
-      className={`relative rounded-r-2xl border border-l-[3px] px-4 py-4 outline-none transition-all duration-200 sm:px-5 ${tone.border} ${
+      className={`relative rounded-r-2xl border border-l-[3px] px-4 py-4 outline-none transition-ui duration-200 sm:px-5 ${tone.border} ${
         isActive || isEditing
           ? `${tone.strongSurface} ${tone.mutedBorder} shadow-card`
           : isEvidence
@@ -130,7 +130,7 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
               className="w-full resize-y rounded-xl border border-lilac/55 bg-white/75 px-3.5 py-3 font-body text-[15px] leading-[1.8] text-ink outline-none transition-colors focus:border-ink/20"
             />
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" disabled={isSaving || !editingDraft.trim()} onClick={() => void handleSave()} className="rounded-xl bg-sage px-4 py-2 font-body text-[11px] font-medium text-ink shadow-btn transition-all hover:-translate-y-px hover:brightness-105 active:translate-y-0 disabled:opacity-40">
+              <button type="button" disabled={isSaving || !editingDraft.trim()} onClick={() => void handleSave()} className="rounded-xl bg-sage px-4 py-2 font-body text-[11px] font-medium text-ink shadow-btn transition-ui hover:-translate-y-px hover:brightness-105 active:scale-[0.97] disabled:opacity-40">
                 {isSaving ? '保存中…' : '保存校对'}
               </button>
               <button type="button" disabled={isSaving} onClick={onFinishEditing} className="font-body text-[11px] text-ink-soft transition-colors hover:text-ink">
@@ -144,7 +144,7 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
             <p className="whitespace-pre-wrap font-body text-[15px] leading-[1.85] text-ink">{displayText}</p>
             <div className="mt-3 flex min-h-7 flex-wrap items-center gap-2.5">
               <span className={`contents ${isActive ? '' : 'invisible pointer-events-none'}`} aria-hidden={!isActive}>
-                <button type="button" onClick={() => onFilterSpeaker(turn.speaker_key)} className="inline-flex items-center gap-1 rounded-full border border-card-border bg-white/70 px-3 py-1.5 font-body text-[10px] text-ink-soft transition-all hover:-translate-y-px hover:text-ink">
+                <button type="button" onClick={() => onFilterSpeaker(turn.speaker_key)} className="inline-flex items-center gap-1 rounded-full border border-card-border bg-white/70 px-3 py-1.5 font-body text-[10px] text-ink-soft transition-ui hover:-translate-y-px hover:text-ink">
                   <Eye aria-hidden="true" size={12} weight="regular" />只看 {speakerName} 的发言
                 </button>
                 <button type="button" onClick={startEditing} className="inline-flex items-center gap-1 font-body text-[10px] text-ink-soft underline decoration-card-border underline-offset-4 transition-colors hover:text-ink">

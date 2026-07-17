@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ConfirmDialogProps } from '../store';
 import { ModalShell } from './ModalShell';
+import { ActionButton } from './UI';
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
@@ -26,20 +27,22 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       contentClassName="p-5"
       footer={(
         <div className="flex items-center justify-end gap-3">
-          <button
+          <ActionButton
             onClick={onCancel}
             disabled={isLoading}
-            className="text-ink-soft hover:text-ink font-body text-[12px] transition-colors disabled:opacity-40"
+            variant="text"
           >
             {cancelText}
-          </button>
-          <button
+          </ActionButton>
+          <ActionButton
             onClick={onConfirm}
-            disabled={isLoading}
-            className="px-5 py-2 bg-pink text-ink font-body text-[12px] font-medium rounded-full shadow-btn hover:-translate-y-px active:translate-y-0 active:shadow-none hover:brightness-105 transition-all disabled:opacity-40"
+            variant="danger"
+            shape="pill"
+            isLoading={isLoading}
+            loadingLabel={`${confirmText.replace(/确认/, '正在')}...`}
           >
-            {isLoading ? `${confirmText.replace(/确认/, '正在')}...` : confirmText}
-          </button>
+            {confirmText}
+          </ActionButton>
         </div>
       )}
     >

@@ -85,7 +85,7 @@ export const ClaimDetailModal: React.FC<ClaimDetailModalProps> = ({
           <section className="rounded-2xl border border-lemon/40 bg-lemon/10 p-4">
             <div className="flex items-center gap-2"><Quotes aria-hidden="true" size={18} /><h3 className="font-display italic text-[14px] font-medium text-ink">证据摘录</h3></div>
             <blockquote className="mt-3 whitespace-pre-wrap font-body text-[13px] leading-[1.85] text-ink-soft">“{claim.evidence_excerpt}”</blockquote>
-            <button type="button" disabled={isWorking} onClick={() => void run(() => onOpenEvidence(claim))} className="mt-4 inline-flex items-center gap-1 rounded-xl bg-lemon px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all hover:-translate-y-px hover:brightness-105 disabled:opacity-40">
+            <button type="button" disabled={isWorking} onClick={() => void run(() => onOpenEvidence(claim))} className="mt-4 inline-flex items-center gap-1 rounded-xl bg-lemon px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-ui hover:-translate-y-px hover:brightness-105 disabled:opacity-40">
               打开对应逐字稿片段 <ArrowSquareOut aria-hidden="true" size={14} />
             </button>
           </section>

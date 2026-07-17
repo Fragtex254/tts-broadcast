@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { FolderOpen, Plus } from '@phosphor-icons/react';
 import type { ContentProject, ContentTargetPlatform } from '../../store';
 import { ModalShell } from '../ModalShell';
+import { ActionButton } from '../UI';
 
 interface ResearchProjectBarProps {
   projects: ContentProject[];
@@ -91,18 +92,18 @@ export const ResearchProjectBar: React.FC<ResearchProjectBarProps> = ({
         <span className="rounded-full bg-lilac/25 px-3 py-1.5 font-body text-[10px] text-ink">{currentProject.status === 'draft' ? '研究中' : currentProject.status}</span>
       </div>}
 
-      <button
-        type="button"
+      <ActionButton
+        variant="confirm"
+        shape="pill"
         onClick={() => { setError(null); setIsCreateOpen(true); }}
-        className="inline-flex items-center justify-center gap-2 rounded-full bg-sage px-5 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0"
       >
         <Plus aria-hidden="true" size={16} />
         新建项目
-      </button>
+      </ActionButton>
       </div>
       {(loadError || selectionError) && <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-pink/10 p-3">
         <p className="font-body text-[11px] text-ink">{selectionError || loadError}</p>
-        {loadError && onRetry && <button type="button" onClick={() => void onRetry()} className="font-body text-[11px] font-medium text-ink-soft hover:text-ink">重试加载</button>}
+        {loadError && onRetry && <ActionButton variant="text" size="sm" onClick={() => void onRetry()}>重试加载</ActionButton>}
       </div>}
     </section>
 
@@ -152,13 +153,18 @@ export const ResearchProjectBar: React.FC<ResearchProjectBarProps> = ({
             {Object.entries(PLATFORM_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <button
+        <ActionButton
           type="submit"
-          disabled={isCreating || !title.trim() || !topic.trim()}
-          className="w-full rounded-full bg-sage px-5 py-3 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40"
+          variant="confirm"
+          shape="pill"
+          size="lg"
+          isLoading={isCreating}
+          loadingLabel="创建中…"
+          disabled={!title.trim() || !topic.trim()}
+          className="w-full"
         >
-          {isCreating ? '创建中…' : '创建并开始研究'}
-        </button>
+          创建并开始研究
+        </ActionButton>
       </form>
     </ModalShell>
   </>;

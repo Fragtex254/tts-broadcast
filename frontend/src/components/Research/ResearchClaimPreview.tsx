@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowSquareOut, Quotes } from '@phosphor-icons/react';
 import type { TranscriptClaim } from '../../store';
 import { formatTranscriptTime } from '../../pages/transcriptWorkspaceModel';
+import { ActionButton } from '../UI';
 import { compactResearchText } from './researchViewModel';
 
 interface ResearchClaimPreviewProps {
@@ -23,10 +24,10 @@ export const ResearchClaimPreview: React.FC<ResearchClaimPreviewProps> = ({ clai
         <h3 className="mt-2 font-display text-[19px] font-medium leading-snug text-ink">{compactResearchText(claim.claim, 64)}</h3>
         <p className="mt-2 font-body text-[11px] text-ink-soft/55">{claim.speaker_name || claim.speaker_key} · {formatTranscriptTime(claim.start_seconds)}–{formatTranscriptTime(claim.end_seconds)}</p>
       </div>
-      <button type="button" onClick={() => onOpenDetail(claim)} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-lilac px-3.5 py-2.5 font-body text-[11px] text-ink shadow-btn">
+      <ActionButton variant="edit" size="sm" onClick={() => onOpenDetail(claim)} className="shrink-0">
         完整详情
         <ArrowSquareOut aria-hidden="true" size={14} />
-      </button>
+      </ActionButton>
     </div>
 
     <div className="mt-5 grid gap-3 xl:grid-cols-2">

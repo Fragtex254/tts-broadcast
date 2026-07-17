@@ -34,7 +34,7 @@ export const TranscriptionStatsCenter: React.FC<TranscriptionStatsCenterProps> =
           type="button"
           onClick={onRefresh}
           disabled={isLoading}
-          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
+          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-ui duration-150"
         >
           {isLoading ? '刷新中...' : '刷新'}
         </button>

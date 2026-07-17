@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActionButton } from './UI';
 
 type ModalVariant = 'dialog' | 'fullscreen';
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -42,6 +43,8 @@ const ACCENT_CLASS: Record<ModalAccent, string> = {
   lilac: 'bg-lilac',
 };
 
+const MODAL_EXIT_DURATION_MS = 140;
+
 export const ModalShell: React.FC<ModalShellProps> = ({
   isOpen = true,
   title,
@@ -68,6 +71,13 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const closeOnEscapeRef = useRef(closeOnEscape);
+  const [isRendered, setIsRendered] = useState(isOpen);
+  const [previousIsOpen, setPreviousIsOpen] = useState(isOpen);
+
+  if (isOpen !== previousIsOpen) {
+    setPreviousIsOpen(isOpen);
+    if (isOpen) setIsRendered(true);
+  }
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -76,6 +86,12 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   useEffect(() => {
     closeOnEscapeRef.current = closeOnEscape;
   }, [closeOnEscape]);
+
+  useEffect(() => {
+    if (isOpen) return undefined;
+    const timeout = window.setTimeout(() => setIsRendered(false), MODAL_EXIT_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -121,7 +137,9 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     };
   }, [initialFocusRef, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isRendered) return null;
+
+  const motionState = isOpen ? 'open' : 'closed';
 
   const header = (
     <div className="flex items-start justify-between gap-4 border-b border-card-border bg-white/35 p-5 backdrop-blur-sm">
@@ -141,13 +159,14 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       <div className="flex shrink-0 items-center gap-2">
         {headerActions}
         {showCloseButton && (
-          <button
-            type="button"
+          <ActionButton
             onClick={onClose}
-            className="rounded-xl border border-card-border bg-white/60 px-3 py-2 font-body text-[12px] text-ink-soft transition-colors hover:text-ink"
+            variant="neutral"
+            size="sm"
+            className="bg-white/60"
           >
             {closeLabel}
-          </button>
+          </ActionButton>
         )}
       </div>
     </div>
@@ -163,7 +182,8 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     return (
       <div
         ref={panelRef}
-        className={`fixed inset-0 z-50 flex flex-col bg-paper animate-fade-in ${panelClassName}`}
+        className={`modal-fullscreen fixed inset-0 z-50 flex flex-col bg-paper ${panelClassName}`}
+        data-state={motionState}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel || title}
@@ -181,12 +201,13 @@ export const ModalShell: React.FC<ModalShellProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 px-4 py-6 backdrop-blur-sm"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-ink/25 px-4 py-6 backdrop-blur-sm"
+      data-state={motionState}
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
         ref={panelRef}
-        className={`flex max-h-[calc(100vh-3rem)] w-full ${SIZE_CLASS[size]} flex-col overflow-hidden rounded-card border border-card-border bg-paper shadow-card animate-fade-in ${panelClassName}`}
+        className={`modal-panel flex max-h-[calc(100vh-3rem)] w-full ${SIZE_CLASS[size]} flex-col overflow-hidden rounded-card border border-card-border bg-paper shadow-card ${panelClassName}`}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel || title}

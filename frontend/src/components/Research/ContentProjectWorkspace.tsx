@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CaretDown, CaretUp, CheckCircle, Export, NotePencil, X } from '@phosphor-icons/react';
 import useStore, { type ContentProject, type TranscriptClaim } from '../../store';
 import { ModalShell } from '../ModalShell';
+import { ActionButton } from '../UI';
 import { compactResearchText } from './researchViewModel';
 
 interface ContentProjectWorkspaceProps {
@@ -37,7 +38,7 @@ export const ContentProjectWorkspace: React.FC<ContentProjectWorkspaceProps> = (
     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sage/25 text-ink-soft"><NotePencil aria-hidden="true" size={24} weight="duotone" /></div>
     <h2 className="mt-4 font-display text-[17px] font-medium text-ink">先建立你的洞察项目</h2>
     <p className="mx-auto mt-2 max-w-xs font-body text-[12px] leading-relaxed text-ink-soft/60">明确要回答的问题后，再从多个播客中收集支持、反例与证据。</p>
-    {onRequestCreate && <button type="button" onClick={onRequestCreate} className="mt-5 rounded-full bg-sage px-5 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn">新建内容项目</button>}
+    {onRequestCreate && <ActionButton variant="confirm" shape="pill" onClick={onRequestCreate} className="mt-5">新建内容项目</ActionButton>}
   </aside>;
 
   const save = async () => {
@@ -93,7 +94,7 @@ export const ContentProjectWorkspace: React.FC<ContentProjectWorkspaceProps> = (
   };
 
   return <>
-    <aside className="order-first min-w-0 max-w-full rounded-card border border-card-border bg-white/80 p-5 shadow-card lg:order-none lg:sticky lg:top-0" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22,1,0.36,1) 0.06s both' }}>
+    <aside className="order-first min-w-0 max-w-full rounded-card border border-card-border bg-white/80 p-5 shadow-card lg:order-none lg:sticky lg:top-0">
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 rounded-full bg-sage" />
         <h2 className="font-display text-[15px] font-medium text-ink-soft">我的洞察项目</h2>
@@ -161,17 +162,17 @@ export const ContentProjectWorkspace: React.FC<ContentProjectWorkspaceProps> = (
         </div>
       </details>
 
-      <button type="button" disabled={isSaving} onClick={() => void save()} className="mt-4 w-full rounded-full bg-sage px-5 py-3 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40">{isSaving ? '保存中…' : '保存项目判断'}</button>
+      <ActionButton variant="confirm" shape="pill" size="lg" isLoading={isSaving} loadingLabel="保存中…" onClick={() => void save()} className="mt-4 w-full">保存项目判断</ActionButton>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <button type="button" disabled={project.claims.length === 0} onClick={() => void openExport('xiaohongshu')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-lilac px-3 py-2.5 font-body text-[10px] text-ink disabled:opacity-40"><Export aria-hidden="true" size={13} />小红书结构</button>
-        <button type="button" disabled={project.claims.length === 0} onClick={() => void openExport('wechat')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-lemon px-3 py-2.5 font-body text-[10px] text-ink disabled:opacity-40"><Export aria-hidden="true" size={13} />公众号结构</button>
+        <ActionButton variant="edit" size="xs" disabled={project.claims.length === 0} onClick={() => void openExport('xiaohongshu')}><Export aria-hidden="true" size={13} />小红书结构</ActionButton>
+        <ActionButton variant="primary" size="xs" disabled={project.claims.length === 0} onClick={() => void openExport('wechat')}><Export aria-hidden="true" size={13} />公众号结构</ActionButton>
       </div>
     </aside>
 
     <ModalShell isOpen={isExportOpen} title="Markdown 导出" subtitle="复制后继续加入你的判断和表达" onClose={() => setIsExportOpen(false)} accent="sage" size="lg">
       <div className="space-y-3">
         <textarea readOnly value={markdown} rows={24} className="w-full resize-y rounded-xl border border-card-border bg-paper/60 p-4 font-mono text-[11px] leading-relaxed text-ink outline-none" />
-        <button type="button" onClick={() => void navigator.clipboard.writeText(markdown)} className="rounded-full bg-sage px-5 py-2 font-body text-[11px] font-medium text-ink shadow-btn">复制 Markdown</button>
+        <ActionButton variant="confirm" shape="pill" size="sm" onClick={() => void navigator.clipboard.writeText(markdown)}>复制 Markdown</ActionButton>
       </div>
     </ModalShell>
   </>;

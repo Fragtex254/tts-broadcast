@@ -192,7 +192,7 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
           <p className="font-body text-[15px] text-ink">{presetError}</p>
           <button
             onClick={fetchPresets}
-            className="mt-4 bg-sage hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-all duration-150"
+            className="mt-4 bg-sage hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-ui duration-150"
           >
             重新加载
           </button>
@@ -210,13 +210,13 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
             <div className="flex justify-center gap-2 mt-5">
               <button
                 onClick={onCreateDesign}
-                className="bg-lilac hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-all duration-150"
+                className="bg-lilac hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-ui duration-150"
               >
                 音色设计
               </button>
               <button
                 onClick={onCreateClone}
-                className="bg-blush hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-all duration-150"
+                className="bg-blush hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-ui duration-150"
               >
                 声音克隆
               </button>
@@ -242,7 +242,7 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
               <button
                 key={item.value}
                 onClick={() => setFilter(item.value)}
-                className={`px-3.5 py-2 rounded-lg font-body text-[13px] font-medium transition-all duration-150 ${
+                className={`px-3.5 py-2 rounded-lg font-body text-[13px] font-medium transition-ui duration-150 ${
                   filter === item.value
                     ? 'bg-white text-ink shadow-card border border-card-border'
                     : 'text-ink-soft hover:text-ink hover:bg-white/50'
@@ -265,7 +265,7 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                   setConfirmDeleteId(null);
                   if (editingId !== preset.id) cancelEdit();
                 }}
-                className={`text-left rounded-card border p-4 min-h-[150px] transition-all duration-150 ${
+                className={`text-left rounded-card border p-4 min-h-[150px] transition-ui duration-150 ${
                   isSelected
                     ? 'bg-white shadow-card border-ink/20'
                     : 'bg-white/55 border-card-border hover:border-ink/15 hover:bg-white/75'
@@ -399,7 +399,7 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                   <button
                     onClick={() => saveEdit(selectedPreset)}
                     disabled={isSaving}
-                    className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-all duration-150"
+                    className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-ui duration-150"
                   >
                     {isSaving ? '保存中...' : '保存修改'}
                   </button>
@@ -424,7 +424,7 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                     type="button"
                     onClick={() => toggleUseTrialAudioAsClone(selectedPreset)}
                     disabled={!selectedPreset.trial_audio_path || togglingCloneId === selectedPreset.id}
-                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 font-body text-[13px] transition-all duration-150 ${
+                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 font-body text-[13px] transition-ui duration-150 ${
                       selectedPreset.use_trial_audio_as_clone
                         ? 'border-sage/40 bg-sage/25 text-ink'
                         : 'border-card-border bg-white/55 text-ink-soft hover:bg-white/80 hover:text-ink'
@@ -469,13 +469,13 @@ export const VoicePresetLibrary: React.FC<VoicePresetLibraryProps> = ({
                 <div className="flex gap-2 pt-2">
                   <button
                     onClick={() => startEdit(selectedPreset)}
-                    className="flex-1 bg-lilac hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-all duration-150"
+                    className="flex-1 bg-lilac hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-ui duration-150"
                   >
                     编辑
                   </button>
                   <button
                     onClick={() => removePreset(selectedPreset)}
-                    className="bg-pink/85 hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-all duration-150"
+                    className="bg-pink/85 hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[13px] font-medium transition-ui duration-150"
                   >
                     {confirmDeleteId === selectedPreset.id ? '确认删除' : '删除'}
                   </button>

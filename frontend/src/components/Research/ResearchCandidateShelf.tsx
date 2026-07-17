@@ -84,15 +84,14 @@ export const ResearchCandidateShelf: React.FC<ResearchCandidateShelfProps> = ({
     </div>
 
     <div ref={shelfRef} role="list" tabIndex={0} onScroll={updateScrollState} aria-label="候选观点横向列表" className="flex max-w-full snap-x snap-mandatory gap-3 overflow-x-auto pb-3 outline-none focus-visible:ring-2 focus-visible:ring-lilac/70">
-      {results.map(({ claim, similarity, search_mode }, index) => {
+      {results.map(({ claim, similarity, search_mode }) => {
         const isActive = activeClaimId === claim.id;
         const isAdded = projectClaimIds.has(claim.id);
         const isSelected = selectedIds.has(claim.id);
         return <article
           key={claim.id}
           role="listitem"
-          className={`flex h-[228px] w-[278px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border p-4 transition-all duration-150 ${isActive ? 'border-ink-soft bg-lilac/10 shadow-card' : 'border-card-border bg-white/70 hover:-translate-y-px hover:shadow-card'}`}
-          style={index < 4 ? { animation: `fade-in-up 0.3s cubic-bezier(0.22,1,0.36,1) ${index * 0.04}s both` } : undefined}
+          className={`flex h-[228px] w-[278px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border p-4 transition-ui duration-150 ${isActive ? 'border-ink-soft bg-lilac/10 shadow-card' : 'border-card-border bg-white/70 hover:-translate-y-px hover:shadow-card'}`}
         >
           <button type="button" onClick={() => onPreview(claim)} aria-label={`预览观点：${claim.claim}`} className="min-h-0 flex-1 overflow-hidden text-left outline-none focus-visible:ring-2 focus-visible:ring-lilac/70">
             <span className="flex items-start gap-3">

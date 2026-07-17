@@ -204,7 +204,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
           <button
             type="button"
             onClick={fetchPresets}
-            className="mt-4 rounded-xl bg-sage px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105"
+            className="mt-4 rounded-xl bg-sage px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-ui duration-150 hover:brightness-105"
           >
             重新加载
           </button>
@@ -242,7 +242,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
           return (
             <div
               key={preset.id}
-              className={`min-h-48 cursor-pointer rounded-card border p-4 text-left transition-all duration-150 hover:-translate-y-px active:translate-y-0 ${
+              className={`min-h-48 cursor-pointer rounded-card border p-4 text-left transition-ui duration-150 hover:-translate-y-px active:scale-[0.97] ${
                 isExpanded
                   ? 'border-ink/20 bg-white/85 shadow-card'
                   : 'border-card-border bg-white/60 hover:border-ink/15 hover:bg-white/80'
@@ -433,7 +433,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                         <button
                           onClick={(e) => handleSaveEdit(e, preset)}
                           disabled={isSavingEdit}
-                          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[10px] rounded-xl px-3 py-1.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
+                          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[10px] rounded-xl px-3 py-1.5 shadow-btn transition-ui duration-150 uppercase tracking-wider"
                         >
                           {isSavingEdit ? '保存中...' : '保存修改'}
                         </button>
@@ -463,7 +463,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                           type="button"
                           onClick={(e) => handleToggleUseTrialAudioAsClone(e, preset)}
                           disabled={togglingCloneId === preset.id}
-                          className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-2 font-body text-[10px] transition-all duration-150 ${
+                          className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-2 font-body text-[10px] transition-ui duration-150 ${
                             preset.use_trial_audio_as_clone
                               ? 'border-sage/40 bg-sage/25 text-ink'
                               : 'border-card-border bg-white/45 text-ink-soft hover:bg-white/70 hover:text-ink'

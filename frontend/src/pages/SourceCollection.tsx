@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { QuickGenerate } from '../components/Dashboard/QuickGenerate';
 import { ModalShell } from '../components/ModalShell';
+import { ActionButton, ActionCard, WorkbenchCard } from '../components/UI';
 import useStore from '../store';
 
 export const SourceCollection: React.FC = () => {
@@ -23,17 +24,12 @@ export const SourceCollection: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-6xl space-y-4">
-          <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-2 h-2 rounded-full bg-lemon" />
-              <h3 className="font-display italic text-[14px] font-medium text-ink-soft">新建内容</h3>
-            </div>
+          <WorkbenchCard heading="新建内容" accent="lemon">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <button
-                type="button"
+              <ActionCard
                 onClick={() => setIsNewsIntakeOpen(true)}
                 aria-label="AI 今日资讯"
-                className="group rounded-card border border-lemon/50 bg-lemon/15 p-5 text-left transition-all duration-150 hover:-translate-y-px hover:bg-lemon/25 hover:shadow-card active:translate-y-0"
+                accent="lemon"
               >
                 <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/60">从结构化信息开始</span>
                 <span className="mt-2 block font-display text-[22px] font-medium text-ink">AI 今日资讯</span>
@@ -41,11 +37,10 @@ export const SourceCollection: React.FC = () => {
                   获取 AI HOT 资讯，筛选后改写为适合播报的稿件。
                 </span>
                 <span className="mt-4 inline-flex font-body text-[11px] font-medium text-ink transition-transform duration-150 group-hover:translate-x-1">开始采集 →</span>
-              </button>
-              <button
-                type="button"
+              </ActionCard>
+              <ActionCard
                 onClick={() => navigate('/transcribe')}
-                className="group rounded-card border border-lilac/55 bg-lilac/15 p-5 text-left transition-all duration-150 hover:-translate-y-px hover:bg-lilac/25 hover:shadow-card active:translate-y-0"
+                accent="lilac"
               >
                 <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/60">从已有素材开始</span>
                 <span className="mt-2 block font-display text-[22px] font-medium text-ink">音视频整理</span>
@@ -53,9 +48,9 @@ export const SourceCollection: React.FC = () => {
                   上传音视频，选择普通转录或播客整理，并在内容库继续总结与校对。
                 </span>
                 <span className="mt-4 inline-flex font-body text-[11px] font-medium text-ink transition-transform duration-150 group-hover:translate-x-1">开始整理 →</span>
-              </button>
+              </ActionCard>
             </div>
-          </section>
+          </WorkbenchCard>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.7fr)]">
             <div id="news-intake" className="scroll-mt-5">
@@ -63,19 +58,13 @@ export const SourceCollection: React.FC = () => {
             </div>
 
             <aside className="space-y-4">
-              <section
-                className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both' }}
-              >
-                <div className="flex items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-sage" />
-                    <h3 className="font-display italic text-[14px] font-medium text-ink-soft">当前任务</h3>
-                  </div>
-                  {(script || currentBroadcast) && (
+              <WorkbenchCard
+                heading="当前任务"
+                accent="sage"
+                headerActions={(script || currentBroadcast) && (
                     <span className="rounded-full bg-sage/30 px-2.5 py-1 font-body text-[9px] uppercase tracking-wider text-ink">进行中</span>
-                  )}
-                </div>
+                )}
+              >
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-2xl bg-paper/70 border border-card-border p-3">
@@ -100,25 +89,24 @@ export const SourceCollection: React.FC = () => {
                       : '选择一种素材来源开始，工作台会保留当前进度。'}
                   </p>
                   {script && (
-                    <button
-                      type="button"
+                    <ActionButton
                       onClick={() => navigate('/editor')}
-                      className="mt-3 w-full rounded-xl bg-sage px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0 active:shadow-none"
+                      variant="confirm"
+                      className="mt-3 w-full"
                     >
                       继续编辑
-                    </button>
+                    </ActionButton>
                   )}
                 </div>
-              </section>
+              </WorkbenchCard>
 
-              <button
-                type="button"
+              <ActionCard
                 onClick={() => navigate('/history')}
-                className="w-full rounded-card border border-card-border bg-white/55 p-4 text-left shadow-card transition-all duration-150 hover:-translate-y-px hover:bg-white/75 active:translate-y-0"
+                padding="compact"
               >
                 <span className="font-display text-[16px] font-medium text-ink">打开内容库</span>
                 <span className="mt-1 block font-body text-[11px] text-ink-soft/60">查看播报成品和转录文稿 →</span>
-              </button>
+              </ActionCard>
             </aside>
           </div>
         </div>

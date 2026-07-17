@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ModalShell } from '../ModalShell';
+import { ActionButton } from '../UI';
 
 interface TranscriptionResultModalProps {
   isOpen: boolean;
@@ -74,37 +75,39 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
       footerClassName="p-5"
       footer={(
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <button
+          <ActionButton
+            variant="edit"
+            isUppercase
             onClick={handleFormat}
-            disabled={!draftText.trim() || !canFormat || isFormatting}
-            className="relative overflow-hidden bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+            isLoading={isFormatting}
+            loadingLabel="排版中..."
+            disabled={!draftText.trim() || !canFormat}
           >
-            {isFormatting && <span className="absolute left-0 top-0 h-full w-2/3 bg-white/20 animate-pulse" />}
-            <span className="relative">{isFormatting ? '排版中...' : 'AI 排版分段'}</span>
-          </button>
+            AI 排版分段
+          </ActionButton>
 
           <div className="flex flex-wrap justify-end gap-2">
-            <button
+            <ActionButton
+              variant="text"
               onClick={handleCopy}
               disabled={!primaryText}
-              className="px-4 py-2 font-body text-[12px] text-ink-soft hover:text-ink disabled:opacity-40 transition-colors"
             >
               {copied ? '已复制' : '复制'}
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
+              variant="text"
               onClick={() => onDownload(primaryText)}
               disabled={!primaryText}
-              className="px-4 py-2 font-body text-[12px] text-ink-soft hover:text-ink disabled:opacity-40 transition-colors"
             >
               下载 TXT
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
+              variant="confirm"
               onClick={() => onImport(primaryText)}
               disabled={!primaryText}
-              className="px-4 py-2 font-body text-[12px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150"
             >
               导入稿件
-            </button>
+            </ActionButton>
           </div>
         </div>
       )}

@@ -8,7 +8,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
   return (
-    <header className="px-5 py-5 sm:px-6 border-b border-rule-soft bg-paper/75 animate-fade-in-up">
+    <header className="px-5 py-5 sm:px-6 border-b border-rule-soft bg-paper/75">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-display text-[30px] sm:text-[32px] font-medium text-ink leading-[0.95] tracking-tight">

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowSquareOut, CheckCircle, Copy, DownloadSimple, Radio } from '@phosphor-icons/react';
 import type { TranscriptionChunkPreview, TranscriptionProgress } from '../../store';
+import { ActionButton } from '../UI';
 
 const CARD_PREVIEW_CHUNK_COUNT = 5;
 
@@ -58,7 +59,6 @@ export const LiveTranscriptionPreview: React.FC<LiveTranscriptionPreviewProps> =
   return (
     <section
       className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-      style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
       aria-label="实时转录预览"
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -126,15 +126,15 @@ export const LiveTranscriptionPreview: React.FC<LiveTranscriptionPreviewProps> =
           {isTranscribing && hasText && <span>{isAutoFollowing ? '自动跟随最新内容' : '已暂停自动跟随'}</span>}
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={onCopy} disabled={!hasText} className="inline-flex items-center gap-1.5 px-3 py-2 font-body text-[11px] text-ink-soft transition-colors hover:text-ink disabled:opacity-40">
+          <ActionButton onClick={onCopy} disabled={!hasText} variant="text" size="sm">
             <Copy aria-hidden="true" size={13} />{isCopied ? '已复制' : '复制'}
-          </button>
-          <button type="button" onClick={onDownload} disabled={!hasText} className="inline-flex items-center gap-1.5 px-3 py-2 font-body text-[11px] text-ink-soft transition-colors hover:text-ink disabled:opacity-40">
+          </ActionButton>
+          <ActionButton onClick={onDownload} disabled={!hasText} variant="text" size="sm">
             <DownloadSimple aria-hidden="true" size={13} />下载 TXT
-          </button>
-          <button type="button" onClick={onOpen} disabled={(!hasText && !isTranscribing) || isOpening} className="inline-flex items-center gap-1.5 rounded-xl bg-lilac px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0 disabled:opacity-40">
-            <ArrowSquareOut aria-hidden="true" size={14} />{isOpening ? '正在打开…' : openLabel}
-          </button>
+          </ActionButton>
+          <ActionButton onClick={onOpen} disabled={!hasText && !isTranscribing} variant="edit" size="md" isLoading={isOpening} loadingLabel="正在打开…">
+            <ArrowSquareOut aria-hidden="true" size={14} />{openLabel}
+          </ActionButton>
         </div>
       </div>
     </section>

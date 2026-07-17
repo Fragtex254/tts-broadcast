@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { TranscriptSpeaker } from '../../store';
+import { ActionButton } from '../UI';
 
 interface TranscriptSpeakerPanelProps {
   speakers: TranscriptSpeaker[];
@@ -50,14 +51,16 @@ export const TranscriptSpeakerPanel: React.FC<TranscriptSpeakerPanelProps> = ({ 
                 maxLength={50}
                 className="min-w-0 flex-1 bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
               />
-              <button
-                type="button"
+              <ActionButton
+                variant="confirm"
+                size="sm"
                 onClick={() => void handleSave(speaker)}
-                disabled={savingId === speaker.id || (drafts[speaker.id] ?? speaker.display_name).trim() === speaker.display_name}
-                className="rounded-xl bg-sage px-3 py-2 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40"
+                isLoading={savingId === speaker.id}
+                loadingLabel="保存中"
+                disabled={(drafts[speaker.id] ?? speaker.display_name).trim() === speaker.display_name}
               >
-                {savingId === speaker.id ? '保存中' : '保存'}
-              </button>
+                保存
+              </ActionButton>
             </div>
           </div>
         ))}

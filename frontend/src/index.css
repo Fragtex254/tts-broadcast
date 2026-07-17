@@ -121,12 +121,12 @@
   --font-body: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
 
   /* Animations */
-  --animate-fade-in-up: fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  --animate-fade-in-left: fade-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  --animate-fade-in: fade-in 0.3s ease forwards;
+  --animate-fade-in-up: fade-in-up 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  --animate-fade-in-left: fade-in-left 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  --animate-fade-in: fade-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   --animate-breathe: breathe 2.5s ease-in-out infinite;
-  --animate-shake: shake 0.3s ease-in-out;
-  --animate-scale-bounce: scale-bounce 0.3s ease;
+  --animate-shake: shake 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-scale-bounce: scale-bounce 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   --animate-waveform-pulse: waveform-pulse 1.5s ease-in-out infinite;
 }
 
@@ -154,9 +154,10 @@
   --font-display: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
   --font-body: 'MiSans App', 'MiSans', 'MiSans VF', 'MiSans Regular', 'Noto Sans SC', sans-serif;
   --ui-font-scale: 1;
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.25s ease;
-  --transition-slow: 0.4s ease;
+  --ease-ui-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-fast: 0.16s var(--ease-ui-out);
+  --transition-normal: 0.2s var(--ease-ui-out);
+  --transition-slow: 0.25s var(--ease-ui-out);
 }
 
 html[data-ui-font-preset="modern"] {
@@ -186,6 +187,84 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Shared interaction primitives: explicit properties, crisp easing, consistent press feedback. */
+.transition-ui,
+.pressable {
+  transition-duration: 160ms;
+  transition-property: color, background-color, border-color, opacity, box-shadow, filter, transform;
+  transition-timing-function: var(--ease-ui-out);
+}
+
+:where(button, a[href], [role="button"]):not(:disabled):not([aria-disabled="true"]) {
+  -webkit-tap-highlight-color: transparent;
+  transition-duration: 160ms;
+  transition-property: color, background-color, border-color, opacity, box-shadow, filter, transform;
+  transition-timing-function: var(--ease-ui-out);
+}
+
+:where(button, a[href], [role="button"]):not(:disabled):not([aria-disabled="true"]):active,
+.pressable:not(:disabled):not([aria-disabled="true"]):active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pressable:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.modal-backdrop,
+.modal-fullscreen,
+.modal-panel {
+  opacity: 1;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-ui-out);
+}
+
+.modal-backdrop {
+  transition-property: opacity, backdrop-filter;
+}
+
+.modal-panel {
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition-property: opacity, transform;
+}
+
+.modal-fullscreen {
+  transform: translateY(0);
+  transition-property: opacity, transform;
+}
+
+@starting-style {
+  .modal-backdrop,
+  .modal-fullscreen,
+  .modal-panel {
+    opacity: 0;
+  }
+
+  .modal-panel {
+    transform: translateY(8px) scale(0.98);
+  }
+
+  .modal-fullscreen {
+    transform: translateY(8px);
+  }
+}
+
+.modal-backdrop[data-state="closed"],
+.modal-fullscreen[data-state="closed"] {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: 140ms;
+}
+
+.modal-backdrop[data-state="closed"] .modal-panel {
+  opacity: 0;
+  transform: translateY(4px) scale(0.985);
+  transition-duration: 140ms;
 }
 
 .font-display,
@@ -248,10 +327,6 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@keyframes voice-selector-enter {
-  from { opacity: 0; transform: translate(18px, 24px) scale(0.96); }
-  to { opacity: 1; transform: translate(0, 0) scale(1); }
-}
 @keyframes breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
@@ -273,8 +348,19 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
+    animation-name: none !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 120ms !important;
+    transition-property: color, background-color, border-color, opacity !important;
+  }
+
+  :where(button, a[href], [role="button"]):active,
+  .pressable:active,
+  .pressable:hover,
+  .modal-panel,
+  .modal-fullscreen,
+  .modal-backdrop[data-state="closed"] .modal-panel {
+    transform: none !important;
   }
 }

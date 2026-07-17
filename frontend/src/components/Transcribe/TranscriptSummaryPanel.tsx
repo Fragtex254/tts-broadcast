@@ -1,6 +1,7 @@
 import React from 'react';
 import type { TranscriptDetail, TranscriptSummaryProgress } from '../../store';
 import { formatTranscriptTime } from '../../pages/transcriptWorkspaceModel';
+import { ActionButton } from '../UI';
 
 interface TranscriptSummaryPanelProps {
   transcript: TranscriptDetail;
@@ -35,22 +36,29 @@ export const TranscriptSummaryPanel: React.FC<TranscriptSummaryPanelProps> = ({ 
               <p className="mt-4 font-body text-[13px] leading-relaxed text-ink-soft/65">逐字稿已准备好。点击一次即可生成总览、章节、说话人观点与重点内容。</p>
             )}
           </div>
-          <button
-            type="button"
+          <ActionButton
             onClick={onSummarize}
-            disabled={isSummarizing}
-            className="relative shrink-0 overflow-hidden rounded-full bg-lemon px-5 py-2.5 font-body text-[12px] font-medium uppercase tracking-wider text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 disabled:opacity-40"
+            variant="primary"
+            shape="pill"
+            size="lg"
+            isUppercase
+            isLoading={isSummarizing}
+            loadingLabel="总结中…"
+            className="shrink-0"
           >
-            {isSummarizing && <span className="absolute inset-y-0 left-0 w-2/3 animate-pulse bg-white/20" />}
-            <span className="relative">{isSummarizing ? '总结中…' : isStale ? '更新摘要' : transcript.summary ? '重新总结' : '一键总结'}</span>
-          </button>
+            {isStale ? '更新摘要' : transcript.summary ? '重新总结' : '一键总结'}
+          </ActionButton>
         </div>
         {(isSummarizing || progress.phase === 'failed') && (
-          <div className={`mt-4 rounded-2xl border p-4 ${progress.phase === 'failed' ? 'animate-shake border-pink/30 bg-pink/10' : 'border-card-border bg-white/60'}`}>
+          <div className={`mt-4 rounded-2xl border p-4 ${progress.phase === 'failed' ? 'animate-shake border-pink/30 bg-pink/10' : 'border-card-border bg-white/60'}`} role="status" aria-live="polite">
             <div className="flex items-center justify-between gap-3 font-body text-[11px] text-ink-soft/70">
               <span>{progress.message}</span><span>{Math.round(progress.percent)}%</span>
             </div>
-            {progress.phase !== 'failed' && <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/80"><div className="h-full rounded-full bg-lilac transition-all duration-300" style={{ width: `${progress.percent}%` }} /></div>}
+            {progress.phase !== 'failed' && (
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/80" role="progressbar" aria-label="摘要生成进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress.percent)}>
+                <div className="h-full w-full origin-left rounded-full bg-lilac transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]" style={{ transform: `scaleX(${Math.min(Math.max(progress.percent, 0), 100) / 100})` }} />
+              </div>
+            )}
           </div>
         )}
         {!isSummarizing && transcript.record.summary_status === 'failed' && transcript.record.summary_error && (

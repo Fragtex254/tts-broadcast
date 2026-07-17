@@ -13,10 +13,10 @@ interface TranscriptionHistoryPanelProps {
   onDelete: (record: TranscriptionRecord) => void;
 }
 
-const ACTION_BUTTON_NEUTRAL = 'px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-lg border border-card-border transition-all duration-150';
-const ACTION_BUTTON_FORMAT = 'px-3 py-1.5 font-body text-[11px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-all duration-150';
-const ACTION_BUTTON_IMPORT = 'px-3 py-1.5 font-body text-[11px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-all duration-150';
-const ACTION_BUTTON_DANGER = 'px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-pink bg-white/70 hover:bg-white/90 rounded-lg border border-card-border transition-all duration-150';
+const ACTION_BUTTON_NEUTRAL = 'px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-lg border border-card-border transition-ui duration-150';
+const ACTION_BUTTON_FORMAT = 'px-3 py-1.5 font-body text-[11px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-ui duration-150';
+const ACTION_BUTTON_IMPORT = 'px-3 py-1.5 font-body text-[11px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-ui duration-150';
+const ACTION_BUTTON_DANGER = 'px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-pink bg-white/70 hover:bg-white/90 rounded-lg border border-card-border transition-ui duration-150';
 
 function formatRecordDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -78,7 +78,6 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
   return (
     <section
       className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-      style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both' }}
     >
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 min-w-0">
@@ -89,7 +88,7 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
           type="button"
           onClick={onRefresh}
           disabled={isLoading}
-          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/60 hover:bg-white/80 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
+          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/60 hover:bg-white/80 disabled:opacity-40 rounded-xl border border-card-border transition-ui duration-150"
         >
           {isLoading ? '刷新中...' : '刷新'}
         </button>
@@ -122,14 +121,13 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
 
       {!isLoading && !error && records.length > 0 && (
         <div className="space-y-3">
-          {records.map((record, index) => {
+          {records.map((record) => {
             const text = preferredText(record);
             const preview = previewText(record);
             return (
               <article
                 key={record.id}
                 className="bg-white/60 rounded-2xl p-4 border border-card-border"
-                style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.03}s both` }}
               >
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="min-w-0">

@@ -1,5 +1,6 @@
 import React from 'react';
 import { createScopedLogger, toLogError } from '../services/logger';
+import { ActionButton } from './UI';
 
 const logger = createScopedLogger('error-boundary');
 
@@ -47,12 +48,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
             <p className="font-body text-[12px] text-ink-soft/60 mb-6">
               {this.state.error?.message || '发生了一个意外错误，请刷新页面重试'}
             </p>
-            <button
+            <ActionButton
+              variant="primary"
+              shape="pill"
               onClick={() => window.location.reload()}
-              className="px-5 py-2 bg-lemon hover:brightness-105 text-ink rounded-full font-body text-[12px] font-medium shadow-btn transition-all duration-150"
             >
               刷新页面
-            </button>
+            </ActionButton>
           </div>
         </div>
       );

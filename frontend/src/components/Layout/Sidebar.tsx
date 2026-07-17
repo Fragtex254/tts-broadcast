@@ -31,7 +31,7 @@ export const Sidebar: React.FC = () => {
             aria-label={item.label}
             title={item.label}
             className={({ isActive }) =>
-              `flex flex-col lg:flex-row items-center justify-center lg:justify-start lg:gap-4 px-2 lg:px-5 py-2.5 lg:py-[18px] rounded-xl lg:rounded-2xl text-[13px] lg:text-[18px] font-body leading-none transition-all duration-200 ${
+              `flex flex-col lg:flex-row items-center justify-center lg:justify-start lg:gap-4 px-2 lg:px-5 py-2.5 lg:py-[18px] rounded-xl lg:rounded-2xl text-[13px] lg:text-[18px] font-body leading-none transition-ui duration-200 ${
                 isActive
                   ? 'bg-white/85 text-ink font-semibold shadow-card border border-card-border'
                   : 'text-ink-soft font-medium hover:text-ink hover:bg-white/50'

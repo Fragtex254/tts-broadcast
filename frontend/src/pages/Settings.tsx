@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Header } from '../components/Layout/Header';
 import { PasswordField } from '../components/PasswordField';
+import { ActionButton, WorkbenchCard } from '../components/UI';
 import { createScopedLogger, toLogError } from '../services/logger';
 import useStore, { type LlmModelOption, type Settings as AppSettings } from '../store';
 import { buildAutoSaveUpdate, changeBaseUrl } from './settingsDraft';
@@ -203,24 +204,6 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const SectionCard: React.FC<{
-    dotColor: string;
-    title: string;
-    index: number;
-    children: React.ReactNode;
-  }> = ({ dotColor, title, index, children }) => (
-    <section
-      className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-      style={{ animation: `fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.1}s both` }}
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">{title}</h3>
-      </div>
-      {children}
-    </section>
-  );
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header title="设置" subtitle="管理服务连接、默认偏好与界面体验" />
@@ -243,7 +226,7 @@ export const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSettingsView('connections')}
-                className={`rounded-2xl px-4 py-3 text-left transition-all duration-150 ${settingsView === 'connections' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
+                className={`rounded-2xl px-4 py-3 text-left transition-ui duration-150 ${settingsView === 'connections' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
               >
                 <span className="block font-display text-[16px] font-medium text-ink">服务连接</span>
                 <span className="mt-1 block font-body text-[10px] text-ink-soft/60">LLM、TTS 与 ASR</span>
@@ -251,7 +234,7 @@ export const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSettingsView('preferences')}
-                className={`rounded-2xl px-4 py-3 text-left transition-all duration-150 ${settingsView === 'preferences' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
+                className={`rounded-2xl px-4 py-3 text-left transition-ui duration-150 ${settingsView === 'preferences' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
               >
                 <span className="block font-display text-[16px] font-medium text-ink">默认偏好</span>
                 <span className="mt-1 block font-body text-[10px] text-ink-soft/60">界面、音色与播报文案</span>
@@ -260,7 +243,7 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && settingsView === 'preferences' && (
-            <SectionCard dotColor="bg-lilac" title="界面字体" index={0}>
+            <WorkbenchCard accent="lilac" heading="界面字体">
               <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5">
                 <div className="space-y-4">
                   <div>
@@ -271,7 +254,7 @@ export const Settings: React.FC = () => {
                           key={option.value}
                           type="button"
                           onClick={() => handleImmediateSettingChange('ui_font_preset', option.value)}
-                          className={`text-left p-4 rounded-2xl border transition-all ${
+                          className={`text-left p-4 rounded-2xl border transition-ui ${
                             formData.ui_font_preset === option.value
                               ? 'bg-lilac/55 border-ink/15 shadow-btn'
                               : 'bg-white/45 border-card-border hover:border-ink/15'
@@ -292,7 +275,7 @@ export const Settings: React.FC = () => {
                           key={option.value}
                           type="button"
                           onClick={() => handleImmediateSettingChange('ui_font_scale', option.value)}
-                          className={`p-4 rounded-2xl border transition-all ${
+                          className={`p-4 rounded-2xl border transition-ui ${
                             formData.ui_font_scale === option.value
                               ? 'bg-sage/60 border-ink/15 shadow-btn'
                               : 'bg-white/45 border-card-border hover:border-ink/15'
@@ -318,11 +301,11 @@ export const Settings: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </SectionCard>
+            </WorkbenchCard>
           )}
 
           {!isLoadingSettings && settingsView === 'connections' && (
-            <SectionCard dotColor="bg-pink" title="API 配置" index={1}>
+            <WorkbenchCard accent="pink" heading="API 配置">
               <div className="space-y-5">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
@@ -339,7 +322,7 @@ export const Settings: React.FC = () => {
                           key={option.value}
                           type="button"
                           onClick={() => handleApiFormatChange(option.value)}
-                          className={`px-3 py-1.5 rounded-full font-body text-[11px] transition-all ${formData.llm_api_format === option.value ? 'bg-lilac text-ink shadow-btn' : 'text-ink-soft hover:text-ink'}`}
+                          className={`px-3 py-1.5 rounded-full font-body text-[11px] transition-ui ${formData.llm_api_format === option.value ? 'bg-lilac text-ink shadow-btn' : 'text-ink-soft hover:text-ink'}`}
                         >
                           {option.label}
                         </button>
@@ -392,16 +375,16 @@ export const Settings: React.FC = () => {
                           ))}
                         </select>
                       )}
-                      <button
-                        type="button"
+                      <ActionButton
                         onClick={handleFetchModels}
                         disabled={isFetchingModels || !formData.llm_base_url || !formData.mimo_api_key}
-                        className="px-4 py-2.5 bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
+                        variant="primary"
+                        isLoading={isFetchingModels}
+                        loadingLabel="获取中..."
+                        className="whitespace-nowrap"
                       >
-                        {isFetchingModels ? (
-                          <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>获取中...</>
-                        ) : '获取模型'}
-                      </button>
+                        获取模型
+                      </ActionButton>
                     </div>
                     {modelFetchResult?.resolvedUrl && (
                       <p className="mt-2 font-body text-[11px] text-ink-soft/70 animate-fade-in">已从 {modelFetchResult.resolvedUrl} 获取模型</p>
@@ -463,15 +446,16 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-2">
-                    <button
+                    <ActionButton
                       onClick={() => handleTestKey('llm')}
                       disabled={isTestingKey === 'llm' || !formData.mimo_api_key}
-                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
+                      variant="confirm"
+                      isLoading={isTestingKey === 'llm'}
+                      loadingLabel="测试中..."
+                      className="whitespace-nowrap"
                     >
-                      {isTestingKey === 'llm' ? (
-                        <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
-                      ) : '测试 LLM'}
-                    </button>
+                      测试 LLM
+                    </ActionButton>
                     {dirtyFields.has('mimo_api_key') && (
                       <span className="font-body text-[11px] text-ink-soft/70 flex items-center">未保存</span>
                     )}
@@ -512,15 +496,16 @@ export const Settings: React.FC = () => {
                       placeholder="输入 TTS API Key"
                       className="flex-1"
                     />
-                    <button
+                    <ActionButton
                       onClick={() => handleTestKey('tts')}
                       disabled={isTestingKey === 'tts' || !formData.mimo_tts_api_key}
-                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
+                      variant="confirm"
+                      isLoading={isTestingKey === 'tts'}
+                      loadingLabel="测试中..."
+                      className="whitespace-nowrap"
                     >
-                      {isTestingKey === 'tts' ? (
-                        <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
-                      ) : '测试 TTS'}
-                    </button>
+                      测试 TTS
+                    </ActionButton>
                     {dirtyFields.has('mimo_tts_api_key') && (
                       <span className="font-body text-[11px] text-ink-soft/70 flex items-center">未保存</span>
                     )}
@@ -546,7 +531,7 @@ export const Settings: React.FC = () => {
                         key={option.value}
                         type="button"
                         onClick={() => setAsrConfigTab(option.value)}
-                        className={`text-left p-3.5 rounded-2xl border transition-all ${asrConfigTab === option.value ? 'bg-lilac/35 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
+                        className={`text-left p-3.5 rounded-2xl border transition-ui ${asrConfigTab === option.value ? 'bg-lilac/35 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
                       >
                         <span className="block font-body text-[12px] font-medium text-ink">{option.label}</span>
                         <span className="block mt-1 font-body text-[10px] text-ink-soft/70 leading-relaxed">{option.description}</span>
@@ -651,11 +636,11 @@ export const Settings: React.FC = () => {
                   )}
                 </div>
               </div>
-            </SectionCard>
+            </WorkbenchCard>
           )}
 
           {!isLoadingSettings && settingsView === 'preferences' && (
-            <SectionCard dotColor="bg-blush" title="音色设置" index={2}>
+            <WorkbenchCard accent="blush" heading="音色设置">
               <div>
                 <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">默认音色</label>
                 <select
@@ -668,11 +653,11 @@ export const Settings: React.FC = () => {
                 </select>
                 <p className="mt-2 font-body text-[11px] text-ink-soft/70">新建或导入稿件进入编辑器时会自动应用，仍可在当前稿件中更换</p>
               </div>
-            </SectionCard>
+            </WorkbenchCard>
           )}
 
           {!isLoadingSettings && settingsView === 'preferences' && (
-            <SectionCard dotColor="bg-sage" title="播报设置" index={3}>
+            <WorkbenchCard accent="sage" heading="播报设置">
               <div className="space-y-4">
                 <div>
                   <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">开场白</label>
@@ -703,11 +688,11 @@ export const Settings: React.FC = () => {
                   />
                 </div>
               </div>
-            </SectionCard>
+            </WorkbenchCard>
           )}
 
           {!isLoadingSettings && (
-            <div className="flex items-center justify-between" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both' }}>
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {saveSuccess && (
                   <span className="font-body text-[12px] text-sage flex items-center gap-1.5 animate-fade-in">
@@ -721,15 +706,18 @@ export const Settings: React.FC = () => {
                   </span>
                 )}
               </div>
-              <button
+              <ActionButton
                 onClick={handleSave}
                 disabled={isSaving || dirtyFields.size === 0}
-                className="px-6 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body font-medium text-[12px] shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 uppercase tracking-wider"
+                variant="confirm"
+                size="lg"
+                isUppercase
+                isLoading={isSaving}
+                loadingLabel="保存中..."
+                className="px-6"
               >
-                {isSaving ? (
-                  <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>保存中...</>
-                ) : '保存设置'}
-              </button>
+                保存设置
+              </ActionButton>
             </div>
           )}
 

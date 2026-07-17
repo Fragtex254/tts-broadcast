@@ -10,7 +10,6 @@ interface CompactClaimCardProps {
   isSelected?: boolean;
   onSelectionChange?: (claimId: number) => void;
   onOpen: (claim: TranscriptClaim) => void;
-  animationDelay?: number;
 }
 
 export const CompactClaimCard: React.FC<CompactClaimCardProps> = ({
@@ -20,17 +19,15 @@ export const CompactClaimCard: React.FC<CompactClaimCardProps> = ({
   isSelected = false,
   onSelectionChange,
   onOpen,
-  animationDelay = 0,
 }) => (
   <article
-    className={`group flex min-h-32 gap-3 rounded-2xl border p-4 transition-all duration-150 hover:-translate-y-px hover:shadow-card ${
+    className={`group flex min-h-32 gap-3 rounded-2xl border p-4 transition-ui duration-150 hover:-translate-y-px hover:shadow-card ${
       isSelected
         ? 'border-lilac bg-lilac/10'
         : claim.status === 'stale'
           ? 'border-pink/30 bg-pink/5'
           : 'border-card-border bg-white/70'
     }`}
-    style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22,1,0.36,1) ${animationDelay}s both` }}
   >
     {onSelectionChange && (
       <label className="-m-1 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl transition-colors hover:bg-lilac/20">

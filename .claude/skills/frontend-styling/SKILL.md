@@ -1,236 +1,132 @@
 ---
 name: frontend-styling
-description: 套用 Warm Workbench / Soft Editorial 设计系统、调整样式、改配色或动效时使用。涵盖基于 burnt-peach / sandy-clay / powder-blush / tea-green / sky-blue-light 的色彩 token（paper/ink/pink/lemon/blush/sage/lilac）与语义色映射、字体（font-display/font-body）与字号、卡片模板、按钮/输入框/Pill 模板、动效 class 与缓动函数、prefers-reduced-motion、响应式断点。触发场景：调样式、改颜色、改按钮、卡片样式、字体、动画、动效、配色、Tailwind class、响应式布局、好看一点。
+description: 调整 Warm Workbench / Soft Editorial 视觉、Tailwind class、ActionButton/ActionCard/WorkbenchCard 变体、颜色、字体、层级、响应式和动效时使用。覆盖 paper/ink/pink/lemon/blush/sage/lilac 语义色、MiSans、transition-ui、按压反馈、Modal 动效、reduced motion。触发场景：改样式、按钮卡片一致性、动效审查、transition-all、hover、视觉层级、响应式、好看一点。
 ---
 
-# 前端样式与设计系统
+# 前端视觉与交互规范
 
-## 何时用 / 不用
+## 设计目标
 
-- **用**：套用/调整视觉样式——配色、字体、卡片、按钮、输入框、Pill、动效、响应式布局。
-- **不用**：组件结构/生命周期/状态（→ `frontend-component`）；数据流（→ `frontend-state-data`）。
+**Warm Workbench / Soft Editorial** 是成熟的内容生产工作台：温暖、有编辑感，但首先清楚、稳定、响应迅速。
 
-## 核心铁则
+- 保留暖纸色背景、MiSans 和柔和功能色，不改成黑白极简或冷灰 SaaS。
+- 粉彩颜色表达动作与状态，不作无意义装饰。
+- 主工作区层级要实，内部层级再逐步变轻；避免所有表面都透明发虚。
+- 高频操作克制，偶发状态变化和弹窗才使用轻量空间动效。
 
-1. 颜色**只通过 Tailwind class 使用，不硬编码 hex**（`bg-paper`/`text-ink`/`bg-pink`/`bg-lemon`/`bg-blush`/`bg-sage`/`bg-lilac`）。
-2. 语义色固定映射：主操作 `lemon`/`sage`、次操作 `lilac`、危险/强调 `pink`；状态 pill 与卡片色点按既定表分配。
-3. 标题用 `font-display` + 色点；正文/按钮/标签用 `font-body`，两者默认都走本机 MiSans 中文字体。
-4. 卡片、按钮、输入框、Pill 一律用文档中的统一 class 模板，不自创。
-5. 动效只用既有 animate-* class + ease-out-expo 缓动（`cubic-bezier(0.22,1,0.36,1)`）；`prefers-reduced-motion` 已由 `index.css` 全局处理，组件层无需额外处理。
+## 语义 token
 
-## 模式与模板
+组件只使用 `index.css` 注册的语义 class，不硬编码 hex，也不直接散用底层参考色阶。
 
-### 设计哲学
+| Token | 语义 |
+|---|---|
+| `paper` / `paper-2` | 页面与 app chrome 暖纸底色 |
+| `ink` / `ink-soft` | 主文字 / 次文字 |
+| `lemon` | 开始、生成、获取等主操作；等待状态 |
+| `sage` | 保存、确认、成功 |
+| `lilac` | 编辑、转换、排版、切分 |
+| `pink` | 危险、失败、警告、强强调 |
+| `blush` | 音色、温暖辅助强调 |
 
-**Warm Workbench / Soft Editorial** — 保留温暖纸感和柔和色彩，但优先服务生产型工作台的清晰度、密度和状态可读性。
+危险按钮仍用 `text-ink`，不要自动套白字。低对比度文字仅用于辅助信息，不用于关键说明、表单标签和操作名称。
 
-核心特征：
-- 暖纸色背景，不是纯白也不是灰色
-- MiSans 中文字体（标题和正文统一，清晰、现代）
-- 主工作区使用更实的浅色卡片，避免所有层级都发虚
-- 粉彩色系作为功能色（不是装饰色），颜色必须表达动作、状态或风险
+## 字体与信息层级
 
-### 色彩
+- 页面标题、卡片标题、关键数字：`font-display`。
+- 正文、表单、按钮、标签：`font-body`。两者都以 MiSans 为首选字体。
+- 页面标题通常 `text-[28px]`–`text-[32px]`；工作区标题 `text-[14px]`–`text-[16px]`；正文 `text-[12px]`–`text-[14px]`。
+- 大写和宽字距只用于极短标签；中文操作按钮默认不强制 uppercase。
+- 同一层级保持字号和字重一致，不靠更多颜色补救层级混乱。
 
-所有颜色通过 Tailwind class 使用，不硬编码 hex 值。
+## 表面与共享组件
 
-| Token | 值 | Tailwind Class | 用途 |
-|-------|-----|---------------|------|
-| 纸色 | `#fbf2ea` | `bg-paper` | 页面背景 |
-| 纸色-2 | `#f6e5d5` | `bg-paper-2` | Sidebar / app chrome 背景 |
-| 墨色 | `#0b1718` | `text-ink` | 主要文字 |
-| 墨色-柔 | `#204146` | `text-ink-soft` | 次要文字、说明文字 |
-| 粉红 | `#e65c4c` | `bg-pink` | 错误、危险、警告 |
-| 茶绿 | `#8ec837` | `bg-lemon` | 主操作 |
-| 沙陶 | `#e5b180` | `bg-blush` | 温暖强调、音色 |
-| 淡茶绿 | `#bbde87` | `bg-sage` | 成功、保存、确认 |
-| 浅天蓝 | `#96c8cf` | `bg-lilac` | 转换、编辑、排版、切分 |
+优先使用 `components/UI`，组件选择边界见 `frontend-component`。
 
-底层参考色板已在 `frontend/src/index.css` 注册为 `burnt-peach-*`、`sandy-clay-*`、`powder-blush-*`、`tea-green-*`、`sky-blue-light-*`。组件层优先使用上方语义 token，不直接散用底层色阶。
+### 标准工作区
 
-**语义色使用约定：**
-
-| 场景 | 颜色 |
-|------|------|
-| 主操作按钮（获取、开始、保存、生成） | `lemon` / `sage` |
-| 转换/编辑操作（改写、切分、排版、重新编辑） | `lilac` |
-| 危险/错误操作（删除、失败、警告） | `pink`，文字使用 `text-ink`，不要用 `text-white` |
-| 成功状态标签 | `sage` |
-| 等待/加载状态标签 | `lemon` |
-| 生成中状态标签 | `lilac` |
-| 错误状态标签/提示 | `pink` |
-| 卡片标题色点 | 按功能分配（见下方） |
-
-**卡片色点分配：**
-
-| 组件 | 色点 |
-|------|------|
-| 资讯获取 | `bg-lemon` |
-| 口播稿预览 | `bg-pink` |
-| 语音生成 | `bg-blush` |
-| 段落编辑器 | `bg-lilac` |
-| 播放器 | `bg-sage` |
-| API 配置（LLM/TTS） | `bg-pink` |
-| 音色设置 | `bg-blush` |
-| 播报设置 | `bg-sage` |
-| 定时任务 | `bg-lemon` |
-
-### 字体
-
-| 角色 | 字体 | Tailwind Class | 用途 |
-|------|------|---------------|------|
-| 标题/数字/装饰 | MiSans | `font-display` | 页面标题、卡片标题、索引数字 |
-| 正文/按钮/标签 | MiSans | `font-body` | 正文、按钮、输入框、标签 |
-| 中文兜底 | Noto Sans SC | font-stack fallback | 未安装 MiSans 时回退 |
-
-**字号约定：**
-
-| 场景 | 字号 | 示例 |
-|------|------|------|
-| 页面标题 | `text-[32px] font-medium` | "控制台" |
-| 卡片标题 | `font-display italic text-[14px] font-medium` | "资讯获取" |
-| 正文 | `text-[13px]` | 口播稿内容 |
-| 小标签 | `text-[11px] uppercase tracking-wider` | 分类标签 |
-| 微标签 | `text-[9px] uppercase tracking-wider` | 状态 pill |
-| 数字索引 | `font-display italic text-[18px] font-medium` | "01", "02" |
-
-### 卡片
-
-所有主要内容区域使用更实的工作台卡片样式：
-
-```
-className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-```
-
-**卡片内部结构：**
+使用 `WorkbenchCard`：白色 80% 表面、card border、shadow-card、圆角和标题色点由组件统一。需要纯展示且没有标题的局部表面才手写：
 
 ```tsx
-<div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
-  {/* 标题区：色点 + 斜体衬线标题 */}
-  <div className="flex items-center gap-2 mb-4">
-    <span className="w-2 h-2 rounded-full bg-{color}" />
-    <h3 className="font-display italic text-[14px] font-medium text-ink-soft">标题</h3>
-  </div>
-
-  {/* 内容区 */}
-  ...
-</div>
+<section className="rounded-card border border-card-border bg-white/80 p-5 shadow-card backdrop-blur-sm" />
 ```
+
+卡片内部次级内容通常使用 `rounded-2xl border border-card-border bg-white/60 p-4`；不要给每一层都加阴影。
+
+### 可点击入口
+
+使用 `ActionCard`。`lemon` 表示开始/创建路径，`lilac` 表示编辑/整理路径，`neutral` 表示普通导航。纯展示内容不要伪装成可点击卡片。
 
 ### 按钮
 
-| 类型 | 样式模板 | 用途 |
-|------|---------|------|
-| 主操作 | `bg-lemon hover:brightness-105 text-ink rounded-full px-5 py-2 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider` | 获取、保存 |
-| 转换/编辑操作 | `bg-lilac hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn` | 改写、切分、排版、重新编辑 |
-| 确认操作 | `bg-sage hover:brightness-105 text-ink rounded-xl px-4 py-2.5 shadow-btn` | 测试连接、全部生成 |
-| 危险操作 | `bg-pink hover:brightness-105 text-ink rounded-full px-5 py-2 shadow-btn` | 删除、失败重试 |
-| 文字按钮 | `text-ink-soft hover:text-ink font-body text-[12px] transition-colors` | 编辑、取消 |
-| 禁用态 | `disabled:opacity-40` | 所有按钮通用 |
+使用 `ActionButton`：
 
-**按钮交互：**
+| variant | 用途 |
+|---|---|
+| `primary` | 开始、生成、获取 |
+| `confirm` | 保存、确认、成功后续动作 |
+| `edit` | 编辑、转换、排版、切分 |
+| `danger` | 删除、破坏性确认、失败重试 |
+| `neutral` | 次要但完整的操作 |
+| `text` | 取消、返回、轻量辅助动作 |
 
-```
-hover:-translate-y-px active:translate-y-0 active:shadow-none
-```
+同一操作区只保留一个最强主按钮。loading 使用 `isLoading` 和具体文案，不在调用处重复拼 pulse、disabled、`aria-busy`。
 
-### 输入框
+开关、音频 transport、分页、列表内图标工具等专用控件可保留原生 button，但必须有 focus、disabled 和按压反馈。
 
-```
-className="bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
-```
+## 表单与状态
 
-选择器使用 `rounded-full`，文本输入使用 `rounded-xl`。
+- 文本输入：`rounded-xl border border-card-border bg-white/70`；select 可用 pill 形状。
+- focus 至少改变 border 或 ring，不能只依赖浏览器默认且不可见的 outline。
+- 状态 pill 使用淡色背景 + `text-ink`，同时带明确文字。
+- 错误靠近相关字段/操作，`bg-pink/10 border-pink/30`；成功用 sage，但不要把整页染绿。
+- 骨架结构应接近最终内容，避免加载完成后大幅跳动。
 
-### 状态标签（Pill）
+## 动效
 
-```tsx
-<span className="inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-body font-medium uppercase tracking-wider bg-{color}/{opacity} text-ink">
-  ✓ 已完成
-</span>
-```
+### 原则
 
-### 内部内容区
+1. 普通交互 120–250ms，默认使用快速 ease-out：`cubic-bezier(0.22, 1, 0.36, 1)`。
+2. 使用 `transition-ui` 或明确的 `transition-colors` / `transition-opacity`；禁止 `transition-all`。
+3. 只动画 `transform`、`opacity`、颜色、边框、阴影和滤镜。避免动画 width、height、margin、top/left。
+4. 按钮和可点击卡片有 `active:scale-[0.97]` 等轻微按压反馈；hover 位移最多 1px。
+5. hover 只增强已有可点击语义；关键内容不能只在 hover 出现。触摸设备不依赖 hover 完成任务。
+6. 页面 Header、Sidebar、高频切换区域和动态列表不重复播放入场动画。
+7. 不为增加动效而增加动效；状态清楚优先于动画存在。
 
-需要嵌套在卡片内的次要内容区：
+### 适合使用的动画
 
-```
-className="bg-white/60 rounded-2xl p-4 border border-card-border"
-```
+- Modal：遮罩 opacity；面板轻微 translate/scale，方向与触发关系一致，transform-origin 靠近触发侧。
+- 新出现的低频成功/错误状态：短淡入；错误可单次 shake。
+- 音频播放：受播放状态驱动的 waveform；停止后立即结束。
+- 长任务：进度使用 transform scaleX 或明确阶段，不用不可中断循环 keyframe 假装进度。
 
-### 可用动画
+动态列表的进入/退出优先用可被状态中断的 transition。若必须 stagger，总延迟应很短，且不应用于频繁刷新列表。
 
-| Class | 效果 | 用途 |
-|-------|------|------|
-| `animate-fade-in-up` | 从下方淡入上移 | 卡片入场 |
-| `animate-fade-in-left` | 从左侧淡入 | 列表项入场 |
-| `animate-fade-in` | 纯淡入 | 编辑模式切换、内容出现 |
-| `animate-breathe` | 透明度呼吸 | 状态指示点 |
-| `animate-shake` | 水平抖动 | 错误提示 |
-| `animate-scale-bounce` | 缩放弹跳 | 保存成功反馈 |
-| `animate-waveform-pulse` | 垂直脉动 | 音频波形播放中 |
-| `animate-pulse` | Tailwind 内置脉冲 | 骨架屏、加载进度条 |
+### Reduced motion
 
-### 交错入场实现
+`index.css` 的 `prefers-reduced-motion: reduce` 应移除位移、缩放和长循环，但保留即时的颜色、边框和透明度反馈。组件不要用内联 animation 绕过全局规则。
 
-使用 `style` 内联 `animation` 属性实现 stagger，不用 JS：
+## 响应式
 
-```tsx
-{items.map((item, index) => (
-  <div
-    key={item.id}
-    style={{
-      animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both`,
-    }}
-  >
-    ...
-  </div>
-))}
-```
+- 默认按窄屏单列设计，再用 `sm:` / `lg:` 扩展。
+- 窄屏操作区允许换行；主按钮保持易点击，图标工具仍需可访问名称。
+- 桌面多栏必须允许子项 `min-w-0`，长标题截断或换行，避免横向溢出。
+- Sidebar 小屏保持紧凑，桌面展示完整导航；不要改变既有导航结构。
 
-### 缓动函数
+## 完成检查
 
-- 入场动画：`cubic-bezier(0.22, 1, 0.36, 1)`（ease-out-expo）
-- 通用过渡：`transition-all duration-150` 或 `duration-200`
-- 按钮 hover：`hover:brightness-105`（微妙提亮，不换色）
+- [ ] 保留 Warm Workbench 色彩、MiSans 和暖纸底色
+- [ ] 使用语义 token，无组件级硬编码色值
+- [ ] 标准按钮、入口卡、工作区已复用 UI 组件
+- [ ] 主次操作和文字对比清楚，同一区域只有一个最强主按钮
+- [ ] 无 `transition-all`，常规动画在 120–250ms
+- [ ] 高频区域没有重复入场，动态列表动画可中断
+- [ ] hover 不承担触摸设备必需功能
+- [ ] reduced motion 下仍有清晰的非位移反馈
+- [ ] 窄屏无横向溢出，长文本可处理
 
-### `prefers-reduced-motion`
+## 相关规范
 
-`index.css` 已全局处理：在用户开启"减少动态效果"时，所有动画自动禁用。组件层面无需额外处理。
-
-### 响应式断点策略
-
-使用 Tailwind 默认断点，主要用到：
-
-| 断点 | 宽度 | 用途 |
-|------|------|------|
-| 默认（无前缀） | < 640px | 移动端：单栏 |
-| `lg:` | ≥ 1024px | 桌面端：双栏 |
-
-### 布局模式
-
-```tsx
-{/* 单栏移动端 → 双栏桌面端 */}
-<div className="flex flex-col lg:flex-row gap-4">
-  <div className="w-full lg:w-1/2">左侧</div>
-  <div className="w-full lg:w-1/2">右侧</div>
-</div>
-```
-
-### Sidebar
-
-Sidebar 桌面端使用 `sm:w-64` 展示完整品牌与导航文本；小屏使用 `w-20` 折叠，只显示短品牌和导航图标，避免主内容被挤压到文字竖排。
-
-## Checklist
-
-- [ ] 颜色用 Tailwind class，无硬编码 hex
-- [ ] 语义色映射正确（主/次/危险操作、状态 pill、卡片色点）
-- [ ] 卡片/按钮/输入框/Pill 用统一模板 class
-- [ ] 标题 `font-display` + 色点，正文 `font-body`
-- [ ] 动效用既有 animate-* class 与 ease-out-expo 缓动
-- [ ] 响应式按 `lg:` 断点处理单栏→双栏
-
-## 相关 skill / 文档
-
-- 组件结构与生命周期 → `frontend-component`
-- 设计哲学完整背景 → `frontend/FRONTEND_CONVENTIONS.md`
+- 组件结构和共享组件边界：`frontend-component`
+- 设计 token 实现：`frontend/src/index.css`
+- 技术栈与目录：`frontend/FRONTEND_CONVENTIONS.md`

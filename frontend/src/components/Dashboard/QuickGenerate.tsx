@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createScopedLogger, toLogError } from '../../services/logger';
 import useStore from '../../store';
+import { ActionButton, WorkbenchCard } from '../UI';
 
 const logger = createScopedLogger('quick-generate');
 
@@ -70,13 +71,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
-      {/* 标题 */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-2 h-2 rounded-full bg-lemon" />
-        <h3 className="font-display italic text-[14px] font-medium text-ink-soft">AI 资讯采集</h3>
-      </div>
-
+    <WorkbenchCard heading="AI 资讯采集" accent="lemon">
       {/* 配置区 */}
       <div className="flex flex-col gap-2 mb-4 sm:flex-row">
         <select
@@ -97,13 +92,17 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
             <option key={n} value={n}>{n} 条</option>
           ))}
         </select>
-        <button
+        <ActionButton
           onClick={handleFetch}
-          disabled={isLoading}
-          className="bg-lemon hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider whitespace-nowrap"
+          variant="primary"
+          shape="pill"
+          isUppercase
+          isLoading={isLoading}
+          loadingLabel="加载中..."
+          className="whitespace-nowrap"
         >
-          {isLoading ? '加载中...' : '获取'}
-        </button>
+          获取
+        </ActionButton>
       </div>
 
       {/* 资讯列表 */}
@@ -113,13 +112,16 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
             <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">
               已加载 {todayItems.length} 条资讯
             </span>
-            <button
+            <ActionButton
               onClick={handleRewrite}
-              disabled={isRewriting}
-              className="bg-lilac hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider"
+              variant="edit"
+              shape="pill"
+              isUppercase
+              isLoading={isRewriting}
+              loadingLabel="改写中..."
             >
-              {isRewriting ? '改写中...' : '✦ 一键改写口播稿'}
-            </button>
+              ✦ 一键改写口播稿
+            </ActionButton>
           </div>
 
           <div className="space-y-0">
@@ -127,9 +129,6 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
               <div
                 key={item.id}
                 className="flex items-start gap-3 py-2.5 border-b border-card-border last:border-0"
-                style={{
-                  animation: `fade-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both`,
-                }}
               >
                 <span className="font-display italic text-[16px] font-medium text-pink min-w-[26px] leading-snug">
                   {String(index + 1).padStart(2, '0')}
@@ -171,7 +170,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
           {error}
         </div>
       )}
-    </div>
+    </WorkbenchCard>
   );
 };
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { ArrowRight, Copy, DownloadSimple } from '@phosphor-icons/react';
 import type { TranscriptionChunkPreview } from '../../store';
 import { ModalShell } from '../ModalShell';
+import { ActionButton } from '../UI';
 
 interface TranscriptionPreviewModalProps {
   isOpen: boolean;
@@ -50,16 +51,16 @@ export const TranscriptionPreviewModal: React.FC<TranscriptionPreviewModalProps>
       ariaLabel={isLive ? '实时逐字稿' : '转录文稿'}
       footer={(
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onCopy} disabled={!text.trim()} className="inline-flex items-center gap-1.5 px-4 py-2 font-body text-[11px] text-ink-soft transition-colors hover:text-ink disabled:opacity-40">
+          <ActionButton variant="text" size="sm" onClick={onCopy} disabled={!text.trim()}>
             <Copy aria-hidden="true" size={13} />{isCopied ? '已复制' : '复制'}
-          </button>
-          <button type="button" onClick={onDownload} disabled={!text.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-sage px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40">
+          </ActionButton>
+          <ActionButton variant="confirm" size="sm" onClick={onDownload} disabled={!text.trim()}>
             <DownloadSimple aria-hidden="true" size={13} />下载 TXT
-          </button>
+          </ActionButton>
           {onImport && (
-            <button type="button" onClick={onImport} disabled={!text.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-lemon px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40">
+            <ActionButton variant="primary" size="sm" onClick={onImport} disabled={!text.trim()}>
               导入稿件<ArrowRight aria-hidden="true" size={13} />
-            </button>
+            </ActionButton>
           )}
         </div>
       )}

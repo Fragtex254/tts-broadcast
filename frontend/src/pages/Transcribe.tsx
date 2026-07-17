@@ -6,6 +6,7 @@ import { LiveTranscriptionPreview } from '../components/Transcribe/LiveTranscrip
 import { TranscribeProviderControls } from '../components/Transcribe/TranscribeProviderControls';
 import { TranscriptConversationModal } from '../components/Transcribe/TranscriptConversationModal';
 import { TranscriptionPreviewModal } from '../components/Transcribe/TranscriptionPreviewModal';
+import { ActionButton } from '../components/UI';
 import useStore, {
   type AsrModelOption,
   type AsrEngine,
@@ -470,7 +471,6 @@ export const Transcribe: React.FC = () => {
             <>
               <section
                 className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both' }}
               >
                 <div className="flex items-center gap-2 mb-4">
                   <span className="w-2 h-2 rounded-full bg-lilac" />
@@ -529,16 +529,18 @@ export const Transcribe: React.FC = () => {
                   onAsrContextChange={setAsrContext}
                   onRefreshMossModels={loadMossModels}
                 >
-                  <button
+                  <ActionButton
                     onClick={handleSubmit}
-                    disabled={isTranscribing || isMossModelMissing || isPodcastUnavailable}
-                    className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+                    disabled={isMossModelMissing || isPodcastUnavailable}
+                    variant="primary"
+                    shape="pill"
+                    size="lg"
+                    isUppercase
+                    isLoading={isTranscribing}
+                    loadingLabel="转录中..."
                   >
-                    {isTranscribing && (
-                      <span className="absolute left-0 top-0 h-full w-2/3 bg-white/20 animate-pulse" />
-                    )}
-                    <span className="relative">{isTranscribing ? '转录中...' : '开始转录'}</span>
-                  </button>
+                    开始转录
+                  </ActionButton>
                 </TranscribeProviderControls>
 
                 {error && (
@@ -548,7 +550,7 @@ export const Transcribe: React.FC = () => {
                 )}
 
                 {(isTranscribing || transcribeProgress.phase !== 'idle') && (
-                  <div className="mt-4 bg-white/60 rounded-2xl p-4 border border-card-border">
+                  <div className="mt-4 bg-white/60 rounded-2xl p-4 border border-card-border" role="status" aria-live="polite">
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <p className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">
@@ -562,10 +564,17 @@ export const Transcribe: React.FC = () => {
                         {Math.round(transcribeProgress.percent)}%
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-white/70 border border-card-border">
+                    <div
+                      className="h-2 overflow-hidden rounded-full bg-white/70 border border-card-border"
+                      role="progressbar"
+                      aria-label="转录进度"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(transcribeProgress.percent)}
+                    >
                       <div
-                        className="h-full rounded-full bg-lilac transition-all duration-300"
-                        style={{ width: `${Math.min(Math.max(transcribeProgress.percent, 0), 100)}%` }}
+                        className="h-full w-full origin-left rounded-full bg-lilac transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                        style={{ transform: `scaleX(${Math.min(Math.max(transcribeProgress.percent, 0), 100) / 100})` }}
                       />
                     </div>
                     {transcribeProgress.total > 0 && (
@@ -594,7 +603,6 @@ export const Transcribe: React.FC = () => {
             <>
               <section
                 className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both' }}
               >
                 <div className="flex items-center gap-2 mb-4">
                   <span className="w-2 h-2 rounded-full bg-lilac" />
@@ -656,20 +664,18 @@ export const Transcribe: React.FC = () => {
                   onAsrContextChange={setAsrContext}
                   onRefreshMossModels={loadMossModels}
                 >
-                  <button
+                  <ActionButton
                     onClick={handleBatchSubmit}
-                    disabled={isBatchTranscribing || selectedIndexes.size === 0 || isMossModelMissing || isPodcastUnavailable}
-                    className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+                    disabled={selectedIndexes.size === 0 || isMossModelMissing || isPodcastUnavailable}
+                    variant="primary"
+                    shape="pill"
+                    size="lg"
+                    isUppercase
+                    isLoading={isBatchTranscribing}
+                    loadingLabel="转录中..."
                   >
-                    {isBatchTranscribing && (
-                      <span className="absolute left-0 top-0 h-full w-2/3 bg-white/20 animate-pulse" />
-                    )}
-                    <span className="relative">
-                      {isBatchTranscribing
-                        ? '转录中...'
-                        : `开始批量转录（已选 ${selectedIndexes.size}/${batchFiles.length}）`}
-                    </span>
-                  </button>
+                    开始批量转录（已选 {selectedIndexes.size}/{batchFiles.length}）
+                  </ActionButton>
                 </TranscribeProviderControls>
 
                 {error && (
@@ -679,7 +685,7 @@ export const Transcribe: React.FC = () => {
                 )}
 
                 {(isBatchTranscribing || batchTranscribeProgress.phase !== 'idle') && (
-                  <div className="mt-4 bg-white/60 rounded-2xl p-4 border border-card-border">
+                  <div className="mt-4 bg-white/60 rounded-2xl p-4 border border-card-border" role="status" aria-live="polite">
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <p className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">
@@ -693,10 +699,17 @@ export const Transcribe: React.FC = () => {
                         {Math.round(batchTranscribeProgress.percent)}%
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-white/70 border border-card-border">
+                    <div
+                      className="h-2 overflow-hidden rounded-full bg-white/70 border border-card-border"
+                      role="progressbar"
+                      aria-label="批量转录进度"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(batchTranscribeProgress.percent)}
+                    >
                       <div
-                        className="h-full rounded-full bg-lilac transition-all duration-300"
-                        style={{ width: `${Math.min(Math.max(batchTranscribeProgress.percent, 0), 100)}%` }}
+                        className="h-full w-full origin-left rounded-full bg-lilac transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                        style={{ transform: `scaleX(${Math.min(Math.max(batchTranscribeProgress.percent, 0), 100) / 100})` }}
                       />
                     </div>
                     {batchTranscribeProgress.total > 0 && (
@@ -712,7 +725,6 @@ export const Transcribe: React.FC = () => {
               {showBatchItems ? (
                 <section
                   className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                  style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -720,20 +732,25 @@ export const Transcribe: React.FC = () => {
                       <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录结果</h3>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
+                      <ActionButton
                         onClick={handleDownloadAll}
                         disabled={completedCount === 0 || isBatchTranscribing || isZipping}
-                        className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/60 hover:bg-white/80 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
+                        variant="neutral"
+                        size="sm"
+                        isLoading={isZipping}
+                        loadingLabel="打包中..."
+                        className="bg-white/60"
                       >
-                        {isZipping ? '打包中...' : `下载压缩包（${completedCount}）`}
-                      </button>
-                      <button
+                        下载压缩包（{completedCount}）
+                      </ActionButton>
+                      <ActionButton
                         onClick={handleMergeAll}
                         disabled={completedCount === 0 || isBatchTranscribing}
-                        className="px-3 py-1.5 font-body text-[11px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150"
+                        variant="confirm"
+                        size="sm"
                       >
                         合并全部导入（{completedCount}）
-                      </button>
+                      </ActionButton>
                     </div>
                   </div>
 
@@ -809,7 +826,6 @@ export const Transcribe: React.FC = () => {
                 batchFiles.length > 0 && (
                   <section
                     className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                    style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">

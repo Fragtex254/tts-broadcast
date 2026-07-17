@@ -25,7 +25,7 @@ export const VoicePresetPicker: React.FC<VoicePresetPickerProps> = ({
         <button
           type="button"
           onClick={onManage}
-          className="mt-4 rounded-xl bg-lilac px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0 active:shadow-none"
+          className="mt-4 rounded-xl bg-lilac px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-ui duration-150 hover:-translate-y-px hover:brightness-105 active:scale-[0.97] active:shadow-none"
         >
           前往音色库
         </button>
@@ -53,7 +53,7 @@ export const VoicePresetPicker: React.FC<VoicePresetPickerProps> = ({
           return (
             <section
               key={preset.id}
-              className={`rounded-card border p-4 transition-all duration-150 ${
+              className={`rounded-card border p-4 transition-ui duration-150 ${
                 isSelected
                   ? 'border-ink/20 bg-lemon/20 shadow-card'
                   : 'border-card-border bg-white/65 hover:border-ink/15 hover:bg-white/85'
@@ -79,7 +79,7 @@ export const VoicePresetPicker: React.FC<VoicePresetPickerProps> = ({
               <button
                 type="button"
                 onClick={() => onSelect(preset)}
-                className={`mt-3 w-full rounded-xl px-3 py-2 font-body text-[11px] font-medium transition-all duration-150 ${
+                className={`mt-3 w-full rounded-xl px-3 py-2 font-body text-[11px] font-medium transition-ui duration-150 ${
                   isSelected
                     ? 'bg-sage/45 text-ink'
                     : 'bg-white/70 text-ink-soft shadow-btn hover:bg-lemon/35 hover:text-ink'
