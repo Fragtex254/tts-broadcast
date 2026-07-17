@@ -22,7 +22,7 @@ const DEFAULT_LLM_SETTINGS = {
   llm_split_thinking_enabled: false,
 };
 
-const LLM_REQUEST_TIMEOUT_MS = 60000;
+const LLM_REQUEST_TIMEOUT_MS = 120000;
 const STYLE_TAG_SUGGEST_BATCH_SIZE = 10;
 const SEGMENT_AUDIO_TAG_SUGGEST_BATCH_SIZE = 6;
 const SPLIT_SCRIPT_CHUNK_LENGTH = 2500;
@@ -168,9 +168,65 @@ function getErrorStatus(error) {
   return error?.status || error?.response?.status || error?.response?.data?.error?.code;
 }
 
+function getProviderStatusCode(error) {
+  const explicit = error?.providerStatusCode
+    || error?.response?.data?.base_resp?.status_code
+    || error?.response?.data?.error?.code;
+  if (explicit !== undefined && explicit !== null && explicit !== '') return explicit;
+  const statusMessage = error?.response?.data?.base_resp?.status_msg
+    || error?.response?.data?.error?.message
+    || error?.response?.data?.message;
+  const match = String(statusMessage || '').match(/\((\d{4,5})\)/);
+  return match ? Number(match[1]) : undefined;
+}
+
+function getProviderErrorMessage(error) {
+  const data = error?.response?.data;
+  const candidates = [
+    data?.error?.message,
+    data?.message,
+    data?.msg,
+    data?.base_resp?.status_msg,
+    typeof data === 'string' ? data : '',
+  ];
+  return String(candidates.find((value) => typeof value === 'string' && value.trim()) || '').trim();
+}
+
+function annotateOpenAiProviderError(error) {
+  const providerStatusCode = getProviderStatusCode(error);
+  if (providerStatusCode !== undefined && providerStatusCode !== null && providerStatusCode !== '') {
+    error.providerStatusCode = providerStatusCode;
+  }
+  if (providerStatusCode === 1002 || providerStatusCode === '1002') {
+    error.status = 429;
+    error.isRateLimit = true;
+  }
+  return error;
+}
+
+function createLlmError(message, { code, status, providerStatusCode } = {}) {
+  const mapped = new Error(message);
+  if (code) mapped.code = code;
+  if (status) mapped.status = status;
+  if (providerStatusCode !== undefined && providerStatusCode !== null && providerStatusCode !== '') {
+    mapped.providerStatusCode = providerStatusCode;
+  }
+  return mapped;
+}
+
 function mapLlmError(error) {
   const status = getErrorStatus(error);
-  const message = String(error?.message || error?.response?.data?.error?.message || '');
+  const providerStatusCode = getProviderStatusCode(error);
+  const providerMessage = getProviderErrorMessage(error);
+  const message = providerMessage || String(error?.message || '');
+  if (status) {
+    logger.error({
+      err: error,
+      status,
+      providerStatusCode,
+      providerMessage: providerMessage.slice(0, 500),
+    }, 'LLM API 请求失败');
+  }
   if ((status === 400 || status === '400' || status === 422 || status === '422')
     && /image|vision|media|multimodal|content block|unsupported|input_image|image_url|图片|图像|视觉/i.test(message)) {
     return new Error('当前 LLM 模型或接口不支持图片输入，请在设置中切换到原生支持视觉的模型后重试');
@@ -184,8 +240,28 @@ function mapLlmError(error) {
   if (status === 429 || status === '429') {
     return new Error('LLM API 请求过于频繁，请稍后重试');
   }
+  if (providerStatusCode === 1026 || providerStatusCode === '1026') {
+    return createLlmError('LLM API 拒绝了输入中的敏感内容，请调整原文或改用其他模型', {
+      code: 'LLM_INPUT_SENSITIVE', status, providerStatusCode
+    });
+  }
+  if (providerStatusCode === 1027 || providerStatusCode === '1027'
+    || /output.*sensitive|输出内容涉敏/i.test(providerMessage)) {
+    return createLlmError('LLM 输出触发内容安全过滤，正在尝试用中性表述重新生成', {
+      code: 'LLM_OUTPUT_SENSITIVE', status, providerStatusCode
+    });
+  }
+  if (providerStatusCode === 1039 || providerStatusCode === '1039') {
+    return createLlmError('LLM 请求超过 Token 限制，请缩短输入或输出长度', {
+      code: 'LLM_TOKEN_LIMIT', status, providerStatusCode
+    });
+  }
+  if (status === 422 || status === '422') {
+    const detail = providerMessage ? `：${providerMessage}` : '';
+    return new Error(`LLM API 拒绝了当前请求（422）${detail}`);
+  }
   if (error?.code === 'ECONNABORTED') {
-    return new Error('LLM API 请求超时，请稍后重试');
+    return createLlmError('LLM API 请求超时，请稍后重试', { code: 'LLM_TIMEOUT' });
   }
   if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND' || error?.code === 'EHOSTUNREACH') {
     return new Error('无法连接 LLM API，请检查 Base URL 或网络');
@@ -436,14 +512,19 @@ async function createOpenAiMessage({ prompt, systemPrompt, maxTokens, config, ap
     payload.thinking = createThinkingOption(false);
   }
 
-  const response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), payload, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'api-key': apiKey,
-      'Content-Type': 'application/json'
-    },
-    timeout: LLM_REQUEST_TIMEOUT_MS
-  });
+  let response;
+  try {
+    response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), payload, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      timeout: LLM_REQUEST_TIMEOUT_MS
+    });
+  } catch (error) {
+    throw annotateOpenAiProviderError(error);
+  }
 
   return extractOpenAiText(response);
 }
@@ -500,14 +581,19 @@ async function createOpenAiVisionMessage({ prompt, systemPrompt, maxTokens, conf
     payload.thinking = createThinkingOption(false);
   }
 
-  const response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), payload, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'api-key': apiKey,
-      'Content-Type': 'application/json'
-    },
-    timeout: LLM_REQUEST_TIMEOUT_MS
-  });
+  let response;
+  try {
+    response = await axios.post(createOpenAiChatCompletionsUrl(config.baseUrl), payload, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      timeout: LLM_REQUEST_TIMEOUT_MS
+    });
+  } catch (error) {
+    throw annotateOpenAiProviderError(error);
+  }
 
   return extractOpenAiText(response);
 }

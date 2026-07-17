@@ -204,6 +204,107 @@ describe('Transcript 总结服务', () => {
     expect(generateText.mock.calls[1][0].prompt).toContain('{"digest": 损坏}');
   });
 
+  test('模型输出触发内容安全过滤时用中性表述重试当前阶段', async () => {
+    const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
+    const record = podcastTranscriptStore.create({
+      record: { fileName: 'sensitive-retry.wav', text: '争议话题', contentMode: 'podcast', structureStatus: 'ready' },
+      transcript: {
+        speakers: [{ speakerKey: 'speaker-0001', displayName: '说话人 1', sortOrder: 0, speakerScope: 'global' }],
+        segments: [{ sourceIndex: 0, segmentIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '争议话题' }],
+        turns: [{ turnIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '争议话题', evidenceSegmentIndexes: [0] }]
+      }
+    });
+    const sensitiveError = Object.assign(new Error('输出涉敏'), { code: 'LLM_OUTPUT_SENSITIVE' });
+    const generateText = jest.fn()
+      .mockRejectedValueOnce(sensitiveError)
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '中性概括',
+        claims: [{ content: '节目讨论了相关争议', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        one_liner: '一期讨论相关争议的节目', overview: '节目以中性方式讨论相关争议。',
+        chapters: [{ title: '相关争议', content: '节目讨论了相关争议。', evidence_start_index: 0, evidence_end_index: 0 }],
+        speaker_viewpoints: [], highlights: []
+      }));
+
+    const detail = await transcriptionSummaryService.generate({ transcriptionId: record.id, generateText, model: 'test-model' });
+
+    expect(detail.record.summary_status).toBe('completed');
+    expect(generateText).toHaveBeenCalledTimes(3);
+    expect(generateText.mock.calls[1][0].prompt).toContain('内容安全重试要求');
+    expect(generateText.mock.calls[1][0].systemPrompt).toContain('克制、中性');
+  });
+
+  test('模型请求超时时只重试当前阶段且不改写原始提示词', async () => {
+    const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
+    const record = podcastTranscriptStore.create({
+      record: { fileName: 'timeout-retry.wav', text: '正常话题', contentMode: 'podcast', structureStatus: 'ready' },
+      transcript: {
+        speakers: [{ speakerKey: 'speaker-0001', displayName: '说话人 1', sortOrder: 0, speakerScope: 'global' }],
+        segments: [{ sourceIndex: 0, segmentIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '正常话题' }],
+        turns: [{ turnIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '正常话题', evidenceSegmentIndexes: [0] }]
+      }
+    });
+    const timeoutError = Object.assign(new Error('请求超时'), { code: 'LLM_TIMEOUT' });
+    const generateText = jest.fn()
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '正常摘要',
+        claims: [{ content: '正常观点', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        one_liner: '一期正常节目', overview: '节目讨论正常话题。',
+        chapters: [{ title: '正常话题', content: '正常观点。', evidence_start_index: 0, evidence_end_index: 0 }],
+        speaker_viewpoints: [], highlights: []
+      }));
+
+    const detail = await transcriptionSummaryService.generate({ transcriptionId: record.id, generateText, model: 'test-model' });
+
+    expect(detail.record.summary_status).toBe('completed');
+    expect(generateText.mock.calls[1][0].prompt).toBe(generateText.mock.calls[0][0].prompt);
+  });
+
+  test('中性重试仍涉敏时拆分批次并只省略持续失败的子批次', async () => {
+    const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
+    const record = podcastTranscriptStore.create({
+      record: { fileName: 'sensitive-split.wav', text: '普通话题。敏感话题。', contentMode: 'podcast', structureStatus: 'ready' },
+      transcript: {
+        speakers: [{ speakerKey: 'speaker-0001', displayName: '说话人 1', sortOrder: 0, speakerScope: 'global' }],
+        segments: [
+          { sourceIndex: 0, segmentIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '普通话题' },
+          { sourceIndex: 1, segmentIndex: 1, speakerKey: 'speaker-0001', startSeconds: 3, endSeconds: 5, text: '敏感话题' }
+        ],
+        turns: [
+          { turnIndex: 0, speakerKey: 'speaker-0001', startSeconds: 0, endSeconds: 2, text: '普通话题', evidenceSegmentIndexes: [0] },
+          { turnIndex: 1, speakerKey: 'speaker-0001', startSeconds: 3, endSeconds: 5, text: '敏感话题', evidenceSegmentIndexes: [1] }
+        ]
+      }
+    });
+    const sensitiveError = () => Object.assign(new Error('输出涉敏'), { code: 'LLM_OUTPUT_SENSITIVE' });
+    const generateText = jest.fn()
+      .mockRejectedValueOnce(sensitiveError())
+      .mockRejectedValueOnce(sensitiveError())
+      .mockResolvedValueOnce(JSON.stringify({
+        digest: '普通话题摘要',
+        claims: [{ content: '普通观点', speaker_key: 'speaker-0001', evidence_start_index: 0, evidence_end_index: 0 }]
+      }))
+      .mockRejectedValueOnce(sensitiveError())
+      .mockRejectedValueOnce(sensitiveError())
+      .mockResolvedValueOnce(JSON.stringify({
+        one_liner: '一期包含普通话题的节目', overview: '普通话题已完成总结，部分内容因安全限制省略。',
+        chapters: [{ title: '普通话题', content: '普通观点。', evidence_start_index: 0, evidence_end_index: 0 }],
+        speaker_viewpoints: [], highlights: []
+      }));
+
+    const detail = await transcriptionSummaryService.generate({ transcriptionId: record.id, generateText, model: 'test-model' });
+
+    expect(detail.record.summary_status).toBe('completed');
+    expect(generateText).toHaveBeenCalledTimes(6);
+    expect(detail.claims).toEqual([
+      expect.objectContaining({ claim: '普通观点', evidence_start_index: 0, evidence_end_index: 0 })
+    ]);
+  });
+
   test('批次 JSON 缺少摘要时反馈校验错误并只重试当前批次', async () => {
     const transcriptionSummaryService = require('../../src/services/transcriptionSummaryService');
     const record = podcastTranscriptStore.create({
