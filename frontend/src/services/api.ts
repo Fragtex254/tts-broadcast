@@ -241,7 +241,7 @@ export const transcribeApi = {
     api.patch(`/transcribe/results/${id}/metadata`, data),
   analyzeClaims: (id: number, taskId: string) =>
     api.post(`/transcribe/results/${id}/analyze-claims`, { taskId }),
-  updateClaim: (claimId: number, data: { userNote?: string; isStarred?: boolean }) =>
+  updateClaim: (claimId: number, data: { userNote?: string; isStarred?: boolean; isHidden?: boolean }) =>
     api.patch(`/transcribe/claims/${claimId}`, data),
   deleteClaim: (claimId: number) => api.delete(`/transcribe/claims/${claimId}`),
   fetchModels: (data: { provider: AsrProvider; engine?: AsrEngine; baseUrl?: string; apiKey?: string }) =>

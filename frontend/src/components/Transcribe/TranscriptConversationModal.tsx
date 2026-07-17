@@ -51,8 +51,13 @@ interface TranscriptConversationModalProps {
   evidenceEndSegmentIndex?: number | null;
 }
 
-export const TranscriptConversationModal: React.FC<TranscriptConversationModalProps> = ({
-  isOpen,
+interface TranscriptConversationReaderProps extends TranscriptConversationModalProps {
+  presentation: 'modal' | 'embedded';
+  onOpenFull?: () => void;
+}
+
+export const TranscriptConversationReader: React.FC<TranscriptConversationReaderProps> = ({
+  isOpen = true,
   title,
   turns,
   speakers,
@@ -60,6 +65,8 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
   onCorrect,
   initialEvidenceSegmentIndex = null,
   evidenceEndSegmentIndex = null,
+  presentation,
+  onOpenFull,
 }) => {
   const requestedEvidenceEnd = evidenceEndSegmentIndex ?? initialEvidenceSegmentIndex;
   const evidenceRangeStart = initialEvidenceSegmentIndex === null || requestedEvidenceEnd === null
@@ -112,7 +119,7 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
     virtualItems,
     visibleEndIndex,
   } = useVirtualTranscriptTurns({
-    isEnabled: isOpen,
+    isEnabled: presentation === 'embedded' || isOpen,
     turnIds: displayedTurnIds,
     pinnedTurnId: editingTurnId || activeTurnId || searchTargetTurnId,
   });
@@ -239,22 +246,8 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
     </label>
   );
 
-  return (
-    <ModalShell
-      isOpen={isOpen}
-      title="逐字稿阅读"
-      subtitle={<span className="block max-w-[680px] truncate">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</span>}
-      onClose={handleClose}
-      headerActions={searchInput}
-      size="xl"
-      accent="lilac"
-      contentClassName="overflow-hidden p-0"
-      panelClassName="h-[calc(100vh-3rem)]"
-      panelStyle={{ maxWidth: '1320px' }}
-      closeOnBackdrop={false}
-      ariaLabel="逐字稿阅读"
-    >
-      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper lg:grid-cols-[220px_minmax(0,1fr)] lg:grid-rows-1 xl:grid-cols-[220px_minmax(0,1fr)_220px]">
+  const readerContent = (
+      <div className={`grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper lg:grid-cols-[220px_minmax(0,1fr)] lg:grid-rows-1 ${presentation === 'modal' ? 'xl:grid-cols-[220px_minmax(0,1fr)_220px]' : 'xl:grid-cols-[200px_minmax(0,1fr)_190px]'}`}>
         <aside className="border-b border-card-border bg-white/30 p-4 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r" aria-label="说话人筛选">
           <label className="relative mb-3 block sm:hidden">
             <span className="sr-only">在逐字稿中搜索</span>
@@ -419,8 +412,51 @@ export const TranscriptConversationModal: React.FC<TranscriptConversationModalPr
           </div>
         </aside>
       </div>
+  );
+
+  if (presentation === 'embedded') {
+    return (
+      <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 sm:p-6 shadow-card border border-card-border">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-pink" /><h2 className="font-display italic text-[14px] font-medium text-ink-soft">逐字稿阅读</h2></div>
+            <p className="mt-1 font-body text-[10px] text-ink-soft/55">复用完整阅读器，在固定内容空间内连续阅读、搜索、筛选与校对</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {searchInput}
+            {onOpenFull && <button type="button" onClick={onOpenFull} className="rounded-xl bg-lilac px-3.5 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0">打开全屏阅读</button>}
+          </div>
+        </div>
+        <p className="mt-3 truncate font-body text-[10px] text-ink-soft/45">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</p>
+        <div className="mt-4 h-[680px] overflow-hidden rounded-2xl border border-card-border bg-paper">
+          {readerContent}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <ModalShell
+      isOpen={isOpen}
+      title="逐字稿阅读"
+      subtitle={<span className="block max-w-[680px] truncate">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</span>}
+      onClose={handleClose}
+      headerActions={searchInput}
+      size="xl"
+      accent="lilac"
+      contentClassName="overflow-hidden p-0"
+      panelClassName="h-[calc(100vh-3rem)]"
+      panelStyle={{ maxWidth: '1320px' }}
+      closeOnBackdrop={false}
+      ariaLabel="逐字稿阅读"
+    >
+      {readerContent}
     </ModalShell>
   );
 };
+
+export const TranscriptConversationModal: React.FC<TranscriptConversationModalProps> = (props) => (
+  <TranscriptConversationReader {...props} presentation="modal" />
+);
 
 export default TranscriptConversationModal;

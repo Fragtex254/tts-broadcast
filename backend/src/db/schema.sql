@@ -229,6 +229,7 @@ CREATE TABLE IF NOT EXISTS transcription_claims (
   confidence REAL NOT NULL DEFAULT 0,
   user_note TEXT NOT NULL DEFAULT '',
   is_starred INTEGER NOT NULL DEFAULT 0,
+  is_hidden INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active',
   analysis_model TEXT NOT NULL DEFAULT '',
   embedding TEXT NOT NULL DEFAULT '',

@@ -177,11 +177,10 @@ export const TranscriptWorkspace: React.FC = () => {
                 claimsError={currentTranscript.record.claims_error}
                 onAnalyze={() => void analyzeClaims(transcriptionId).catch((claimError) => setError(claimError instanceof Error ? claimError.message : '无法开始观点分析'))}
                 onOpenClaim={openClaim}
+                onUpdateClaim={updateClaim}
               />
-              <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-                <TranscriptSpeakerPanel speakers={currentTranscript.speakers} onRename={handleRename} />
-                <TranscriptTurnList turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => setIsConversationOpen(true)} onCorrect={handleCorrectTurn} />
-              </div>
+              <TranscriptSpeakerPanel speakers={currentTranscript.speakers} onRename={handleRename} />
+              <TranscriptTurnList title={currentTranscript.record.relative_path || currentTranscript.record.file_name} turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => setIsConversationOpen(true)} onCorrect={handleCorrectTurn} />
               <ClaimDetailModal
                 key={selectedClaim ? `claim-${selectedClaim.id}` : `missing-${searchParams.get('claim') || 'claim'}`}
                 isOpen={hasClaimParam && (!isEvidenceMode || selectedClaim === null)}

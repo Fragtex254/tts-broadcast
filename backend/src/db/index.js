@@ -193,6 +193,7 @@ db.exec(`
     evidence_start_index INTEGER NOT NULL, evidence_end_index INTEGER NOT NULL, start_seconds REAL NOT NULL,
     end_seconds REAL NOT NULL, topic_tags TEXT NOT NULL DEFAULT '[]', content_value INTEGER NOT NULL DEFAULT 0,
     confidence REAL NOT NULL DEFAULT 0, user_note TEXT NOT NULL DEFAULT '', is_starred INTEGER NOT NULL DEFAULT 0,
+    is_hidden INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active', analysis_model TEXT NOT NULL DEFAULT '', embedding TEXT NOT NULL DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (transcription_id) REFERENCES transcription_results(id) ON DELETE CASCADE
@@ -234,6 +235,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_content_project_claims_order
     ON content_project_claims(project_id, sort_order, id);
 `);
+
+try {
+  db.prepare('SELECT is_hidden FROM transcription_claims LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE transcription_claims ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0');
+}
 
 try {
   db.prepare('SELECT corrected_text FROM transcription_turns LIMIT 1').get();

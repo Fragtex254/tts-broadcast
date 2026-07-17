@@ -306,6 +306,7 @@ export interface TranscriptClaim {
   confidence: number;
   user_note: string;
   is_starred: boolean;
+  is_hidden: boolean;
   status: 'active' | 'stale';
   analysis_model: string;
   embedding: number[] | null;
@@ -534,7 +535,7 @@ export interface AppState {
   summarizeTranscript: (transcriptionId: number) => Promise<void>;
   updateTranscriptMetadata: (transcriptionId: number, metadata: { podcastName: string; episodeTitle: string; guestNames: string[]; sourceUrl: string; publishedAt: string; topicTags: string[] }) => Promise<TranscriptionRecord>;
   analyzeTranscriptClaims: (transcriptionId: number) => Promise<void>;
-  updateTranscriptClaim: (claimId: number, update: { userNote?: string; isStarred?: boolean }) => Promise<TranscriptClaim>;
+  updateTranscriptClaim: (claimId: number, update: { userNote?: string; isStarred?: boolean; isHidden?: boolean }) => Promise<TranscriptClaim>;
   deleteTranscriptClaim: (claimId: number) => Promise<void>;
   batchTranscribeMedia: (
     files: File[],
