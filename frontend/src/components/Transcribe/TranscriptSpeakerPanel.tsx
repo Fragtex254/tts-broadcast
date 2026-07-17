@@ -36,7 +36,7 @@ export const TranscriptSpeakerPanel: React.FC<TranscriptSpeakerPanelProps> = ({ 
         <span className="h-2 w-2 rounded-full bg-blush" />
         <h2 className="font-display italic text-[14px] font-medium text-ink-soft">说话人</h2>
       </div>
-      <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {speakers.map((speaker) => (
           <div key={speaker.id} className="rounded-2xl border border-card-border bg-white/60 p-3">
             <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/55" htmlFor={`speaker-${speaker.id}`}>

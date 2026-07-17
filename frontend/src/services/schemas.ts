@@ -213,7 +213,7 @@ export const TranscriptClaimSchema = z.object({
   question: z.string(), claim: z.string(), reasoning: z.string(), evidence_excerpt: z.string(),
   evidence_start_index: z.number(), evidence_end_index: z.number(), start_seconds: z.number(), end_seconds: z.number(),
   topic_tags: z.array(z.string()), content_value: z.number(), confidence: z.number(), user_note: z.string(),
-  is_starred: z.boolean(), status: z.enum(['active', 'stale']), analysis_model: z.string(), embedding: z.array(z.number()).nullable(),
+  is_starred: z.boolean(), is_hidden: z.boolean(), status: z.enum(['active', 'stale']), analysis_model: z.string(), embedding: z.array(z.number()).nullable(),
   podcast_name: z.string(), episode_title: z.string(), source_url: z.string(), published_at: z.string(),
   created_at: z.string(), updated_at: z.string(),
 });

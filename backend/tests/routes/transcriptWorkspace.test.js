@@ -123,4 +123,31 @@ describe('Transcript 内容详情 API', () => {
     expect(refreshed.record.claims_status).toBe('stale');
     expect(refreshed.claims[0].status).toBe('stale');
   });
+
+  test('收藏和隐藏观点会持久化，但不会删除观点', async () => {
+    const claim = researchStore.replaceClaims(record.id, { model: 'test-model', claims: [{
+      speakerKey: 'speaker-0001', question: '测试问题', claim: '测试观点', reasoning: '', evidenceExcerpt: '测试内容',
+      evidenceStartIndex: 0, evidenceEndIndex: 0, startSeconds: 0, endSeconds: 2,
+      topicTags: [], contentValue: 80, confidence: 0.9,
+    }] })[0];
+
+    const response = await request(app)
+      .patch(`/api/transcribe/claims/${claim.id}`)
+      .send({ isStarred: true, isHidden: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.claim).toMatchObject({ id: claim.id, is_starred: true, is_hidden: true });
+    const refreshed = podcastTranscriptStore.getDetail(record.id);
+    expect(refreshed.claims).toHaveLength(1);
+    expect(refreshed.claims[0]).toMatchObject({ is_starred: true, is_hidden: true });
+  });
+
+  test('拒绝非法观点隐藏状态', async () => {
+    const response = await request(app)
+      .patch('/api/transcribe/claims/999')
+      .send({ isHidden: 'yes' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('隐藏状态无效');
+  });
 });

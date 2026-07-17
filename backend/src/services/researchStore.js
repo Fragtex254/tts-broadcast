@@ -15,6 +15,7 @@ function normalizeClaim(row) {
     content_value: Number(row.content_value || 0),
     confidence: Number(row.confidence || 0),
     is_starred: Boolean(row.is_starred),
+    is_hidden: Boolean(row.is_hidden),
   };
 }
 
@@ -41,17 +42,18 @@ function getClaim(id) {
   return normalizeClaim(db.prepare(`${CLAIM_SELECT} WHERE c.id = ?`).get(id));
 }
 
-function updateClaim(id, { userNote, isStarred, status } = {}) {
+function updateClaim(id, { userNote, isStarred, isHidden, status } = {}) {
   const current = getClaim(id);
   if (!current) return undefined;
   const nextStatus = status === undefined ? current.status : status;
   const result = db.prepare(`
     UPDATE transcription_claims
-    SET user_note = ?, is_starred = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+    SET user_note = ?, is_starred = ?, is_hidden = ?, status = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
     userNote === undefined ? current.user_note : userNote,
     isStarred === undefined ? (current.is_starred ? 1 : 0) : (isStarred ? 1 : 0),
+    isHidden === undefined ? (current.is_hidden ? 1 : 0) : (isHidden ? 1 : 0),
     nextStatus,
     id
   );

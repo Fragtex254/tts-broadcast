@@ -189,8 +189,14 @@ router.patch('/claims/:claimId', (req, res) => {
     if (!check.valid) return res.status(400).json({ error: check.error });
     if (req.body.userNote !== undefined && (typeof req.body.userNote !== 'string' || req.body.userNote.length > 5000)) return res.status(400).json({ error: '个人笔记不能超过 5000 个字符' });
     if (req.body.isStarred !== undefined && typeof req.body.isStarred !== 'boolean') return res.status(400).json({ error: '收藏状态无效' });
+    if (req.body.isHidden !== undefined && typeof req.body.isHidden !== 'boolean') return res.status(400).json({ error: '隐藏状态无效' });
     if (req.body.status !== undefined && !['active', 'stale'].includes(req.body.status)) return res.status(400).json({ error: '观点状态无效' });
-    const claim = researchStore.updateClaim(check.id, { userNote: req.body.userNote?.trim(), isStarred: req.body.isStarred, status: req.body.status });
+    const claim = researchStore.updateClaim(check.id, {
+      userNote: req.body.userNote?.trim(),
+      isStarred: req.body.isStarred,
+      isHidden: req.body.isHidden,
+      status: req.body.status,
+    });
     if (!claim) return res.status(404).json({ error: '观点不存在' });
     res.json({ claim });
   } catch (error) {

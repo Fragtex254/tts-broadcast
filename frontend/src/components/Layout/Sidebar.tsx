@@ -1,4 +1,5 @@
 import React from 'react';
+import { GithubLogo } from '@phosphor-icons/react';
 import { NavLink } from 'react-router-dom';
 
 const navItems = [
@@ -46,10 +47,18 @@ export const Sidebar: React.FC = () => {
         ))}
       </nav>
 
-      <div className="hidden lg:block px-5 py-5 border-t border-card-border">
-        <div className="font-display italic text-[15px] text-ink/30 pl-5">
-          v 3.0.0
-        </div>
+      <div className="border-t border-card-border p-3 lg:px-5 lg:py-5">
+        <a
+          href="https://github.com/Fragtex254/tts-broadcast"
+          target="_blank"
+          rel="noreferrer"
+          title="在 GitHub 查看项目"
+          aria-label="在 GitHub 查看项目"
+          className="flex items-center justify-center gap-2 rounded-xl px-2 py-2 font-body text-[11px] text-ink-soft/55 transition-colors hover:bg-white/50 hover:text-ink lg:justify-start lg:px-5"
+        >
+          <GithubLogo aria-hidden="true" size={18} weight="fill" />
+          <span className="hidden lg:inline">GitHub · v 3.0.0</span>
+        </a>
       </div>
     </aside>
   );
