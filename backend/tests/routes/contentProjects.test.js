@@ -22,10 +22,20 @@ describe('内容项目 API', () => {
     expect(added.status).toBe(201);
     expect(exported.status).toBe(200);
     expect(exported.body.markdown).toContain('研究播客｜AI 单集｜嘉宾甲｜1:05–1:10｜https://example.com/ai');
-    expect(exported.body.markdown).toContain('我的阶段性判断');
+    expect(exported.body.markdown).toContain('主要分歧、成立条件与阶段性判断');
 
     researchStore.replaceClaims(record.id, { model: 'new-model', claims: [{ speakerKey: 'speaker-0001', question: '新问题', claim: '新观点', reasoning: '新理由', evidenceExcerpt: '真实证据', evidenceStartIndex: 0, evidenceEndIndex: 0, startSeconds: 65, endSeconds: 70, topicTags: ['AI'], contentValue: 91, confidence: 0.95 }] });
     const projectAfterReanalysis = await request(app).get(`/api/content-projects/${created.body.project.id}`);
     expect(projectAfterReanalysis.body.project.claims[0].claim).toMatchObject({ id: claim.id, status: 'stale', claim: '明确观点' });
+  });
+
+  test('内容不完整时仍可导出带占位提示的草稿', async () => {
+    const created = await request(app).post('/api/content-projects').send({ title: '待补充项目', targetPlatform: 'xiaohongshu' });
+    const exported = await request(app).post(`/api/content-projects/${created.body.project.id}/export`).send({ platform: 'xiaohongshu' });
+
+    expect(exported.status).toBe(200);
+    expect(exported.body.markdown).toContain('（尚未选择观点，可稍后补充）');
+    expect(exported.body.markdown).toContain('（尚未补充播客来源）');
+    expect(exported.body.markdown).toContain('（请补充个人判断）');
   });
 });
