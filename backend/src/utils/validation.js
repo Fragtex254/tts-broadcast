@@ -2,7 +2,9 @@
 const path = require('path');
 const fs = require('fs');
 
-const audioDir = path.join(__dirname, '../../audio');
+const audioDir = process.env.NODE_ENV === 'test'
+  ? path.join(__dirname, '../../.test-audio')
+  : path.join(__dirname, '../../audio');
 const assetDir = process.env.NODE_ENV === 'test'
   ? path.join(__dirname, '../../.test-assets')
   : path.join(__dirname, '../../assets');
@@ -22,6 +24,24 @@ function validateId(idStr, label = 'ID') {
 }
 
 /**
+ * 把公开的 /audio/ 路径解析到当前运行环境的音频根目录。
+ * 测试环境因此只会读取 .test-audio，且拒绝路径穿越。
+ * @param {string} audioPath - 以 /audio/ 开头的公开路径
+ * @returns {string} 安全的绝对文件路径
+ */
+function resolveAudioFilePath(audioPath) {
+  if (typeof audioPath !== 'string' || !audioPath.startsWith('/audio/')) {
+    throw new Error('音频路径无效');
+  }
+  const resolvedPath = path.resolve(audioDir, audioPath.slice('/audio/'.length));
+  const relativePath = path.relative(audioDir, resolvedPath);
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('音频路径无效');
+  }
+  return resolvedPath;
+}
+
+/**
  * 安全删除音频文件
  * @param {string|null|undefined} audioPath - 文件路径（绝对路径或以 /audio/ 开头的相对路径）
  */
@@ -29,12 +49,18 @@ function cleanAudioFile(audioPath) {
   if (!audioPath) return;
   let fp = audioPath;
   if (audioPath.startsWith('/audio/')) {
-    fp = path.join(__dirname, '../..', audioPath);
+    try {
+      fp = resolveAudioFilePath(audioPath);
+    } catch {
+      return;
+    }
   }
-  // 安全检查：仅允许删除 audioDir 下的文件
-  if (!fp.startsWith(audioDir)) return;
-  if (fs.existsSync(fp)) {
-    fs.unlinkSync(fp);
+  const resolvedPath = path.resolve(fp);
+  const relativePath = path.relative(audioDir, resolvedPath);
+  // 安全检查：仅允许删除 audioDir 内的文件，避免相似前缀或路径穿越。
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return;
+  if (fs.existsSync(resolvedPath)) {
+    fs.unlinkSync(resolvedPath);
   }
 }
 
@@ -54,4 +80,11 @@ function cleanAssetFile(assetPath) {
   }
 }
 
-module.exports = { validateId, cleanAudioFile, cleanAssetFile, audioDir, assetDir };
+module.exports = {
+  validateId,
+  cleanAudioFile,
+  cleanAssetFile,
+  resolveAudioFilePath,
+  audioDir,
+  assetDir,
+};

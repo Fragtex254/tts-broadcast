@@ -16,6 +16,7 @@ const CRON_OPTIONS = [
 
 export const Automation: React.FC = () => {
   const schedules = useStore((state) => state.schedules);
+  const automationExecution = useStore((state) => state.automationExecution);
   const fetchSchedules = useStore((state) => state.fetchSchedules);
   const createSchedule = useStore((state) => state.createSchedule);
   const deleteSchedule = useStore((state) => state.deleteSchedule);
@@ -26,12 +27,20 @@ export const Automation: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoadingSchedules, setIsLoadingSchedules] = useState(schedules.length === 0);
 
   useEffect(() => {
-    void fetchSchedules().catch((loadError) => {
-      setError('加载自动任务失败，请稍后重试');
-      logger.error({ err: toLogError(loadError) }, '加载自动任务失败');
-    });
+    let isCurrent = true;
+    void fetchSchedules()
+      .catch((loadError) => {
+        if (!isCurrent) return;
+        setError('加载自动任务失败，请稍后重试');
+        logger.error({ err: toLogError(loadError) }, '加载自动任务失败');
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoadingSchedules(false);
+      });
+    return () => { isCurrent = false; };
   }, [fetchSchedules]);
 
   const handleCreate = async () => {
@@ -78,26 +87,48 @@ export const Automation: React.FC = () => {
   };
 
   const formatCron = (cron: string) => CRON_OPTIONS.find((option) => option.value === cron)?.label || cron;
+  const executionAvailable = automationExecution.available;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header title="自动化" subtitle="安排固定时间自动采集、改写并生成播报" />
+      <Header
+        title={executionAvailable ? '自动化' : '自动化（规划中）'}
+        subtitle={executionAvailable
+          ? '执行器已连接；任务运行态以服务端记录为准'
+          : '保留旧定时配置；真实的采集、写作与音频工作流尚未接入'}
+      />
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-5xl space-y-4">
+          <section role="status" className={`rounded-card border p-5 ${executionAvailable ? 'border-sage/45 bg-sage/15' : 'border-lemon/45 bg-lemon/15'}`}>
+            <h2 className="ui-section-title text-ink">
+              {executionAvailable ? '自动化执行器已连接' : '当前只保存时间配置，不会执行内容生产'}
+            </h2>
+            <p className="ui-body mt-2 max-w-3xl text-ink-soft/80">
+              {executionAvailable
+                ? '可以创建和启停任务；列表会区分已调度、未调度与停用状态。'
+                : '为避免把配置误认为已经运行，本阶段暂停新建和启用。后续接入可追踪的 Automation Run、错误重试和产物记录后再开放。'}
+            </p>
+          </section>
           <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-2 h-2 rounded-full bg-lemon" />
-              <h3 className="font-display italic text-[14px] font-medium text-ink-soft">新建自动任务</h3>
+              <h3 className="font-display italic text-[14px] font-medium text-ink-soft">
+                {executionAvailable ? '定时配置' : '定时配置（暂不可新建）'}
+              </h3>
             </div>
             <p className="mb-4 max-w-2xl font-body text-[12px] leading-relaxed text-ink-soft/70">
-              自动化是独立的生产任务，不再藏在系统设置里。创建后可随时暂停，不会影响手动工作流。
+              {executionAvailable
+                ? '自动化是独立的生产任务，不再藏在系统设置里。创建后可随时暂停，不会影响手动工作流。'
+                : '当前只能查看旧配置；新建和启用会等到真实执行器与运行记录接入后开放。'}
             </p>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div>
-                <label className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">任务名称</label>
+                <label htmlFor="automation-name" className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">任务名称</label>
                 <input
+                  id="automation-name"
                   type="text"
+                  disabled={!executionAvailable}
                   value={form.name}
                   onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                   placeholder="例如：每日早报"
@@ -105,8 +136,10 @@ export const Automation: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">执行时间</label>
+                <label htmlFor="automation-cron" className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">执行时间</label>
                 <select
+                  id="automation-cron"
+                  disabled={!executionAvailable}
                   value={form.cron_expression}
                   onChange={(event) => setForm((current) => ({ ...current, cron_expression: event.target.value }))}
                   className="w-full appearance-none bg-white/70 text-ink rounded-xl px-3.5 py-2.5 border border-card-border focus:border-ink/20 focus:outline-none font-body text-[12px] transition-colors"
@@ -116,9 +149,11 @@ export const Automation: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">内容类型（可选）</label>
+                <label htmlFor="automation-content-types" className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">内容类型（可选）</label>
                 <input
+                  id="automation-content-types"
                   type="text"
+                  disabled={!executionAvailable}
                   value={form.content_types}
                   onChange={(event) => setForm((current) => ({ ...current, content_types: event.target.value }))}
                   placeholder="留空则使用默认"
@@ -127,16 +162,16 @@ export const Automation: React.FC = () => {
               </div>
             </div>
             {error && (
-              <div className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">{error}</div>
+              <div role="alert" className="mt-3 bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">{error}</div>
             )}
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
                 onClick={handleCreate}
-                disabled={isCreating}
+                disabled={isCreating || !executionAvailable}
                 className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider ui-transition duration-fast active:translate-y-0 active:shadow-none"
               >
-                {isCreating ? '创建中...' : '添加任务'}
+                {isCreating ? '创建中...' : executionAvailable ? '创建自动任务' : '等待执行器接入'}
               </button>
             </div>
           </section>
@@ -152,7 +187,11 @@ export const Automation: React.FC = () => {
               </div>
               <span className="rounded-full bg-white/60 px-3 py-1 font-body text-[11px] uppercase tracking-wider text-ink-soft">{schedules.length} 个任务</span>
             </div>
-            {schedules.length === 0 ? (
+            {isLoadingSchedules ? (
+              <div role="status" aria-busy="true" aria-label="正在加载自动任务" className="space-y-2 animate-pulse">
+                {[1, 2].map((item) => <div key={item} className="h-16 rounded-2xl bg-ink/5" />)}
+              </div>
+            ) : schedules.length === 0 ? (
               <div className="p-10 text-center animate-fade-in">
                 <p className="font-display italic text-[16px] text-ink-soft/70">暂无自动任务</p>
                 <p className="mt-1 font-body text-[12px] text-ink-soft/30">需要固定生产节奏时再添加即可</p>
@@ -169,19 +208,35 @@ export const Automation: React.FC = () => {
                       <button
                         type="button"
                         role="switch"
-                        aria-checked={Boolean(schedule.is_active)}
-                        aria-label={`${schedule.is_active ? '暂停' : '启用'} ${schedule.name}`}
+                        aria-checked={executionAvailable && schedule.is_active === 1}
+                        aria-label={executionAvailable
+                          ? `${schedule.name} ${schedule.is_active ? '已启用' : '已停用'}`
+                          : `${schedule.name} 暂不可启用`}
+                        disabled={!executionAvailable}
                         onClick={() => handleToggle(schedule.id)}
-                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${schedule.is_active ? 'bg-sage' : 'bg-ink/10'}`}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                          executionAvailable
+                            ? schedule.is_active ? 'cursor-pointer bg-sage' : 'cursor-pointer bg-ink/15'
+                            : 'cursor-not-allowed bg-ink/10 opacity-55'
+                        }`}
                       >
-                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${schedule.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                          executionAvailable && schedule.is_active ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
                       </button>
                       <div>
                         <p className="font-body text-[13px] font-medium text-ink">{schedule.name}</p>
                         <p className="mt-0.5 font-body text-[11px] text-ink-soft/70">{formatCron(schedule.cron_expression)}</p>
-                        {schedule.last_run_at && (
-                          <p className="mt-0.5 font-body text-[11px] text-ink-soft/40">上次运行：{new Date(schedule.last_run_at).toLocaleString('zh-CN')}</p>
-                        )}
+                        <p className="mt-0.5 font-body text-[11px] text-ink-soft/55">
+                          {schedule.runtime_state === 'scheduled'
+                            ? '已调度 · 等待下一次执行'
+                            : schedule.runtime_state === 'inactive'
+                              ? '已停用'
+                              : schedule.runtime_state === 'not_scheduled'
+                                ? '启用意图已保存 · 当前未调度'
+                                : '仅保留配置 · 当前未执行'}
+                        </p>
+                        {schedule.last_run_at && <p className="mt-0.5 font-body text-[11px] text-ink-soft/40">旧运行记录：{new Date(schedule.last_run_at).toLocaleString('zh-CN')}</p>}
                       </div>
                     </div>
                     <button

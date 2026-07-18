@@ -1,20 +1,18 @@
 // 播报路由
 const express = require('express');
 const router = express.Router();
-const path = require('path');
 const fs = require('fs');
 const aihot = require('../services/aihot');
 const mimo = require('../services/mimo');
-const tts = require('../services/tts');
 const audio = require('../services/audio');
 const db = require('../db');
 const broadcastStore = require('../services/broadcastStore');
+const broadcastRenderService = require('../services/broadcastRenderService');
+const contentArtifactStore = require('../services/contentArtifactStore');
 const segmentStore = require('../services/segmentStore');
 const voiceConfigService = require('../services/voiceConfig');
-const audioAsset = require('../services/audioAsset');
-const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
-const { validateId, cleanAudioFile } = require('../utils/validation');
+const { validateId, cleanAudioFile, resolveAudioFilePath } = require('../utils/validation');
 
 const logger = createScopedLogger('broadcast-route');
 
@@ -142,10 +140,44 @@ router.post('/rewrite', async (req, res) => {
  */
 router.post('/generate', async (req, res) => {
   try {
-    const { text, voice, voiceType, voiceDesign, voiceClone, stylePrompt, optimizeTextPreview, speed, emotion, pitch, sourceItems, mode } = req.body;
+    const {
+      text,
+      voice,
+      voiceType,
+      voiceDesign,
+      voiceClone,
+      stylePrompt,
+      optimizeTextPreview,
+      speed,
+      emotion,
+      pitch,
+      sourceItems,
+      mode,
+      artifactRevisionId,
+    } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: '请提供口播稿内容' });
+    }
+
+    let linkedArtifactRevisionId = null;
+    if (artifactRevisionId !== undefined && artifactRevisionId !== null) {
+      const revisionCheck = validateId(String(artifactRevisionId), '稿件版本 ID');
+      if (!revisionCheck.valid || Number(artifactRevisionId) !== revisionCheck.id) {
+        return res.status(400).json({ error: '无效的稿件版本 ID' });
+      }
+
+      const revisionContext = contentArtifactStore.getRevisionContext({ revisionId: revisionCheck.id });
+      if (!revisionContext) {
+        return res.status(404).json({ error: '稿件版本不存在' });
+      }
+      if (revisionContext.artifact.kind !== 'audio_script') {
+        return res.status(400).json({ error: '只能从口播稿版本生成音频' });
+      }
+      if (text !== revisionContext.revision.content) {
+        return res.status(409).json({ error: '口播稿已修改，请先保存为新版本再生成音频' });
+      }
+      linkedArtifactRevisionId = revisionCheck.id;
     }
 
     const voiceSelection = voiceConfigService.validateVoiceSelection({
@@ -178,7 +210,8 @@ router.post('/generate', async (req, res) => {
         voiceConfig: normalized.voiceConfig,
         sourceItems,
         status: 'pending',
-        mode: 'segmented'
+        mode: 'segmented',
+        artifactRevisionId: linkedArtifactRevisionId
       });
       return res.json({ broadcast });
     }
@@ -190,28 +223,27 @@ router.post('/generate', async (req, res) => {
       voiceConfig: normalized.voiceConfig,
       resolveClone: true
     });
-    const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => tts.generateSpeech(speechParams));
-
-    const audioPath = audioAsset.writeBroadcastAudio(audioBuffer);
-
-    const broadcast = broadcastStore.create({
+    const { broadcast, audioPath } = await broadcastRenderService.generateWholeRender({
+      speechParams,
       title: text.substring(0, 50) + '...',
       content: text,
-      audioPath,
       voiceType: normalized.voiceType,
       voiceConfig: normalized.voiceConfig,
       sourceItems,
-      status: 'generated',
-      mode: 'whole'
+      sourceArtifactRevisionId: linkedArtifactRevisionId,
     });
 
     // 清理旧的未保存记录，保留最近10条
-    const unsavedCount = broadcastStore.countUnsaved();
+    const unsavedCount = broadcastStore.countEvictableUnsaved();
     if (unsavedCount > 10) {
-      const toDelete = broadcastStore.getOldestUnsaved(unsavedCount - 10);
+      const toDelete = broadcastStore.getOldestEvictableUnsaved(unsavedCount - 10);
       for (const item of toDelete) {
-        broadcastStore.deleteById(item.id);
-        cleanAudioFile(item.audio_path);
+        try {
+          broadcastStore.deleteById(item.id);
+          cleanAudioFile(item.audio_path);
+        } catch (cleanupError) {
+          logger.warn({ err: cleanupError, broadcastId: item.id }, '清理旧的未保存 Render 失败');
+        }
       }
     }
 
@@ -220,6 +252,9 @@ router.post('/generate', async (req, res) => {
       audioUrl: audioPath
     });
   } catch (error) {
+    if (error.code === broadcastRenderService.SOURCE_REVISION_UNAVAILABLE) {
+      return res.status(409).json({ error: error.message });
+    }
     logger.error({ err: error }, '生成语音失败');
     res.status(500).json({ error: error.message || '生成语音失败' });
   }
@@ -441,7 +476,7 @@ router.get('/:id/download', async (req, res) => {
     if (!broadcast.audio_path) {
       return res.status(404).json({ error: '音频文件不存在' });
     }
-    const filepath = path.join(__dirname, '../..', broadcast.audio_path);
+    const filepath = resolveAudioFilePath(broadcast.audio_path);
     if (!fs.existsSync(filepath)) {
       return res.status(404).json({ error: '音频文件不存在' });
     }
@@ -487,7 +522,7 @@ router.get('/:id/audio', async (req, res) => {
       return res.status(404).json({ error: '音频文件不存在' });
     }
 
-    const filepath = path.join(__dirname, '../..', broadcast.audio_path);
+    const filepath = resolveAudioFilePath(broadcast.audio_path);
     if (!fs.existsSync(filepath)) {
       return res.status(404).json({ error: '音频文件不存在' });
     }

@@ -16,8 +16,8 @@ const {
   normalizePlaybackRate,
   resolveVoiceClone,
 } = require('../../src/services/audio');
+const { audioDir } = require('../../src/utils/validation');
 
-const audioDir = path.join(__dirname, '../../audio');
 const LARGE_WAV_SAMPLE_COUNT = 24000 * 12;
 
 /**

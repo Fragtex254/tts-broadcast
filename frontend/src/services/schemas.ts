@@ -55,6 +55,8 @@ export const BroadcastSchema = z.object({
   id: z.number(),
   title: z.string(),
   content: z.string(),
+  artifact_revision_id: z.number().nullable(),
+  source_artifact_revision_id: z.number().nullable(),
   audio_path: z.string().nullable(),
   duration: z.number().nullable(),
   voice_type: z.string().nullable(),
@@ -99,6 +101,13 @@ export const ScheduleSchema = z.object({
   last_run_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
+  runtime_state: z.enum(['unavailable', 'inactive', 'scheduled', 'not_scheduled']),
+});
+
+export const AutomationExecutionStateSchema = z.object({
+  available: z.boolean(),
+  state: z.enum(['available', 'unavailable']),
+  reason: z.string(),
 });
 
 export const VoicePresetSchema = z.object({
@@ -237,9 +246,27 @@ export const ClaimRelationAnalysisSchema = z.object({
 });
 export const ContentProjectSchema = z.object({
   id: z.number(), title: z.string(), topic: z.string(), target_platform: z.enum(['xiaohongshu', 'wechat', 'twitter', 'general']), thesis: z.string(),
+  audience: z.string(), goal: z.string(), angle: z.string(), tone: z.string(), content_format: z.string(),
   personal_practice: z.string(), personal_judgment: z.string(), discussion_question: z.string(), status: z.string(), claim_count: z.number().optional(),
   claims: z.array(z.object({ id: z.number(), project_id: z.number(), claim_id: z.number(), sort_order: z.number(), usage_note: z.string(), claim: TranscriptClaimSchema })).default([]),
   created_at: z.string(), updated_at: z.string(),
+});
+export const ContentProjectSourceSchema = z.object({
+  id: z.number(), project_id: z.number(), project_source_id: z.number(), source_type: z.string(), title: z.string(), content: z.string(),
+  url: z.string(), external_ref: z.string(), metadata: z.record(z.string(), z.unknown()), usage_note: z.string(), sort_order: z.number(),
+  linked_at: z.string(), link_updated_at: z.string(), created_at: z.string(), updated_at: z.string(),
+});
+export const ContentArtifactRevisionSchema = z.object({
+  id: z.number(), artifact_id: z.number(), revision_number: z.number(), content: z.string(), change_reason: z.string(), created_at: z.string(),
+});
+export const ContentArtifactSchema = z.object({
+  id: z.number(), project_id: z.number(), kind: z.string(), title: z.string(), platform: z.string(), status: z.string(),
+  current_revision: ContentArtifactRevisionSchema.nullable(), created_at: z.string(), updated_at: z.string(),
+});
+export const ContentProjectWorkspaceSchema = z.object({
+  project: ContentProjectSchema,
+  sources: z.array(ContentProjectSourceSchema),
+  artifacts: z.array(ContentArtifactSchema),
 });
 
 // === API 响应包装 ===

@@ -18,6 +18,7 @@ describe('ResearchProjectBar', () => {
     fireEvent.click(screen.getByRole('button', { name: '新建项目' }));
     const submit = screen.getByRole('button', { name: '创建并开始研究' });
     expect(submit.hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('option', { name: 'Twitter' })).toBeNull();
 
     fireEvent.change(screen.getByLabelText('项目标题'), { target: { value: 'AI 与程序员' } });
     fireEvent.change(screen.getByLabelText('研究问题'), { target: { value: 'AI 会改变哪些能力结构？' } });

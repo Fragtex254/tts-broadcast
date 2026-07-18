@@ -116,6 +116,40 @@ describe('broadcastStore', () => {
     });
   });
 
+  describe('completeWholeGeneration', () => {
+    test('只将尚未收口的 pending whole Render 原子更新为 generated', () => {
+      const pending = insertBroadcast({ status: 'pending', mode: 'whole' });
+
+      const completed = broadcastStore.completeWholeGeneration({
+        id: pending.id,
+        audioPath: '/audio/broadcast_pending.wav',
+      });
+
+      expect(completed).toMatchObject({
+        id: pending.id,
+        status: 'generated',
+        audio_path: '/audio/broadcast_pending.wav',
+      });
+      expect(broadcastStore.completeWholeGeneration({
+        id: pending.id,
+        audioPath: '/audio/should-not-overwrite.wav',
+      })).toBeUndefined();
+      expect(broadcastStore.getById(pending.id).audio_path).toBe('/audio/broadcast_pending.wav');
+    });
+  });
+
+  describe('pending whole Render 回滚', () => {
+    test('只删除仍为 pending 且没有音频的本次 Render', () => {
+      const pending = insertBroadcast({ status: 'pending', mode: 'whole' });
+      const generated = insertBroadcast({ status: 'generated', mode: 'whole', audioPath: '/audio/kept.wav' });
+
+      expect(broadcastStore.deletePendingWholeGeneration(pending.id)).toBe(true);
+      expect(broadcastStore.deletePendingWholeGeneration(generated.id)).toBe(false);
+      expect(broadcastStore.getById(pending.id)).toBeUndefined();
+      expect(broadcastStore.getById(generated.id)).toBeDefined();
+    });
+  });
+
   describe('updateVoiceConfig', () => {
     test('更新音色配置', () => {
       const b = insertBroadcast();
@@ -158,6 +192,20 @@ describe('broadcastStore', () => {
       const oldest = broadcastStore.getOldestSaved(1);
       expect(oldest.length).toBe(1);
       expect(oldest[0].title).toBe('旧保存');
+    });
+  });
+
+  describe('自动淘汰候选', () => {
+    test('只统计和返回已生成且未保存的 Render，不淘汰 pending 任务', () => {
+      insertBroadcast({ title: '生成中', status: 'pending' });
+      const generated = insertBroadcast({ title: '可淘汰', status: 'generated' });
+      const saved = insertBroadcast({ title: '已保存', status: 'generated' });
+      broadcastStore.toggleSaved(saved.id);
+
+      expect(broadcastStore.countEvictableUnsaved()).toBe(1);
+      expect(broadcastStore.getOldestEvictableUnsaved(10)).toEqual([
+        expect.objectContaining({ id: generated.id, title: '可淘汰' }),
+      ]);
     });
   });
 

@@ -22,7 +22,17 @@ router.post('/', (req, res) => {
   try {
     const title = stringValue(req.body.title, '', 300);
     if (!title) return res.status(400).json({ error: '请输入内容项目标题' });
-    const project = store.create({ title, topic: stringValue(req.body.topic, '', 1000), targetPlatform: req.body.targetPlatform || 'general', thesis: stringValue(req.body.thesis) });
+    const project = store.create({
+      title,
+      topic: stringValue(req.body.topic, '', 1000),
+      targetPlatform: req.body.targetPlatform || 'general',
+      thesis: stringValue(req.body.thesis),
+      audience: stringValue(req.body.audience, '', 2000),
+      goal: stringValue(req.body.goal, '', 4000),
+      angle: stringValue(req.body.angle, '', 4000),
+      tone: stringValue(req.body.tone, '', 1000),
+      contentFormat: stringValue(req.body.contentFormat, '', 100),
+    });
     res.status(201).json({ project });
   } catch (error) { logger.error({ err: error }, '创建内容项目失败'); res.status(400).json({ error: error.message || '创建内容项目失败' }); }
 });
@@ -33,8 +43,32 @@ router.get('/:id', (req, res) => {
 });
 
 router.patch('/:id', (req, res) => {
-  try { const check = validateId(req.params.id, '内容项目 ID'); if (!check.valid) return res.status(400).json({ error: check.error }); const values = { title: req.body.title === undefined ? undefined : stringValue(req.body.title, '', 300), topic: req.body.topic === undefined ? undefined : stringValue(req.body.topic, '', 1000), targetPlatform: req.body.targetPlatform, thesis: req.body.thesis === undefined ? undefined : stringValue(req.body.thesis), personalPractice: req.body.personalPractice === undefined ? undefined : stringValue(req.body.personalPractice), personalJudgment: req.body.personalJudgment === undefined ? undefined : stringValue(req.body.personalJudgment), discussionQuestion: req.body.discussionQuestion === undefined ? undefined : stringValue(req.body.discussionQuestion), status: req.body.status === undefined ? undefined : stringValue(req.body.status, '', 50) }; if (values.title === '') return res.status(400).json({ error: '项目标题不能为空' }); const project = store.update(check.id, values); if (!project) return res.status(404).json({ error: '内容项目不存在' }); res.json({ project }); }
-  catch (error) { logger.error({ err: error }, '更新内容项目失败'); res.status(400).json({ error: error.message || '更新内容项目失败' }); }
+  try {
+    const check = validateId(req.params.id, '内容项目 ID');
+    if (!check.valid) return res.status(400).json({ error: check.error });
+    const values = {
+      title: req.body.title === undefined ? undefined : stringValue(req.body.title, '', 300),
+      topic: req.body.topic === undefined ? undefined : stringValue(req.body.topic, '', 1000),
+      targetPlatform: req.body.targetPlatform,
+      thesis: req.body.thesis === undefined ? undefined : stringValue(req.body.thesis),
+      audience: req.body.audience === undefined ? undefined : stringValue(req.body.audience, '', 2000),
+      goal: req.body.goal === undefined ? undefined : stringValue(req.body.goal, '', 4000),
+      angle: req.body.angle === undefined ? undefined : stringValue(req.body.angle, '', 4000),
+      tone: req.body.tone === undefined ? undefined : stringValue(req.body.tone, '', 1000),
+      contentFormat: req.body.contentFormat === undefined ? undefined : stringValue(req.body.contentFormat, '', 100),
+      personalPractice: req.body.personalPractice === undefined ? undefined : stringValue(req.body.personalPractice),
+      personalJudgment: req.body.personalJudgment === undefined ? undefined : stringValue(req.body.personalJudgment),
+      discussionQuestion: req.body.discussionQuestion === undefined ? undefined : stringValue(req.body.discussionQuestion),
+      status: req.body.status === undefined ? undefined : stringValue(req.body.status, '', 50),
+    };
+    if (values.title === '') return res.status(400).json({ error: '项目标题不能为空' });
+    const project = store.update(check.id, values);
+    if (!project) return res.status(404).json({ error: '内容项目不存在' });
+    res.json({ project });
+  } catch (error) {
+    logger.error({ err: error }, '更新内容项目失败');
+    res.status(400).json({ error: error.message || '更新内容项目失败' });
+  }
 });
 
 router.delete('/:id', (req, res) => {

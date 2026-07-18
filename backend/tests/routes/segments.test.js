@@ -1,11 +1,15 @@
-const request = require('supertest');
-const app = require('../../src/app');
-const db = require('../../src/db');
-
 // 批量生成会调用真实 TTS 外部 API，这里 mock 掉
 jest.mock('../../src/services/tts', () => ({
   generateSpeech: jest.fn(),
 }));
+jest.mock('../../src/utils/validation', () => ({
+  ...jest.requireActual('../../src/utils/validation'),
+  cleanAudioFile: jest.fn(),
+}));
+
+const request = require('supertest');
+const app = require('../../src/app');
+const db = require('../../src/db');
 const tts = require('../../src/services/tts');
 const audio = require('../../src/services/audio');
 const audioAsset = require('../../src/services/audioAsset');
@@ -13,11 +17,13 @@ const mimo = require('../../src/services/mimo');
 const segmentStore = require('../../src/services/segmentStore');
 const ttsQueue = require('../../src/services/ttsQueue');
 const generationJobStore = require('../../src/services/generationJobStore');
+const { cleanAudioFile } = require('../../src/utils/validation');
 
 describe('Segments API', () => {
   let broadcastId;
 
   beforeEach(() => {
+    cleanAudioFile.mockReset();
     ttsQueue.clear();
     ttsQueue.minIntervalMs = 0;
     ttsQueue.maxConcurrent = 10;
@@ -27,6 +33,7 @@ describe('Segments API', () => {
 
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
+    db.prepare('DELETE FROM content_projects').run();
 
     const result = db.prepare(`
       INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode)
@@ -47,6 +54,7 @@ describe('Segments API', () => {
     generationJobStore.clear();
     db.prepare('DELETE FROM segments').run();
     db.prepare('DELETE FROM broadcasts').run();
+    db.prepare('DELETE FROM content_projects').run();
   });
 
   describe('GET /api/broadcast/:id/segments', () => {
@@ -132,7 +140,7 @@ describe('Segments API', () => {
       db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
         .run(broadcastId, 0, '第一句', 'pending', '平静');
       tts.generateSpeech.mockResolvedValue(Buffer.from('wav'));
-      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/seg_0.wav');
+      jest.spyOn(audioAsset, 'writeAudioFile').mockReturnValue('/audio/seg_0.wav');
 
       const res = await request(app)
         .post(`/api/broadcast/${broadcastId}/segments/batch-generate`)
@@ -163,7 +171,7 @@ describe('Segments API', () => {
       db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status, style_tag) VALUES (?, ?, ?, ?, ?)`)
         .run(broadcastId, 0, '第二句', 'pending', '');
       tts.generateSpeech.mockResolvedValue(Buffer.from('wav'));
-      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/seg_0.wav');
+      jest.spyOn(audioAsset, 'writeAudioFile').mockReturnValue('/audio/seg_0.wav');
 
       await request(app).post(`/api/broadcast/${broadcastId}/segments/batch-generate`).send();
 
@@ -228,6 +236,41 @@ describe('Segments API', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toContain('不属于当前播报');
+    });
+  });
+
+  describe('分段 Render 来源版本语义', () => {
+    test('精修 segment 后仍把 Revision 表达为创建时来源，而非当前正文绑定', async () => {
+      const project = db.prepare('INSERT INTO content_projects (title) VALUES (?)').run('来源语义项目');
+      const artifact = db.prepare(`
+        INSERT INTO content_artifacts (project_id, kind, title)
+        VALUES (?, 'audio_script', ?)
+      `).run(project.lastInsertRowid, '源口播稿');
+      const revision = db.prepare(`
+        INSERT INTO content_artifact_revisions (artifact_id, revision_number, content)
+        VALUES (?, 1, ?)
+      `).run(artifact.lastInsertRowid, '创建 Render 时的原稿');
+      db.prepare(`
+        UPDATE broadcasts SET content = ?, artifact_revision_id = ? WHERE id = ?
+      `).run('创建 Render 时的原稿', revision.lastInsertRowid, broadcastId);
+      const segment = db.prepare(`
+        INSERT INTO segments (broadcast_id, "index", text, status)
+        VALUES (?, 0, ?, 'pending')
+      `).run(broadcastId, '创建 Render 时的原稿');
+
+      const edited = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${segment.lastInsertRowid}`)
+        .send({ text: 'Render 层精修后的表达' });
+      const detail = await request(app).get(`/api/broadcast/${broadcastId}`);
+
+      expect(edited.status).toBe(200);
+      expect(edited.body.segment.text).toBe('Render 层精修后的表达');
+      expect(detail.status).toBe(200);
+      expect(detail.body.broadcast).toMatchObject({
+        content: '创建 Render 时的原稿',
+        artifact_revision_id: Number(revision.lastInsertRowid),
+        source_artifact_revision_id: Number(revision.lastInsertRowid),
+      });
     });
   });
 
@@ -643,7 +686,7 @@ describe('Segments API', () => {
 
       tts.generateSpeech.mockResolvedValue(Buffer.from('fake-wav'));
       jest.spyOn(audio, 'resolveVoiceClone').mockResolvedValue('data:audio/wav;base64,AAAA');
-      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/segment_fake.wav');
+      jest.spyOn(audioAsset, 'writeAudioFile').mockReturnValue('/audio/segment_fake.wav');
     });
 
     afterEach(() => {
@@ -662,6 +705,24 @@ describe('Segments API', () => {
       // 仍逐段调用 TTS（由队列统一限速）
       expect(tts.generateSpeech).toHaveBeenCalledTimes(3);
       expect(res.body.segments.every((s) => s.status === 'generated')).toBe(true);
+    }, 15000);
+
+    test('每次写入都使用 segment ID 和唯一 token，不按 index 覆盖旧路径', async () => {
+      audioAsset.writeAudioFile.mockImplementation((filename) => `/audio/${filename}`);
+
+      const res = await request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      const segments = segmentStore.getByBroadcastId(cloneBroadcastId);
+      const filenames = audioAsset.writeAudioFile.mock.calls.map(([filename]) => filename);
+      expect(new Set(filenames).size).toBe(3);
+      segments.forEach((segment) => {
+        expect(filenames).toContainEqual(expect.stringMatching(
+          new RegExp(`^segment_${cloneBroadcastId}_${segment.id}_[a-f0-9]{32}\\.wav$`)
+        ));
+      });
     }, 15000);
 
     test('批量生成会并发启动多个 TTS 请求，不等待上一段完成', async () => {
@@ -685,6 +746,143 @@ describe('Segments API', () => {
       const res = await requestPromise;
       expect(res.status).toBe(200);
       expect(res.body.segments.every((s) => s.status === 'generated')).toBe(true);
+    }, 15000);
+
+    test('批量生成期间编辑段落时丢弃旧快照音频并保留新文本为 pending', async () => {
+      let finishFirst;
+      tts.generateSpeech.mockImplementation(({ text }) => {
+        if (text === '第一句') {
+          return new Promise((resolve) => {
+            finishFirst = resolve;
+          });
+        }
+        return Promise.resolve(Buffer.from(`wav:${text}`));
+      });
+      cleanAudioFile.mockClear();
+
+      const requestPromise = request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send()
+        .then((res) => res);
+
+      for (let i = 0; i < 20 && !finishFirst; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      const first = segmentStore.getByBroadcastId(cloneBroadcastId)[0];
+      const edited = await request(app)
+        .put(`/api/broadcast/${cloneBroadcastId}/segments/${first.id}`)
+        .send({ text: '用户编辑后的第一句' });
+      expect(edited.status).toBe(200);
+
+      finishFirst(Buffer.from('stale-wav'));
+      const res = await requestPromise;
+
+      expect(res.status).toBe(200);
+      expect(res.body.results[0]).toMatchObject({ id: first.id, status: 'stale' });
+      expect(segmentStore.getByIdAndBroadcastId(first.id, cloneBroadcastId)).toMatchObject({
+        text: '用户编辑后的第一句',
+        status: 'pending',
+        audio_path: null,
+      });
+      expect(cleanAudioFile).toHaveBeenCalledWith('/audio/segment_fake.wav');
+    }, 15000);
+
+    test('批量 TTS 失败也不会覆盖生成期间的新文本状态', async () => {
+      let failFirst;
+      tts.generateSpeech.mockImplementation(({ text }) => {
+        if (text === '第一句') {
+          return new Promise((resolve, reject) => {
+            failFirst = reject;
+          });
+        }
+        return Promise.resolve(Buffer.from(`wav:${text}`));
+      });
+
+      const requestPromise = request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send()
+        .then((res) => res);
+      for (let i = 0; i < 20 && !failFirst; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      const first = segmentStore.getByBroadcastId(cloneBroadcastId)[0];
+      await request(app)
+        .put(`/api/broadcast/${cloneBroadcastId}/segments/${first.id}`)
+        .send({ text: '失败前用户已改好的文本' });
+      failFirst(new Error('旧快照 TTS 失败'));
+
+      const res = await requestPromise;
+      expect(res.status).toBe(200);
+      expect(res.body.results[0]).toMatchObject({ id: first.id, status: 'stale' });
+      expect(segmentStore.getByIdAndBroadcastId(first.id, cloneBroadcastId)).toMatchObject({
+        text: '失败前用户已改好的文本',
+        status: 'pending',
+        error_message: '',
+      });
+    }, 15000);
+
+    test('批量生成期间删除段落时不会让旧结果复活，且清理本次音频', async () => {
+      let finishFirst;
+      tts.generateSpeech.mockImplementation(({ text }) => {
+        if (text === '第一句') {
+          return new Promise((resolve) => {
+            finishFirst = resolve;
+          });
+        }
+        return Promise.resolve(Buffer.from(`wav:${text}`));
+      });
+      cleanAudioFile.mockClear();
+
+      const requestPromise = request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send()
+        .then((res) => res);
+      for (let i = 0; i < 20 && !finishFirst; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      const first = segmentStore.getByBroadcastId(cloneBroadcastId)[0];
+      const deleted = await request(app)
+        .delete(`/api/broadcast/${cloneBroadcastId}/segments/${first.id}`);
+      expect(deleted.status).toBe(200);
+      finishFirst(Buffer.from('stale-wav'));
+
+      const res = await requestPromise;
+      expect(res.status).toBe(200);
+      expect(res.body.results[0]).toMatchObject({ id: first.id, status: 'stale' });
+      expect(segmentStore.getByIdAndBroadcastId(first.id, cloneBroadcastId)).toBeUndefined();
+      expect(cleanAudioFile).toHaveBeenCalledWith('/audio/segment_fake.wav');
+    }, 15000);
+
+    test('批量生成期间重排时只允许序号未变的快照收口', async () => {
+      const completions = [];
+      tts.generateSpeech.mockImplementation(() => new Promise((resolve) => {
+        completions.push(resolve);
+      }));
+
+      const initial = segmentStore.getByBroadcastId(cloneBroadcastId);
+      const requestPromise = request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send()
+        .then((res) => res);
+      for (let i = 0; i < 20 && completions.length < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      const reordered = await request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/reorder`)
+        .send({ segmentIds: initial.map((segment) => segment.id).reverse() });
+      expect(reordered.status).toBe(200);
+      completions.forEach((resolve) => resolve(Buffer.from('wav')));
+
+      const res = await requestPromise;
+      expect(res.status).toBe(200);
+      expect(res.body.results.map((result) => result.status)).toEqual(['stale', 'generated', 'stale']);
+      const current = segmentStore.getByBroadcastId(cloneBroadcastId);
+      expect(current.find((segment) => segment.id === initial[0].id).status).toBe('pending');
+      expect(current.find((segment) => segment.id === initial[1].id).status).toBe('generated');
+      expect(current.find((segment) => segment.id === initial[2].id).status).toBe('pending');
     }, 15000);
 
     test('同一播报已有批量生成任务时不会重复入队', async () => {
@@ -758,7 +956,7 @@ describe('Segments API', () => {
       const enqueueSpy = jest.spyOn(ttsQueue, 'enqueue');
 
       tts.generateSpeech.mockResolvedValue(Buffer.from('fake-wav'));
-      jest.spyOn(audioAsset, 'writeSegmentAudio').mockReturnValue('/audio/segment_regenerated.wav');
+      jest.spyOn(audioAsset, 'writeAudioFile').mockReturnValue('/audio/segment_regenerated.wav');
 
       const res = await request(app)
         .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
@@ -770,6 +968,167 @@ describe('Segments API', () => {
         expect.objectContaining({ text: '需要重生成的句子' })
       );
       expect(res.body.segment.status).toBe('generated');
+    });
+
+    test('单句生成期间编辑时返回冲突，清理旧快照音频并保留新文本', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '生成前的文本', 'pending');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+      let finishTts;
+      tts.generateSpeech.mockImplementation(() => new Promise((resolve) => {
+        finishTts = resolve;
+      }));
+      jest.spyOn(audioAsset, 'writeAudioFile').mockReturnValue('/audio/stale-regenerate.wav');
+      cleanAudioFile.mockClear();
+
+      const requestPromise = request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send()
+        .then((res) => res);
+      for (let i = 0; i < 20 && !finishTts; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      const edited = await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${segment.id}`)
+        .send({ text: '用户编辑后的文本' });
+      expect(edited.status).toBe(200);
+      finishTts(Buffer.from('stale-wav'));
+
+      const res = await requestPromise;
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain('本次音频已丢弃');
+      expect(segmentStore.getByIdAndBroadcastId(segment.id, broadcastId)).toMatchObject({
+        text: '用户编辑后的文本',
+        status: 'pending',
+        audio_path: null,
+      });
+      expect(cleanAudioFile).toHaveBeenCalledWith('/audio/stale-regenerate.wav');
+    });
+
+    test('遗留 generating 被新请求接管后旧请求不能 ABA 覆盖新结果', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '相同快照文本', 'pending');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+      const completions = [];
+      tts.generateSpeech.mockImplementation(() => new Promise((resolve) => {
+        completions.push(resolve);
+      }));
+      jest.spyOn(audioAsset, 'writeAudioFile').mockImplementation((filename) => `/audio/${filename}`);
+      cleanAudioFile.mockClear();
+
+      const oldRequest = request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send()
+        .then((res) => res);
+      for (let i = 0; i < 20 && completions.length < 1; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      const newRequest = request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send()
+        .then((res) => res);
+      for (let i = 0; i < 20 && completions.length < 2; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(completions).toHaveLength(2);
+
+      completions[0](Buffer.from('old-wav'));
+      const oldResponse = await oldRequest;
+      expect(oldResponse.status).toBe(409);
+
+      completions[1](Buffer.from('new-wav'));
+      const newResponse = await newRequest;
+      expect(newResponse.status).toBe(200);
+
+      const writtenPaths = audioAsset.writeAudioFile.mock.calls.map(([filename]) => `/audio/${filename}`);
+      expect(writtenPaths).toHaveLength(2);
+      expect(cleanAudioFile).toHaveBeenCalledWith(writtenPaths[0]);
+      expect(segmentStore.getByIdAndBroadcastId(segment.id, broadcastId)).toMatchObject({
+        status: 'generated',
+        audio_path: writtenPaths[1],
+      });
+    });
+
+    test('单句 TTS 失败也只能写回未变的启动快照', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '失败前的文本', 'pending');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+      let failTts;
+      tts.generateSpeech.mockImplementation(() => new Promise((resolve, reject) => {
+        failTts = reject;
+      }));
+
+      const requestPromise = request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send()
+        .then((res) => res);
+      for (let i = 0; i < 20 && !failTts; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      await request(app)
+        .put(`/api/broadcast/${broadcastId}/segments/${segment.id}`)
+        .send({ text: '失败前已保存的新文本' });
+      failTts(new Error('旧快照调用失败'));
+
+      const res = await requestPromise;
+      expect(res.status).toBe(500);
+      expect(res.body.error).toContain('旧快照调用失败');
+      expect(segmentStore.getByIdAndBroadcastId(segment.id, broadcastId)).toMatchObject({
+        text: '失败前已保存的新文本',
+        status: 'pending',
+        error_message: '',
+      });
+    });
+
+    test('清理被替换的旧音频失败时仍保持本次生成成功', async () => {
+      db.prepare(`
+        INSERT INTO segments (broadcast_id, "index", text, status, audio_path)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(broadcastId, 0, '需要重生成', 'generated', '/audio/old-stable.wav');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+      tts.generateSpeech.mockResolvedValue(Buffer.from('new-wav'));
+      jest.spyOn(audioAsset, 'writeAudioFile').mockReturnValue('/audio/new-unique.wav');
+      cleanAudioFile.mockImplementation((audioPath) => {
+        if (audioPath === '/audio/old-stable.wav') throw new Error('清理失败');
+      });
+
+      const res = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send();
+
+      expect(res.status).toBe(200);
+      expect(res.body.segment).toMatchObject({
+        status: 'generated',
+        audio_path: '/audio/new-unique.wav',
+      });
+      expect(cleanAudioFile).toHaveBeenCalledWith('/audio/old-stable.wav');
+    });
+
+    test('连续重生成同一段使用两个不同的唯一文件名', async () => {
+      db.prepare(`INSERT INTO segments (broadcast_id, "index", text, status) VALUES (?, ?, ?, ?)`)
+        .run(broadcastId, 0, '同一句', 'pending');
+      const segment = segmentStore.getByBroadcastId(broadcastId)[0];
+      tts.generateSpeech.mockResolvedValue(Buffer.from('wav'));
+      jest.spyOn(audioAsset, 'writeAudioFile').mockImplementation((filename) => `/audio/${filename}`);
+
+      const first = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send();
+      const second = await request(app)
+        .post(`/api/broadcast/${broadcastId}/segments/${segment.id}/regenerate`)
+        .send();
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      const filenames = audioAsset.writeAudioFile.mock.calls.map(([filename]) => filename);
+      expect(filenames).toHaveLength(2);
+      expect(new Set(filenames).size).toBe(2);
+      filenames.forEach((filename) => {
+        expect(filename).toMatch(new RegExp(`^segment_${broadcastId}_${segment.id}_[a-f0-9]{32}\\.wav$`));
+      });
     });
 
     test('播报未选择音色时拒绝重新生成单句', async () => {

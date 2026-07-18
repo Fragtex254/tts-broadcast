@@ -11,8 +11,10 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   status TEXT DEFAULT 'pending',
   saved BOOLEAN DEFAULT 0,
   mode TEXT DEFAULT 'whole' CHECK (mode IN ('whole', 'segmented')),
+  artifact_revision_id INTEGER DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (artifact_revision_id) REFERENCES content_artifact_revisions(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -42,12 +44,14 @@ CREATE TABLE IF NOT EXISTS segments (
   style_tag TEXT DEFAULT '',
   playback_rate REAL DEFAULT 1.0,
   error_message TEXT DEFAULT '',
+  generation_token TEXT DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_broadcasts_created_at ON broadcasts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_broadcasts_artifact_revision_id ON broadcasts(artifact_revision_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_is_active ON schedules(is_active);
 CREATE INDEX IF NOT EXISTS idx_segments_broadcast_id ON segments(broadcast_id);
 
@@ -275,6 +279,11 @@ CREATE TABLE IF NOT EXISTS content_projects (
   topic TEXT NOT NULL DEFAULT '',
   target_platform TEXT NOT NULL DEFAULT 'general',
   thesis TEXT NOT NULL DEFAULT '',
+  audience TEXT NOT NULL DEFAULT '',
+  goal TEXT NOT NULL DEFAULT '',
+  angle TEXT NOT NULL DEFAULT '',
+  tone TEXT NOT NULL DEFAULT '',
+  content_format TEXT NOT NULL DEFAULT '',
   personal_practice TEXT NOT NULL DEFAULT '',
   personal_judgment TEXT NOT NULL DEFAULT '',
   discussion_question TEXT NOT NULL DEFAULT '',
@@ -298,6 +307,68 @@ CREATE TABLE IF NOT EXISTS content_project_claims (
 
 CREATE INDEX IF NOT EXISTS idx_content_project_claims_order
   ON content_project_claims(project_id, sort_order, id);
+CREATE INDEX IF NOT EXISTS idx_content_project_claims_claim
+  ON content_project_claims(claim_id);
+
+CREATE TABLE IF NOT EXISTS content_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  title TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '',
+  external_ref TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_sources_type_external_ref
+  ON content_sources(source_type, external_ref);
+
+CREATE TABLE IF NOT EXISTS content_project_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  source_id INTEGER NOT NULL,
+  usage_note TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE CASCADE,
+  UNIQUE (project_id, source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_project_sources_order
+  ON content_project_sources(project_id, sort_order, id);
+
+CREATE TABLE IF NOT EXISTS content_artifacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  platform TEXT NOT NULL DEFAULT 'general',
+  status TEXT NOT NULL DEFAULT 'draft',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_artifacts_project_updated
+  ON content_artifacts(project_id, updated_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS content_artifact_revisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  artifact_id INTEGER NOT NULL,
+  revision_number INTEGER NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  change_reason TEXT NOT NULL DEFAULT 'manual',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (artifact_id) REFERENCES content_artifacts(id) ON DELETE CASCADE,
+  UNIQUE (artifact_id, revision_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_artifact_revisions_artifact_number
+  ON content_artifact_revisions(artifact_id, revision_number DESC);
 
 CREATE TABLE IF NOT EXISTS api_rate_limit_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

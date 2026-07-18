@@ -13,7 +13,7 @@ const logger = createScopedLogger('schedule-route');
 router.get('/', (req, res) => {
   try {
     const schedules = scheduler.getSchedules();
-    res.json({ schedules });
+    res.json({ schedules, execution: scheduler.getExecutionState() });
   } catch (error) {
     logger.error({ err: error }, '获取任务列表失败');
     res.status(500).json({ error: '获取任务列表失败' });
@@ -38,7 +38,7 @@ router.post('/', (req, res) => {
       content_types: content_types || '[]'
     });
 
-    res.status(201).json({ schedule });
+    res.status(201).json({ schedule, execution: scheduler.getExecutionState() });
   } catch (error) {
     logger.error({ err: error }, '创建任务失败');
     res.status(400).json({ error: error.message });
@@ -71,7 +71,7 @@ router.put('/:id', (req, res) => {
       content_types
     });
 
-    res.json({ schedule });
+    res.json({ schedule, execution: scheduler.getExecutionState() });
   } catch (error) {
     logger.error({
       err: error,
@@ -124,8 +124,15 @@ router.post('/:id/toggle', (req, res) => {
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     const schedule = scheduler.toggleSchedule(idCheck.id);
-    res.json({ schedule });
+    res.json({ schedule, execution: scheduler.getExecutionState() });
   } catch (error) {
+    if (error.code === 'AUTOMATION_EXECUTION_UNAVAILABLE') {
+      logger.warn({
+        hasScheduleId: Boolean(req.params.id),
+        scheduleIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+      }, '自动化执行器不可用，已阻止启用任务');
+      return res.status(409).json({ error: error.message });
+    }
     logger.error({
       err: error,
       hasScheduleId: Boolean(req.params.id),

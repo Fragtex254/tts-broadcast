@@ -16,10 +16,10 @@ export const Sidebar: React.FC = () => {
       <div className="p-4 lg:px-7 lg:py-7 border-b border-card-border text-center lg:text-left">
         <h1 className="font-display text-[20px] lg:text-[28px] font-medium text-ink leading-tight tracking-tight">
           <span className="lg:hidden">AI</span>
-          <span className="hidden lg:inline">AI 简讯播报</span>
+          <span className="hidden lg:inline">AI 内容工作台</span>
         </h1>
         <p className="hidden lg:block font-body text-[13px] tracking-[0.08em] text-ink-soft mt-2">
-          内容生产工作台
+          证据驱动创作
         </p>
       </div>
 

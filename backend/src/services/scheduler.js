@@ -9,14 +9,45 @@ const logger = createScopedLogger('scheduler');
 const activeJobs = new Map();
 let onTriggerCallback = null;
 
+const EXECUTION_UNAVAILABLE_MESSAGE = '自动化执行器尚未配置，当前不能启用任务';
+
+class AutomationExecutionUnavailableError extends Error {
+  constructor() {
+    super(EXECUTION_UNAVAILABLE_MESSAGE);
+    this.name = 'AutomationExecutionUnavailableError';
+    this.code = 'AUTOMATION_EXECUTION_UNAVAILABLE';
+  }
+}
+
+/**
+ * 获取当前进程是否具备真实自动化执行能力。
+ * @returns {{available: boolean, state: 'available'|'unavailable', reason: string}}
+ */
+function getExecutionState() {
+  const available = typeof onTriggerCallback === 'function';
+  return {
+    available,
+    state: available ? 'available' : 'unavailable',
+    reason: available ? '' : '自动化执行器尚未配置',
+  };
+}
+
+function withRuntimeState(schedule) {
+  if (!schedule) return schedule;
+  let runtimeState = 'unavailable';
+  if (onTriggerCallback) {
+    if (!schedule.is_active) runtimeState = 'inactive';
+    else runtimeState = activeJobs.has(schedule.id) ? 'scheduled' : 'not_scheduled';
+  }
+  return { ...schedule, runtime_state: runtimeState };
+}
+
 /**
  * 初始化调度器，加载所有活跃任务
  * @param {Function} [onTrigger] - 任务触发时的回调函数
  */
 function init(onTrigger) {
-  if (onTrigger) {
-    onTriggerCallback = onTrigger;
-  }
+  onTriggerCallback = typeof onTrigger === 'function' ? onTrigger : null;
   const schedules = scheduleStore.getActive();
   schedules.forEach(schedule => {
     startJob(schedule);
@@ -32,6 +63,7 @@ function shutdown() {
     job.stop();
   }
   activeJobs.clear();
+  onTriggerCallback = null;
   logger.info({}, '调度器已关闭');
 }
 
@@ -42,6 +74,7 @@ function shutdown() {
 function startJob(schedule) {
   if (activeJobs.has(schedule.id)) {
     activeJobs.get(schedule.id).stop();
+    activeJobs.delete(schedule.id);
   }
 
   if (!cron.validate(schedule.cron_expression)) {
@@ -53,6 +86,11 @@ function startJob(schedule) {
     return;
   }
 
+  if (!onTriggerCallback) {
+    logger.warn({ scheduleId: schedule.id }, '未配置自动化执行器，跳过定时任务启动');
+    return;
+  }
+
   const job = cron.schedule(schedule.cron_expression, async () => {
     logger.info({
       scheduleId: schedule.id,
@@ -60,9 +98,7 @@ function startJob(schedule) {
       scheduleNameLength: typeof schedule.name === 'string' ? schedule.name.length : undefined,
     }, '执行定时任务');
     try {
-      if (onTriggerCallback) {
-        await onTriggerCallback(schedule);
-      }
+      await onTriggerCallback(schedule);
       // 任务成功后更新时间
       scheduleStore.markLastRun(schedule.id);
     } catch (error) {
@@ -110,9 +146,15 @@ function addSchedule({ name, cron_expression, content_types }) {
     }
   }
 
-  const task = scheduleStore.create({ name, cron_expression, content_types });
-  startJob(task);
-  return task;
+  const executionAvailable = getExecutionState().available;
+  const task = scheduleStore.create({
+    name,
+    cron_expression,
+    content_types,
+    isActive: executionAvailable ? 1 : 0,
+  });
+  if (task.is_active) startJob(task);
+  return withRuntimeState(task);
 }
 
 /**
@@ -139,7 +181,7 @@ function updateSchedule(id, { name, cron_expression, content_types }) {
     startJob(updated);
   }
 
-  return updated;
+  return withRuntimeState(updated);
 }
 
 /**
@@ -152,6 +194,9 @@ function toggleSchedule(id) {
   if (!task) throw new Error('任务不存在');
 
   const newStatus = task.is_active ? 0 : 1;
+  if (newStatus && !getExecutionState().available) {
+    throw new AutomationExecutionUnavailableError();
+  }
   const updated = scheduleStore.updateActive(id, newStatus);
 
   if (newStatus) {
@@ -160,7 +205,7 @@ function toggleSchedule(id) {
     stopJob(id);
   }
 
-  return updated;
+  return withRuntimeState(updated);
 }
 
 /**
@@ -177,15 +222,18 @@ function removeSchedule(id) {
  * @returns {Array} 任务列表
  */
 function getSchedules() {
-  return scheduleStore.getAll();
+  return scheduleStore.getAll().map(withRuntimeState);
 }
 
 module.exports = {
+  AutomationExecutionUnavailableError,
+  EXECUTION_UNAVAILABLE_MESSAGE,
   init,
   shutdown,
   addSchedule,
   updateSchedule,
   toggleSchedule,
   removeSchedule,
-  getSchedules
+  getSchedules,
+  getExecutionState,
 };

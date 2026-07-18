@@ -1,4 +1,5 @@
 // 口播分段（segment）路由
+const { randomUUID } = require('crypto');
 const express = require('express');
 const router = express.Router();
 const mimo = require('../services/mimo');
@@ -18,6 +19,33 @@ const { prependStyleTag, sanitizeStyleTag, MAX_SEGMENT_TEXT_LENGTH } = require('
 const logger = createScopedLogger('segments-route');
 const BATCH_GENERATE_LEASE_MS = 10 * 60 * 1000;
 const BATCH_GENERATE_HEARTBEAT_MS = 30 * 1000;
+
+class SegmentSnapshotChangedError extends Error {
+  constructor() {
+    super('句子在生成期间已变更');
+    this.code = 'SEGMENT_SNAPSHOT_CHANGED';
+  }
+}
+
+function safeCleanGeneratedAudio(audioPath, context = {}) {
+  if (!audioPath) return;
+  try {
+    cleanAudioFile(audioPath);
+  } catch (cleanupError) {
+    logger.warn({ err: cleanupError, audioPath, ...context }, '清理分段生成音频失败');
+  }
+}
+
+function startSegmentGeneration(segment) {
+  const generationToken = randomUUID();
+  return segmentStore.tryStartGeneration(segment, generationToken) ? generationToken : null;
+}
+
+function writeUniqueSegmentAudio(segment, generationToken, audioBuffer) {
+  const token = generationToken.replace(/-/g, '');
+  const filename = `segment_${segment.broadcast_id}_${segment.id}_${token}.wav`;
+  return audioAsset.writeAudioFile(filename, audioBuffer);
+}
 
 function invalidateMergedAudio(broadcast) {
   if (!broadcast) return;
@@ -368,7 +396,25 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     });
 
     const results = new Array(pendingSegments.length);
-    const markSegmentFailed = (segment, index, error) => {
+    const markSegmentStale = (segment, index, error) => {
+      const current = segmentStore.getByIdAndBroadcastId(segment.id, idCheck.id);
+      results[index] = {
+        id: segment.id,
+        status: 'stale',
+        ...(error ? { error: error.message || '语音生成失败' } : {}),
+      };
+      if (current) {
+        sseManager.sendProgress(String(idCheck.id), {
+          segmentId: segment.id,
+          status: current.status,
+          discarded: true,
+          current: index + 1,
+          total: pendingSegments.length,
+        });
+      }
+    };
+
+    const finishSegmentFailure = (segment, index, error, generationToken) => {
       const errorMessage = error.message || '语音生成失败';
       logger.warn({
         err: error,
@@ -377,7 +423,24 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
         segmentIndex: segment.index,
         textLength: segment.text.length,
       }, '分段语音生成失败');
-      segmentStore.updateStatus(segment.id, 'failed', null, errorMessage);
+
+      let activeGenerationToken = generationToken;
+      if (!activeGenerationToken) {
+        activeGenerationToken = startSegmentGeneration(segment);
+      }
+      const outcome = activeGenerationToken
+        ? segmentStore.tryFinishGeneration({
+          snapshot: segment,
+          generationToken: activeGenerationToken,
+          status: 'failed',
+          errorMessage,
+        })
+        : { applied: false };
+      if (!outcome.applied) {
+        markSegmentStale(segment, index, error);
+        return;
+      }
+
       results[index] = { id: segment.id, status: 'failed', error: errorMessage };
       sseManager.sendProgress(String(idCheck.id), {
         segmentId: segment.id,
@@ -389,6 +452,8 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     };
 
     const generateSegment = async (segment, index) => {
+      let generationToken = null;
+      let generatedAudioPath = null;
       try {
         const speechParams = await voiceConfigService.toSpeechParams({
           text: prependStyleTag(segment.text, segment.style_tag),
@@ -398,7 +463,10 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
         });
         const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => {
           heartbeatGenerationJob();
-          segmentStore.updateStatus(segment.id, 'generating');
+          generationToken = startSegmentGeneration(segment);
+          if (!generationToken) {
+            throw new SegmentSnapshotChangedError();
+          }
           sseManager.sendProgress(String(idCheck.id), {
             segmentId: segment.id,
             status: 'generating',
@@ -409,27 +477,56 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           return tts.generateSpeech(speechParams);
         });
 
-        const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
+        generatedAudioPath = writeUniqueSegmentAudio(segment, generationToken, audioBuffer);
+        const outcome = segmentStore.tryFinishGeneration({
+          snapshot: segment,
+          generationToken,
+          status: 'generated',
+          audioPath: generatedAudioPath,
+        });
+        if (!outcome.applied) {
+          safeCleanGeneratedAudio(generatedAudioPath, {
+            broadcastId: idCheck.id,
+            segmentId: segment.id,
+          });
+          markSegmentStale(segment, index);
+          return;
+        }
+        if (outcome.replacedAudioPath && outcome.replacedAudioPath !== generatedAudioPath) {
+          safeCleanGeneratedAudio(outcome.replacedAudioPath, {
+            broadcastId: idCheck.id,
+            segmentId: segment.id,
+          });
+        }
 
-        segmentStore.updateStatus(segment.id, 'generated', audioPath);
         results[index] = { id: segment.id, status: 'generated' };
 
         // 推送成功事件
         sseManager.sendProgress(String(idCheck.id), {
           segmentId: segment.id,
           status: 'generated',
-          audioPath,
+          audioPath: generatedAudioPath,
           current: index + 1,
           total: pendingSegments.length
         });
       } catch (ttsError) {
-        markSegmentFailed(segment, index, ttsError);
+        if (generatedAudioPath) {
+          safeCleanGeneratedAudio(generatedAudioPath, {
+            broadcastId: idCheck.id,
+            segmentId: segment.id,
+          });
+        }
+        if (ttsError.code === 'SEGMENT_SNAPSHOT_CHANGED') {
+          markSegmentStale(segment, index);
+          return;
+        }
+        finishSegmentFailure(segment, index, ttsError, generationToken);
       }
     };
 
     if (cloneResolveError) {
       pendingSegments.forEach((segment, index) => {
-        markSegmentFailed(segment, index, cloneResolveError);
+        finishSegmentFailure(segment, index, cloneResolveError, false);
       });
     } else {
       await Promise.all(pendingSegments.map((segment, index) => generateSegment(segment, index)));
@@ -654,6 +751,9 @@ router.put('/:id/segments/:segId', (req, res) => {
  * 重新生成单个 segment 音频
  */
 router.post('/:id/segments/:segId/regenerate', async (req, res) => {
+  let generatedAudioPath = null;
+  let generationSnapshot = null;
+  let generationToken = null;
   try {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
@@ -662,6 +762,7 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
 
     const segment = segmentStore.getByIdAndBroadcastId(segIdCheck.id, idCheck.id);
     if (!segment) return res.status(404).json({ error: '句子不存在' });
+    generationSnapshot = segment;
 
     const broadcast = broadcastStore.getById(idCheck.id);
     const { voiceType, voiceConfig } = voiceConfigService.parseBroadcastVoiceConfig(broadcast);
@@ -673,7 +774,10 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
       return res.status(400).json({ error: voiceSelection.error });
     }
 
-    segmentStore.updateStatus(segIdCheck.id, 'generating');
+    generationToken = startSegmentGeneration(generationSnapshot);
+    if (!generationToken) {
+      return res.status(409).json({ error: '句子在生成开始前已变更，请按当前内容重试' });
+    }
 
     try {
       const speechParams = await voiceConfigService.toSpeechParams({
@@ -684,11 +788,47 @@ router.post('/:id/segments/:segId/regenerate', async (req, res) => {
       });
       const audioBuffer = await ttsQueue.enqueueTts(speechParams, () => tts.generateSpeech(speechParams));
 
-      const audioPath = audioAsset.writeSegmentAudio(idCheck.id, segment.index, audioBuffer);
-
-      segmentStore.updateStatus(segIdCheck.id, 'generated', audioPath);
+      generatedAudioPath = writeUniqueSegmentAudio(generationSnapshot, generationToken, audioBuffer);
+      const outcome = segmentStore.tryFinishGeneration({
+        snapshot: generationSnapshot,
+        generationToken,
+        status: 'generated',
+        audioPath: generatedAudioPath,
+      });
+      if (!outcome.applied) {
+        safeCleanGeneratedAudio(generatedAudioPath, {
+          broadcastId: idCheck.id,
+          segmentId: segIdCheck.id,
+        });
+        return res.status(409).json({ error: '句子在生成期间已变更，本次音频已丢弃' });
+      }
+      if (outcome.replacedAudioPath && outcome.replacedAudioPath !== generatedAudioPath) {
+        safeCleanGeneratedAudio(outcome.replacedAudioPath, {
+          broadcastId: idCheck.id,
+          segmentId: segIdCheck.id,
+        });
+      }
     } catch (ttsError) {
-      segmentStore.updateStatus(segIdCheck.id, 'failed', null, ttsError.message || '语音生成失败');
+      if (generatedAudioPath) {
+        safeCleanGeneratedAudio(generatedAudioPath, {
+          broadcastId: idCheck.id,
+          segmentId: segIdCheck.id,
+        });
+      }
+      try {
+        segmentStore.tryFinishGeneration({
+          snapshot: generationSnapshot,
+          generationToken,
+          status: 'failed',
+          errorMessage: ttsError.message || '语音生成失败',
+        });
+      } catch (statusError) {
+        logger.warn({
+          err: statusError,
+          broadcastId: idCheck.id,
+          segmentId: segIdCheck.id,
+        }, '收口分段生成失败状态时出错');
+      }
       return res.status(500).json({ error: '语音生成失败: ' + ttsError.message });
     }
 

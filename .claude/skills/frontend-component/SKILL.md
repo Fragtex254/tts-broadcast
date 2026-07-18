@@ -140,11 +140,12 @@ export default MyComponent;
 | 路径 | 组件 | 说明 |
 |------|------|------|
 | `/` | `SourceCollection` | 内容工作台（默认页） |
-| `/editor` | `ScriptEditor` | 口播稿编辑 |
+| `/editor` | `ScriptEditor` | 口播稿编辑；可通过完整 query 绑定内容项目的确切 `audio_script` Revision |
 | `/transcribe` | `Transcribe` | 音视频上传转录 |
 | `/history` | `ContentLibrary` | 内容库（播报 / 转录稿） |
 | `/history/transcriptions/:id` | `TranscriptWorkspace` | 播客阅读、校对与一键总结上下文页 |
-| `/automation` | `Automation` | 自动化任务 |
+| `/projects/:id` | `ProjectWorkspace` | 内容项目 Brief、来源与版本化稿件工作区 |
+| `/automation` | `Automation` | 自动化规划与旧定时配置（真实执行器接入前不可启用） |
 | `/voice-presets` | `VoicePresets` | 音色库 |
 | `/settings` | `Settings` | 系统设置 |
 | `*` | `NotFound` | 404 兜底 |

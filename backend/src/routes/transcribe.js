@@ -566,6 +566,13 @@ router.delete('/results/:id', (req, res) => {
 
     res.json({ message: '转录结果已删除' });
   } catch (error) {
+    if (error.code === 'TRANSCRIPTION_RESULT_IN_USE') {
+      logger.warn({
+        hasResultId: Boolean(req.params.id),
+        resultIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
+      }, '转录结果仍被内容项目引用，已阻止删除');
+      return res.status(409).json({ error: error.message });
+    }
     logger.error({
       err: error,
       hasResultId: Boolean(req.params.id),

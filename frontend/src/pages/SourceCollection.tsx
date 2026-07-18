@@ -1,18 +1,36 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
+import { ModalShell } from '../components/ModalShell';
 import { QuickGenerate } from '../components/Dashboard/QuickGenerate';
 import { ActionButton } from '../components/ui/ActionButton';
 import { WorkbenchCard } from '../components/ui/WorkbenchCard';
+import { ProjectList } from '../components/Projects/ProjectList';
 import useStore from '../store';
+import { getProjectEditorUrl } from './projectEditorContext';
 
 export const SourceCollection: React.FC = () => {
   const navigate = useNavigate();
   const todayItems = useStore((state) => state.todayItems);
   const script = useStore((state) => state.script);
   const currentBroadcast = useStore((state) => state.currentBroadcast);
+  const projectEditorContext = useStore((state) => state.projectEditorContext);
   const isRewriting = useStore((state) => state.isRewriting);
+  const contentProjects = useStore((state) => state.contentProjects);
+  const isLoadingContentProjects = useStore((state) => state.isLoadingContentProjects);
+  const fetchContentProjects = useStore((state) => state.fetchContentProjects);
+  const createContentProject = useStore((state) => state.createContentProject);
   const newsIntakeRef = useRef<HTMLDivElement>(null);
+  const projectTitleRef = useRef<HTMLInputElement>(null);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [projectDraft, setProjectDraft] = useState({ title: '', topic: '', audience: '' });
+  const activeProjectEditorContext = projectEditorContext
+    && script === projectEditorContext.revision.content
+    ? projectEditorContext
+    : null;
 
   const handleRewriteComplete = useCallback(() => {
     navigate('/editor');
@@ -24,6 +42,50 @@ export const SourceCollection: React.FC = () => {
     newsIntake.scrollIntoView?.({ block: 'start' });
     newsIntake.querySelector<HTMLSelectElement>('select')?.focus();
   }, []);
+
+  const refreshProjects = useCallback(async () => {
+    setProjectsError(null);
+    try {
+      await fetchContentProjects();
+    } catch (error) {
+      setProjectsError(error instanceof Error ? error.message : '获取最近项目失败');
+    }
+  }, [fetchContentProjects]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    void fetchContentProjects()
+      .then(() => { if (isCurrent) setProjectsError(null); })
+      .catch((error: unknown) => {
+        if (isCurrent) setProjectsError(error instanceof Error ? error.message : '获取最近项目失败');
+      });
+    return () => { isCurrent = false; };
+  }, [fetchContentProjects]);
+
+  const handleCreateProject = useCallback(async () => {
+    const title = projectDraft.title.trim();
+    if (!title) {
+      setCreateError('请先填写项目名称');
+      return;
+    }
+    setIsCreatingProject(true);
+    setCreateError(null);
+    try {
+      const project = await createContentProject({
+        title,
+        topic: projectDraft.topic.trim(),
+        audience: projectDraft.audience.trim(),
+        targetPlatform: 'general',
+      });
+      setProjectDraft({ title: '', topic: '', audience: '' });
+      setIsCreateProjectOpen(false);
+      navigate(`/projects/${project.id}`);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : '新建内容项目失败');
+    } finally {
+      setIsCreatingProject(false);
+    }
+  }, [createContentProject, navigate, projectDraft]);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -50,7 +112,23 @@ export const SourceCollection: React.FC = () => {
                 <li className="rounded-full bg-sage/25 px-2.5 py-1">3 成稿或音频</li>
               </ol>
             </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <button
+                type="button"
+                disabled={isCreatingProject}
+                onClick={() => {
+                  setCreateError(null);
+                  setIsCreateProjectOpen(true);
+                }}
+                className="ui-pressable group rounded-card border border-sage/60 bg-sage/15 p-5 text-left hover:bg-sage/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="font-body text-[11px] font-medium text-ink-soft/70">从一个清晰问题开始</span>
+                <span className="mt-2 block font-display text-[21px] font-medium leading-tight text-ink">新建内容项目</span>
+                <span className="mt-2 block max-w-md font-body text-[13px] leading-relaxed text-ink-soft/75">
+                  先定义受众、目标和创作角度，再逐步加入来源、主稿与版本。
+                </span>
+                <span className="mt-4 inline-flex font-body text-[12px] font-medium text-ink">{isCreatingProject ? '正在建立项目…' : '进入项目 Brief →'}</span>
+              </button>
               <button
                 type="button"
                 onClick={handleStartNewsIntake}
@@ -59,7 +137,7 @@ export const SourceCollection: React.FC = () => {
                 <span className="font-body text-[11px] font-medium text-ink-soft/70">AI 今日资讯</span>
                 <span className="mt-2 block font-display text-[21px] font-medium leading-tight text-ink">采集资讯并写成稿</span>
                 <span className="mt-2 block max-w-md font-body text-[13px] leading-relaxed text-ink-soft/75">
-                  从 AI HOT 收集结构化资讯，筛选后提炼为可继续编辑的内容草稿。
+                  从 AI HOT 收集结构化资讯并快速试写；当前不会自动进入内容项目，适合先验证选题。
                 </span>
                 <span className="mt-4 inline-flex font-body text-[12px] font-medium text-ink">收集资讯并筛选 →</span>
               </button>
@@ -85,6 +163,24 @@ export const SourceCollection: React.FC = () => {
 
             <aside className="space-y-4">
               <WorkbenchCard className="p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-sage" />
+                    <h2 className="ui-section-title">最近项目</h2>
+                  </div>
+                  {contentProjects.length > 0 && <span className="ui-metadata text-ink-soft/65">继续上次创作</span>}
+                </div>
+                <ProjectList
+                  projects={contentProjects.slice(0, 3)}
+                  isLoading={isLoadingContentProjects}
+                  error={projectsError}
+                  emptyDescription="从上方新建第一个项目，Brief、来源和稿件会可靠保存在服务器。"
+                  onOpen={(projectId) => navigate(`/projects/${projectId}`)}
+                  onRetry={() => void refreshProjects()}
+                />
+              </WorkbenchCard>
+
+              <WorkbenchCard className="p-5">
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-sage" />
@@ -92,7 +188,11 @@ export const SourceCollection: React.FC = () => {
                   </div>
                   {(isRewriting || script || currentBroadcast) && (
                     <span className={`rounded-full px-2.5 py-1 font-body text-[11px] font-medium text-ink ${isRewriting ? 'bg-lilac/30' : 'bg-sage/30'}`}>
-                      {isRewriting ? '正在提炼' : '草稿已保留'}
+                      {isRewriting
+                        ? '正在提炼'
+                        : activeProjectEditorContext
+                          ? `项目口播稿 · 第 ${activeProjectEditorContext.revision.revision_number} 版`
+                          : '临时口播草稿'}
                     </span>
                   )}
                 </div>
@@ -109,17 +209,21 @@ export const SourceCollection: React.FC = () => {
                   <p className="mt-2 font-body text-[13px] leading-relaxed text-ink-soft/75">
                     {isRewriting
                       ? '正在把已选资讯提炼为内容草稿，完成后会自动进入编辑器。'
+                      : activeProjectEditorContext
+                      ? '这是内容项目中已保存的确切口播版本；继续编辑时会保留版本来源，进入 TTS 后仍可追溯。'
                       : script
-                      ? '继续调整结构和表达；定稿后可保留文字成稿，也可以选择音色生成音频。'
-                      : '从上方选择一种素材来源。创作进度会在这里保留，方便随时继续。'}
+                      ? '这是未关联内容项目的临时草稿；可继续调整结构和表达，但不会自动拥有来源与版本记录。'
+                      : '从上方选择一种素材来源；需要长期保存时，请新建内容项目。'}
                   </p>
                   {script && (
                     <ActionButton
                       tone="edit"
-                      onClick={() => navigate('/editor')}
+                      onClick={() => navigate(activeProjectEditorContext
+                        ? getProjectEditorUrl(activeProjectEditorContext)
+                        : '/editor')}
                       className="mt-3 w-full"
                     >
-                      继续提炼与写作
+                      {activeProjectEditorContext ? '继续项目口播稿' : '继续提炼与写作'}
                     </ActionButton>
                   )}
                 </div>
@@ -139,6 +243,71 @@ export const SourceCollection: React.FC = () => {
           </div>
         </div>
       </main>
+
+      <ModalShell
+        isOpen={isCreateProjectOpen}
+        title="新建内容项目"
+        subtitle="先写下最小 Brief，确认值得做，再建立可持续积累的项目。"
+        accent="sage"
+        size="md"
+        closeOnEscape={!isCreatingProject}
+        initialFocusRef={projectTitleRef}
+        onClose={() => {
+          if (!isCreatingProject) setIsCreateProjectOpen(false);
+        }}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleCreateProject();
+          }}
+        >
+          {createError && <p role="alert" className="rounded-xl border border-pink/25 bg-pink/10 p-3 ui-body text-ink">{createError}</p>}
+          <label htmlFor="new-project-title" className="ui-control-label block text-ink-soft">
+            项目名称
+            <input
+              ref={projectTitleRef}
+              id="new-project-title"
+              value={projectDraft.title}
+              onChange={(event) => {
+                setProjectDraft((current) => ({ ...current, title: event.target.value }));
+                setCreateError(null);
+              }}
+              placeholder="例如：AI 如何改变独立创作？"
+              className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-3.5 py-3 font-body text-[13px] text-ink outline-none focus:border-ink/20"
+            />
+          </label>
+          <label htmlFor="new-project-topic" className="ui-control-label block text-ink-soft">
+            核心问题
+            <textarea
+              id="new-project-topic"
+              rows={3}
+              value={projectDraft.topic}
+              onChange={(event) => setProjectDraft((current) => ({ ...current, topic: event.target.value }))}
+              placeholder="这次创作真正要回答什么？"
+              className="mt-1 w-full resize-y rounded-xl border border-card-border bg-white/70 px-3.5 py-3 font-body text-[13px] leading-relaxed text-ink outline-none focus:border-ink/20"
+            />
+          </label>
+          <label htmlFor="new-project-audience" className="ui-control-label block text-ink-soft">
+            目标读者（可选）
+            <input
+              id="new-project-audience"
+              value={projectDraft.audience}
+              onChange={(event) => setProjectDraft((current) => ({ ...current, audience: event.target.value }))}
+              placeholder="谁会因为这篇内容受益？"
+              className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-3.5 py-3 font-body text-[13px] text-ink outline-none focus:border-ink/20"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={isCreatingProject || !projectDraft.title.trim()}
+            className="ui-transition w-full rounded-full bg-sage px-5 py-3 font-body text-[12px] font-medium text-ink shadow-btn hover:brightness-105 disabled:opacity-40"
+          >
+            {isCreatingProject ? '正在建立项目…' : '创建并进入项目'}
+          </button>
+        </form>
+      </ModalShell>
     </div>
   );
 };

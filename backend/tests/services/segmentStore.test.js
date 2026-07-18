@@ -51,6 +51,24 @@ describe('segmentStore', () => {
     });
   });
 
+  describe('replaceAll', () => {
+    test('仅重排已有段落时让旧序号上的 generating 快照回到 pending', () => {
+      segmentStore.createMany(broadcastId, ['A', 'B']);
+      const segments = segmentStore.getByBroadcastId(broadcastId);
+      expect(segmentStore.tryStartGeneration(segments[0], 'replace-token')).toBe(true);
+
+      segmentStore.replaceAll(broadcastId, [
+        { id: segments[1].id, text: 'B', styleTag: '' },
+        { id: segments[0].id, text: 'A', styleTag: '' },
+      ]);
+
+      expect(segmentStore.getByIdAndBroadcastId(segments[0].id, broadcastId)).toMatchObject({
+        index: 1,
+        status: 'pending',
+      });
+    });
+  });
+
   describe('getByIdAndBroadcastId', () => {
     test('返回匹配的 segment', () => {
       segmentStore.createMany(broadcastId, ['测试句']);
@@ -107,6 +125,103 @@ describe('segmentStore', () => {
     });
   });
 
+  describe('生成快照 CAS', () => {
+    test('仅在 segment 的归属、文本、风格、序号与启动快照一致时收口生成结果', () => {
+      segmentStore.createMany(broadcastId, ['启动文本']);
+      const snapshot = segmentStore.getByBroadcastId(broadcastId)[0];
+
+      const generationToken = 'finish-token';
+      const started = segmentStore.tryStartGeneration(snapshot, generationToken);
+      expect(started).toBe(true);
+
+      const completed = segmentStore.tryFinishGeneration({
+        snapshot,
+        generationToken,
+        status: 'generated',
+        audioPath: '/audio/segment_unique.wav',
+      });
+
+      expect(completed).toEqual({ applied: true, replacedAudioPath: null });
+      expect(segmentStore.getByIdAndBroadcastId(snapshot.id, broadcastId)).toMatchObject({
+        text: '启动文本',
+        status: 'generated',
+        audio_path: '/audio/segment_unique.wav',
+      });
+    });
+
+    test('生成期间文本改变时拒绝旧快照完成且保留新文本的 pending 状态', () => {
+      segmentStore.createMany(broadcastId, ['旧文本']);
+      const snapshot = segmentStore.getByBroadcastId(broadcastId)[0];
+      const generationToken = 'text-change-token';
+      expect(segmentStore.tryStartGeneration(snapshot, generationToken)).toBe(true);
+
+      segmentStore.updateText(snapshot.id, '用户编辑后的新文本');
+      const completed = segmentStore.tryFinishGeneration({
+        snapshot,
+        generationToken,
+        status: 'generated',
+        audioPath: '/audio/stale.wav',
+      });
+
+      expect(completed).toEqual({ applied: false, replacedAudioPath: null });
+      expect(segmentStore.getByIdAndBroadcastId(snapshot.id, broadcastId)).toMatchObject({
+        text: '用户编辑后的新文本',
+        status: 'pending',
+        audio_path: null,
+      });
+    });
+
+    test('生成期间风格改变时拒绝旧快照写入 failed 状态', () => {
+      segmentStore.createMany(broadcastId, ['相同文本']);
+      const snapshot = segmentStore.getByBroadcastId(broadcastId)[0];
+      const generationToken = 'style-change-token';
+      expect(segmentStore.tryStartGeneration(snapshot, generationToken)).toBe(true);
+
+      segmentStore.updateStyleTag(snapshot.id, '用户新风格');
+      const failed = segmentStore.tryFinishGeneration({
+        snapshot,
+        generationToken,
+        status: 'failed',
+        errorMessage: '旧快照调用失败',
+      });
+
+      expect(failed).toEqual({ applied: false, replacedAudioPath: null });
+      expect(segmentStore.getByIdAndBroadcastId(snapshot.id, broadcastId)).toMatchObject({
+        style_tag: '用户新风格',
+        status: 'pending',
+        error_message: '',
+      });
+    });
+
+    test('遗留 generating 被新 token 接管后拒绝旧请求的 ABA 写回', () => {
+      segmentStore.createMany(broadcastId, ['同一份文本']);
+      const firstSnapshot = segmentStore.getByBroadcastId(broadcastId)[0];
+      expect(segmentStore.tryStartGeneration(firstSnapshot, 'old-token')).toBe(true);
+
+      const recoveredSnapshot = segmentStore.getByIdAndBroadcastId(firstSnapshot.id, broadcastId);
+      expect(recoveredSnapshot.status).toBe('generating');
+      expect(segmentStore.tryStartGeneration(recoveredSnapshot, 'new-token')).toBe(true);
+
+      expect(segmentStore.tryFinishGeneration({
+        snapshot: firstSnapshot,
+        generationToken: 'old-token',
+        status: 'generated',
+        audioPath: '/audio/old.wav',
+      })).toEqual({ applied: false, replacedAudioPath: null });
+
+      expect(segmentStore.tryFinishGeneration({
+        snapshot: recoveredSnapshot,
+        generationToken: 'new-token',
+        status: 'generated',
+        audioPath: '/audio/new.wav',
+      })).toEqual({ applied: true, replacedAudioPath: null });
+      expect(segmentStore.getByIdAndBroadcastId(firstSnapshot.id, broadcastId)).toMatchObject({
+        status: 'generated',
+        audio_path: '/audio/new.wav',
+      });
+    });
+  });
+
   describe('playbackRate', () => {
     test('单段更新 playback_rate 不重置音频状态', () => {
       segmentStore.createMany(broadcastId, ['测试']);
@@ -149,6 +264,20 @@ describe('segmentStore', () => {
       const reordered = segmentStore.getByBroadcastId(broadcastId);
       expect(reordered.map(s => s.text)).toEqual(['C', 'A', 'B']);
     });
+
+    test('重排时把尚在生成的旧序号快照恢复为 pending', () => {
+      segmentStore.createMany(broadcastId, ['A', 'B']);
+      const segments = segmentStore.getByBroadcastId(broadcastId);
+      expect(segmentStore.tryStartGeneration(segments[0], 'reorder-token')).toBe(true);
+
+      segmentStore.reorder(broadcastId, [segments[1].id, segments[0].id]);
+
+      const reordered = segmentStore.getByBroadcastId(broadcastId);
+      expect(reordered.find((segment) => segment.id === segments[0].id)).toMatchObject({
+        index: 1,
+        status: 'pending',
+      });
+    });
   });
 
   describe('deleteById', () => {
@@ -181,6 +310,21 @@ describe('segmentStore', () => {
       expect(remaining[0].index).toBe(0);
       expect(remaining[1].text).toBe('C');
       expect(remaining[1].index).toBe(1);
+    });
+
+    test('重索引不改写以 segment ID 和生成 token 命名的稳定音频路径', () => {
+      segmentStore.createMany(broadcastId, ['A', 'B']);
+      const segments = segmentStore.getByBroadcastId(broadcastId);
+      const stablePath = `/audio/segment_${broadcastId}_${segments[1].id}_unique.wav`;
+      segmentStore.updateStatus(segments[1].id, 'generated', stablePath);
+
+      segmentStore.deleteAndReindex(broadcastId, segments[0].id);
+
+      expect(segmentStore.getByIdAndBroadcastId(segments[1].id, broadcastId)).toMatchObject({
+        index: 0,
+        status: 'generated',
+        audio_path: stablePath,
+      });
     });
   });
 

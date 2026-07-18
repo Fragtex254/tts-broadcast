@@ -23,6 +23,25 @@ db.pragma('journal_mode = WAL');
 // 启用外键约束（SQLite 默认关闭）
 db.pragma('foreign_keys = ON');
 
+function ensureBroadcastArtifactRevisionColumn() {
+  const broadcastsTable = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'broadcasts'
+  `).get();
+  if (!broadcastsTable) return;
+  try {
+    db.prepare('SELECT artifact_revision_id FROM broadcasts LIMIT 1').get();
+  } catch {
+    db.exec(`
+      ALTER TABLE broadcasts
+      ADD COLUMN artifact_revision_id INTEGER DEFAULT NULL
+        REFERENCES content_artifact_revisions(id) ON DELETE SET NULL
+    `);
+  }
+}
+
+// 旧库必须先补列，否则完整 Schema 中的 Revision 索引会因列不存在而中断初始化。
+ensureBroadcastArtifactRevisionColumn();
+
 // 初始化数据库表
 const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
 db.exec(schema);
@@ -40,6 +59,10 @@ try {
 } catch {
   db.exec("ALTER TABLE broadcasts ADD COLUMN mode TEXT DEFAULT 'whole'");
 }
+
+// 迁移：将音频 Render 可选关联到不可变的口播稿 Revision。
+ensureBroadcastArtifactRevisionColumn();
+db.exec('CREATE INDEX IF NOT EXISTS idx_broadcasts_artifact_revision_id ON broadcasts(artifact_revision_id)');
 
 // 迁移：为旧数据库的 segments 添加 style_tag 列
 try {
@@ -60,6 +83,13 @@ try {
   db.prepare('SELECT playback_rate FROM segments LIMIT 1').get();
 } catch {
   db.exec('ALTER TABLE segments ADD COLUMN playback_rate REAL DEFAULT 1.0');
+}
+
+// 迁移：持久化每次分段生成的唯一令牌，防止超时恢复后的旧请求 ABA 写回。
+try {
+  db.prepare('SELECT generation_token FROM segments LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE segments ADD COLUMN generation_token TEXT DEFAULT NULL');
 }
 
 // 迁移：确保 voice_presets 表存在
@@ -220,6 +250,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS content_projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, topic TEXT NOT NULL DEFAULT '',
     target_platform TEXT NOT NULL DEFAULT 'general', thesis TEXT NOT NULL DEFAULT '', personal_practice TEXT NOT NULL DEFAULT '',
+    audience TEXT NOT NULL DEFAULT '', goal TEXT NOT NULL DEFAULT '', angle TEXT NOT NULL DEFAULT '',
+    tone TEXT NOT NULL DEFAULT '', content_format TEXT NOT NULL DEFAULT '',
     personal_judgment TEXT NOT NULL DEFAULT '', discussion_question TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'draft', created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -234,7 +266,66 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_content_project_claims_order
     ON content_project_claims(project_id, sort_order, id);
+  CREATE INDEX IF NOT EXISTS idx_content_project_claims_claim
+    ON content_project_claims(claim_id);
+  CREATE TABLE IF NOT EXISTS content_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, source_type TEXT NOT NULL DEFAULT 'manual',
+    title TEXT NOT NULL DEFAULT '', content TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
+    external_ref TEXT NOT NULL DEFAULT '', metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_sources_type_external_ref
+    ON content_sources(source_type, external_ref);
+  CREATE TABLE IF NOT EXISTS content_project_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, source_id INTEGER NOT NULL,
+    usage_note TEXT NOT NULL DEFAULT '', sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE CASCADE,
+    UNIQUE (project_id, source_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_project_sources_order
+    ON content_project_sources(project_id, sort_order, id);
+  CREATE TABLE IF NOT EXISTS content_artifacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, kind TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '', platform TEXT NOT NULL DEFAULT 'general', status TEXT NOT NULL DEFAULT 'draft',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_artifacts_project_updated
+    ON content_artifacts(project_id, updated_at DESC, id DESC);
+  CREATE TABLE IF NOT EXISTS content_artifact_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, artifact_id INTEGER NOT NULL, revision_number INTEGER NOT NULL,
+    content TEXT NOT NULL DEFAULT '', change_reason TEXT NOT NULL DEFAULT 'manual',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (artifact_id) REFERENCES content_artifacts(id) ON DELETE CASCADE,
+    UNIQUE (artifact_id, revision_number)
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_artifact_revisions_artifact_number
+    ON content_artifact_revisions(artifact_id, revision_number DESC);
 `);
+
+const contentProjectBriefColumns = [
+  ['audience', "TEXT NOT NULL DEFAULT ''"],
+  ['goal', "TEXT NOT NULL DEFAULT ''"],
+  ['angle', "TEXT NOT NULL DEFAULT ''"],
+  ['tone', "TEXT NOT NULL DEFAULT ''"],
+  ['content_format', "TEXT NOT NULL DEFAULT ''"]
+];
+
+for (const [column, definition] of contentProjectBriefColumns) {
+  try {
+    db.prepare(`SELECT ${column} FROM content_projects LIMIT 1`).get();
+  } catch {
+    db.exec(`ALTER TABLE content_projects ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+try {
+  db.prepare('SELECT change_reason FROM content_artifact_revisions LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE content_artifact_revisions ADD COLUMN change_reason TEXT NOT NULL DEFAULT 'manual'");
+}
 
 try {
   db.prepare('SELECT is_hidden FROM transcription_claims LIMIT 1').get();

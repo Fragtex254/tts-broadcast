@@ -21,6 +21,8 @@ description: 修改前端状态管理、数据流、API 调用时使用。涵盖
 6. 高频状态（slider/resize）用 `useDebounce`；Settings 用 draft + dirtyFields + onBlur/debounce 自动保存 + 顶部批量兜底。
 7. 转录 SSE 的阶段事件可能不带文字：必须保留已有累计文本；优先用 `chunks` 有序快照恢复轮询间隔内跨过的分片，旧服务只有 `chunkText` 时再按已完成 chunk 序号 upsert，不能因重复事件而重复追加。最终 `complete.text` 才替换临时结果。
 8. 观点研究状态放 `researchSlice.ts`；搜索结果区分 `embedding` / `keyword` 降级模式，关系分析只提交显式选中的 claim ID，内容项目详情始终以服务端返回为准。观点分析 SSE 与总结 SSE 分开维护 loading/error，刷新后以 `claims_status` 收敛。
+9. 内容项目工作区通过独立领域 slice 管理 Source、Artifact 与 Revision；服务器聚合响应是唯一真实来源。详情响应必须严格解析，mutation 后使用服务端返回对象合并或重新读取工作区，不在页面自行推导 revision number、项目归属或当前版本。
+10. 项目口播编辑器必须用完整 `projectId + artifactId + revisionId` 上下文加载并核验 `audio_script` Revision；参数残缺时不得降级为旧内存稿。项目正文编辑、添加开场/结尾必须先成功 INSERT 新 Revision，再更新全局 `script` 与 URL；只有 `script` 与当前 Revision 逐字一致时才允许把 `artifactRevisionId` 传给 TTS。旧 `/editor` 无参数流程继续不传该字段。
 
 ## 模式与模板
 

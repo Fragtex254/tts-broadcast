@@ -15,6 +15,9 @@ export interface Broadcast {
   id: number;
   title: string;
   content: string;
+  artifact_revision_id: number | null;
+  /** 创建这次 Render 时使用的不可变稿件版本；分段精修不会改变它。 */
+  source_artifact_revision_id: number | null;
   audio_path: string | null;
   duration: number | null;
   voice_type: string | null;
@@ -124,6 +127,13 @@ export interface Schedule {
   last_run_at: string | null;
   created_at: string;
   updated_at: string;
+  runtime_state: 'unavailable' | 'inactive' | 'scheduled' | 'not_scheduled';
+}
+
+export interface AutomationExecutionState {
+  available: boolean;
+  state: 'available' | 'unavailable';
+  reason: string;
 }
 
 /** 音色预设 */
@@ -337,6 +347,11 @@ export interface ContentProject {
   id: number;
   title: string;
   topic: string;
+  audience: string;
+  goal: string;
+  angle: string;
+  tone: string;
+  content_format: string;
   target_platform: ContentTargetPlatform;
   thesis: string;
   personal_practice: string;
@@ -347,6 +362,109 @@ export interface ContentProject {
   claims: Array<{ id: number; project_id: number; claim_id: number; sort_order: number; usage_note: string; claim: TranscriptClaim }>;
   created_at: string;
   updated_at: string;
+}
+
+export interface CreateContentProjectInput {
+  title: string;
+  topic?: string;
+  targetPlatform?: ContentTargetPlatform;
+  thesis?: string;
+  audience?: string;
+  goal?: string;
+  angle?: string;
+  tone?: string;
+  contentFormat?: string;
+}
+
+export interface ContentProjectUpdateInput {
+  title?: string;
+  topic?: string;
+  targetPlatform?: ContentTargetPlatform;
+  thesis?: string;
+  personalPractice?: string;
+  personalJudgment?: string;
+  discussionQuestion?: string;
+  status?: string;
+  audience?: string;
+  goal?: string;
+  angle?: string;
+  tone?: string;
+  contentFormat?: string;
+}
+
+export interface ContentProjectSource {
+  id: number;
+  project_id: number;
+  project_source_id: number;
+  source_type: string;
+  title: string;
+  content: string;
+  url: string;
+  external_ref: string;
+  metadata: Record<string, unknown>;
+  usage_note: string;
+  sort_order: number;
+  linked_at: string;
+  link_updated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentProjectSourceInput {
+  sourceType: string;
+  title: string;
+  content: string;
+  url?: string;
+  externalRef?: string;
+  metadata?: Record<string, unknown>;
+  usageNote?: string;
+}
+
+export interface ContentArtifactRevision {
+  id: number;
+  artifact_id: number;
+  revision_number: number;
+  content: string;
+  change_reason: string;
+  created_at: string;
+}
+
+export interface ContentArtifact {
+  id: number;
+  project_id: number;
+  kind: string;
+  title: string;
+  platform: string;
+  status: string;
+  current_revision: ContentArtifactRevision | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentArtifactInput {
+  kind: string;
+  title: string;
+  platform: string;
+  status?: string;
+  content: string;
+  changeReason?: string;
+}
+
+export interface ContentArtifactRevisionInput {
+  content: string;
+  changeReason?: string;
+}
+
+export interface ContentProjectWorkspace {
+  project: ContentProject;
+  sources: ContentProjectSource[];
+  artifacts: ContentArtifact[];
+}
+
+export interface ProjectEditorContext {
+  projectId: number;
+  artifactId: number;
+  revision: ContentArtifactRevision;
 }
 
 export interface TranscriptSummaryProgress {
@@ -475,6 +593,7 @@ export interface AppState {
   isLoadingSettings: boolean;
 
   schedules: Schedule[];
+  automationExecution: AutomationExecutionState;
   presets: VoicePreset[];
   isLoadingPresets: boolean;
   presetError: string | null;
@@ -483,6 +602,7 @@ export interface AppState {
   rewriteScript: (data: { items: NewsItem[]; opening?: string; closing?: string }) => Promise<string>;
   generateBroadcast: (data: {
     text: string;
+    artifactRevisionId?: number;
     voice?: string;
     voiceType?: VoiceConfig['voiceType'];
     voiceDesign?: string;
@@ -502,7 +622,7 @@ export interface AppState {
   saveBroadcast: (id: number) => Promise<Broadcast>;
   updateScript: (script: string) => void;
 
-  splitScriptAction: (text: string) => Promise<void>;
+  splitScriptAction: (text: string, artifactRevisionId?: number) => Promise<void>;
   splitScript: (broadcastId: number) => Promise<Segment[]>;
   fetchSegments: (broadcastId: number) => Promise<Segment[]>;
   updateSegmentText: (broadcastId: number, segId: number, text: string) => Promise<Segment>;
@@ -554,6 +674,17 @@ export interface AppState {
   contentProjects: ContentProject[];
   currentContentProject: ContentProject | null;
   isLoadingContentProjects: boolean;
+  projectWorkspace: ContentProjectWorkspace | null;
+  isLoadingProjectWorkspace: boolean;
+  projectWorkspaceError: string | null;
+  isSavingProjectWorkspace: boolean;
+  projectWorkspaceSaveError: string | null;
+  projectArtifactRevisions: ContentArtifactRevision[];
+  isLoadingProjectArtifactRevisions: boolean;
+  projectArtifactRevisionsError: string | null;
+  projectEditorContext: ProjectEditorContext | null;
+  isLoadingProjectEditorRevision: boolean;
+  projectEditorRevisionError: string | null;
   searchClaims: (query: string) => Promise<ClaimSearchResult[]>;
   clearResearchContext: () => void;
   fetchClaimDetail: (claimId: number) => Promise<TranscriptClaim>;
@@ -562,14 +693,23 @@ export interface AppState {
   deleteClaimDetail: (claimId: number) => Promise<void>;
   analyzeClaimRelations: (claimIds: number[]) => Promise<ClaimRelationAnalysis>;
   fetchContentProjects: () => Promise<ContentProject[]>;
-  createContentProject: (data: { title: string; topic?: string; targetPlatform?: ContentTargetPlatform; thesis?: string }) => Promise<ContentProject>;
+  createContentProject: (data: CreateContentProjectInput) => Promise<ContentProject>;
   fetchContentProject: (id: number) => Promise<ContentProject>;
-  updateContentProject: (id: number, data: Partial<{ title: string; topic: string; targetPlatform: ContentTargetPlatform; thesis: string; personalPractice: string; personalJudgment: string; discussionQuestion: string; status: string }>) => Promise<ContentProject>;
+  updateContentProject: (id: number, data: ContentProjectUpdateInput) => Promise<ContentProject>;
   deleteContentProject: (id: number) => Promise<void>;
   addClaimToContentProject: (projectId: number, claimId: number, usageNote?: string) => Promise<ContentProject>;
   reorderContentProjectClaims: (projectId: number, claimIds: number[]) => Promise<ContentProject>;
   removeClaimFromContentProject: (projectId: number, claimId: number) => Promise<void>;
   exportContentProject: (projectId: number, platform: 'xiaohongshu' | 'wechat') => Promise<string>;
+  fetchProjectWorkspace: (projectId: number) => Promise<ContentProjectWorkspace>;
+  clearProjectWorkspace: () => void;
+  addProjectWorkspaceSource: (projectId: number, data: ContentProjectSourceInput) => Promise<ContentProjectSource>;
+  createProjectWorkspaceArtifact: (projectId: number, data: ContentArtifactInput) => Promise<ContentArtifact>;
+  saveProjectArtifactRevision: (projectId: number, artifactId: number, data: ContentArtifactRevisionInput) => Promise<ContentArtifactRevision>;
+  fetchProjectArtifactRevisions: (projectId: number, artifactId: number) => Promise<ContentArtifactRevision[]>;
+  loadProjectEditorRevision: (projectId: number, artifactId: number, revisionId: number) => Promise<ContentArtifactRevision>;
+  adoptProjectEditorRevision: (revision: ContentArtifactRevision) => void;
+  clearProjectEditorContext: () => void;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (data: Partial<Settings>) => Promise<void>;

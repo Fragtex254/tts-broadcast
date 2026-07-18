@@ -2,7 +2,14 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { validateId, cleanAudioFile, cleanAssetFile, audioDir, assetDir } = require('../../src/utils/validation');
+const {
+  validateId,
+  cleanAudioFile,
+  cleanAssetFile,
+  resolveAudioFilePath,
+  audioDir,
+  assetDir,
+} = require('../../src/utils/validation');
 
 describe('validation 工具', () => {
   describe('validateId', () => {
@@ -47,6 +54,10 @@ describe('validation 工具', () => {
 
   describe('cleanAudioFile', () => {
     const testFiles = [];
+
+    beforeEach(() => {
+      fs.mkdirSync(audioDir, { recursive: true });
+    });
 
     afterEach(() => {
       // 清理测试创建的文件
@@ -101,6 +112,18 @@ describe('validation 工具', () => {
     test('导出为字符串路径', () => {
       expect(typeof audioDir).toBe('string');
       expect(audioDir).toContain('audio');
+    });
+
+    test('测试环境使用隔离音频目录，不触碰真实 audio 资产', () => {
+      expect(audioDir).toContain('.test-audio');
+    });
+
+    test('把公开 /audio/ 路径解析到当前环境的隔离目录', () => {
+      expect(resolveAudioFilePath('/audio/example.wav')).toBe(path.join(audioDir, 'example.wav'));
+    });
+
+    test('拒绝越过音频根目录的公开路径', () => {
+      expect(() => resolveAudioFilePath('/audio/../outside.wav')).toThrow('音频路径无效');
     });
   });
 

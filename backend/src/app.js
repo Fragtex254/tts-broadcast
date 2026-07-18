@@ -38,6 +38,7 @@ app.use('/api/transcribe', require('./routes/transcribe'));
 app.use('/api/transcribe', require('./routes/transcriptWorkspace'));
 app.use('/api/research', require('./routes/research'));
 app.use('/api/content-projects', require('./routes/contentProjects'));
+app.use('/api/content-projects', require('./routes/contentWorkspace'));
 app.use('/api/sse', require('./routes/sse'));
 
 // 错误处理中间件

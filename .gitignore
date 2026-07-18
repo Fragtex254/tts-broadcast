@@ -43,6 +43,7 @@ Desktop.ini
 backend/data/
 backend/audio/*.wav
 backend/assets/
+backend/.test-audio/
 backend/.test-assets/
 backend/logs/
 .superpowers/

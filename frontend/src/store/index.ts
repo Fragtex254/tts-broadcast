@@ -7,10 +7,12 @@ import { createSettingsSlice } from './settingsSlice';
 import { createVoiceConfigSlice } from './voiceConfigSlice';
 import { createTranscribeSlice } from './transcribeSlice';
 import { createResearchSlice } from './researchSlice';
+import { createProjectWorkspaceSlice } from './projectWorkspaceSlice';
 import type { AppState } from './types';
 
 export type {
   AppState,
+  AutomationExecutionState,
   AsrEngine,
   AsrModelOption,
   AsrModelCapabilities,
@@ -24,9 +26,19 @@ export type {
   Broadcast,
   ClaimRelationAnalysis,
   ClaimSearchResult,
+  ContentArtifact,
+  ContentArtifactInput,
+  ContentArtifactRevision,
+  ContentArtifactRevisionInput,
   ConfirmDialogProps,
+  ContentProjectSource,
+  ContentProjectSourceInput,
+  ContentProjectUpdateInput,
   ContentProject,
+  ContentProjectWorkspace,
+  ProjectEditorContext,
   ContentTargetPlatform,
+  CreateContentProjectInput,
   LlmApiFormat,
   LlmModelOption,
   Schedule,
@@ -57,6 +69,7 @@ export const useStore = create<AppState>((set, get) => ({
   ...createSegmentSlice(set, get),
   ...createTranscribeSlice(set),
   ...createResearchSlice(set),
+  ...createProjectWorkspaceSlice(set),
   ...createSettingsSlice(set),
   ...createScheduleSlice(set),
   ...createPresetSlice(set),
