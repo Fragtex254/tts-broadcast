@@ -70,7 +70,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
+    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
       {/* 标题 */}
       <div className="flex items-center gap-2 mb-4">
         <span className="w-2 h-2 rounded-full bg-lemon" />
@@ -100,7 +100,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
         <button
           onClick={handleFetch}
           disabled={isLoading}
-          className="bg-lemon hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider whitespace-nowrap"
+          className="bg-lemon hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn ui-transition duration-fast active:translate-y-0 active:shadow-none uppercase tracking-wider whitespace-nowrap"
         >
           {isLoading ? '加载中...' : '获取'}
         </button>
@@ -116,7 +116,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
             <button
               onClick={handleRewrite}
               disabled={isRewriting}
-              className="bg-lilac hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none uppercase tracking-wider"
+              className="bg-lilac hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn ui-transition duration-fast active:translate-y-0 active:shadow-none uppercase tracking-wider"
             >
               {isRewriting ? '改写中...' : '✦ 一键改写口播稿'}
             </button>
@@ -127,9 +127,6 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
               <div
                 key={item.id}
                 className="flex items-start gap-3 py-2.5 border-b border-card-border last:border-0"
-                style={{
-                  animation: `fade-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both`,
-                }}
               >
                 <span className="font-display italic text-[16px] font-medium text-pink min-w-[26px] leading-snug">
                   {String(index + 1).padStart(2, '0')}
@@ -139,7 +136,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
                     {item.title}
                   </h4>
                   {item.category && (
-                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md font-body text-[9px] font-medium uppercase tracking-wider text-ink ${CATEGORY_COLORS[item.category] || 'bg-paper-2'}`}>
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md font-body text-[11px] font-medium uppercase tracking-wider text-ink ${CATEGORY_COLORS[item.category] || 'bg-paper-2'}`}>
                       {CATEGORIES.find(c => c.value === item.category)?.label || item.category}
                     </span>
                   )}
@@ -154,7 +151,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
       {isLoading && todayItems.length === 0 && (
         <div className="mt-3 space-y-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-start gap-3 py-2.5 animate-pulse" style={{ animationDelay: `${i * 0.05}s` }}>
+            <div key={i} className="flex items-start gap-3 py-2.5 animate-pulse">
               <div className="w-6 h-4 bg-ink/5 rounded" />
               <div className="flex-1 space-y-1.5">
                 <div className="h-3 bg-ink/5 rounded w-3/4" />

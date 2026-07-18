@@ -10,6 +10,7 @@ import { ClaimDetailModal } from '../components/Research/ClaimDetailModal';
 import { TranscriptClaimsPanel } from '../components/Research/TranscriptClaimsPanel';
 import type { TranscriptClaim } from '../store';
 import useStore from '../store';
+import { StatusPill } from '../components/ui/StatusPill';
 
 export const TranscriptWorkspace: React.FC = () => {
   const navigate = useNavigate();
@@ -73,6 +74,14 @@ export const TranscriptWorkspace: React.FC = () => {
   };
 
   const currentTranscript = transcript?.record.id === transcriptionId ? transcript : null;
+  const transcriptTitle = currentTranscript
+    ? currentTranscript.record.episode_title.trim()
+      || currentTranscript.record.relative_path
+      || currentTranscript.record.file_name
+    : '';
+  const sourceLabel = currentTranscript
+    ? currentTranscript.record.relative_path || currentTranscript.record.file_name
+    : '';
   const selectedClaim = claimId === null ? null : currentTranscript?.claims.find((claim) => claim.id === claimId) || null;
   const shouldWarnSpeaker = currentTranscript
     && (currentTranscript.record.speaker_scope === 'mixed' || currentTranscript.record.diarization_conflicts > 0);
@@ -89,6 +98,15 @@ export const TranscriptWorkspace: React.FC = () => {
         : summaryIsActive
           ? '总结中'
           : '待总结';
+  const claimsStatusLabel = currentTranscript?.record.claims_status === 'completed'
+    ? `${currentTranscript.claims.length} 条观点`
+    : currentTranscript?.record.claims_status === 'stale'
+      ? '观点待更新'
+      : currentTranscript?.record.claims_status === 'failed'
+        ? '观点分析失败'
+        : currentTranscript && ['queued', 'running'].includes(currentTranscript.record.claims_status)
+          ? '观点分析中'
+          : '待分析观点';
 
   const updateQuery = (updates: { claim?: number | null; evidence?: boolean }, replace = false) => {
     const next = new URLSearchParams(searchParams);
@@ -129,11 +147,11 @@ export const TranscriptWorkspace: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <Header title="内容详情" subtitle="阅读、校对并把长音频整理成可复用内容" />
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <Header title="播客工作区" subtitle="从逐字稿中理解内容、校对事实并沉淀可复用观点" />
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
-        <div className="mx-auto max-w-6xl space-y-4">
-          <button type="button" onClick={() => navigate('/history?tab=transcriptions')} className="font-body text-[12px] text-ink-soft transition-colors hover:text-ink">← 返回内容库</button>
+        <div className="mx-auto max-w-7xl space-y-5">
+          <button type="button" onClick={() => navigate('/history?tab=transcriptions')} className="ui-pressable min-h-9 rounded-lg px-2 font-body text-[12px] text-ink-soft hover:bg-white/45 hover:text-ink">← 返回内容库</button>
 
           {isLoading && (
             <div className="space-y-4 animate-pulse">
@@ -146,12 +164,36 @@ export const TranscriptWorkspace: React.FC = () => {
 
           {!isLoading && currentTranscript && (
             <>
-              <section className="rounded-card border border-card-border bg-white/80 p-5 shadow-card">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0"><p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/55">播客整理</p><h1 className="mt-1 break-words font-display text-[26px] font-medium text-ink sm:truncate" title={currentTranscript.record.relative_path || currentTranscript.record.file_name}>{currentTranscript.record.relative_path || currentTranscript.record.file_name}</h1><p className="mt-2 font-body text-[11px] text-ink-soft/65">{currentTranscript.record.speaker_count} 位说话人 · {currentTranscript.segments.length} 个原始片段 · {currentTranscript.turns.length} 个阅读轮次</p></div>
-                  <span className={`inline-flex rounded-full px-3 py-1.5 font-body text-[9px] font-medium uppercase tracking-wider text-ink ${currentTranscript.record.summary_status === 'completed' ? 'bg-sage/35' : currentTranscript.record.summary_status === 'failed' ? 'bg-pink/20' : 'bg-lemon/35'}`}>{summaryStatusLabel}</span>
+              <header className="border-b border-card-border px-1 pb-6 pt-1 sm:px-2">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 max-w-4xl">
+                    <p className="font-body text-[11px] font-medium tracking-wide text-ink-soft/65">
+                      {currentTranscript.record.podcast_name || '播客内容'} · 阅读工作区
+                    </p>
+                    <h1 className="mt-2 break-words font-display text-[23px] font-medium leading-[1.42] text-ink sm:text-[26px]" title={transcriptTitle}>
+                      {transcriptTitle}
+                    </h1>
+                    {sourceLabel !== transcriptTitle && (
+                      <p className="mt-2 break-words font-body text-[11px] leading-relaxed text-ink-soft/55">来源文件：{sourceLabel}</p>
+                    )}
+                    <p className="mt-3 font-body text-[12px] leading-relaxed text-ink-soft/75">
+                      {currentTranscript.record.speaker_count} 位说话人 · {currentTranscript.segments.length} 个原始片段 · {currentTranscript.turns.length} 个阅读轮次
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2" aria-label="内容处理状态">
+                    <StatusPill tone={currentTranscript.record.summary_status === 'completed' ? 'success' : currentTranscript.record.summary_status === 'failed' ? 'error' : summaryIsActive ? 'working' : 'queued'}>摘要 · {summaryStatusLabel}</StatusPill>
+                    <StatusPill tone={currentTranscript.record.claims_status === 'completed' ? 'success' : currentTranscript.record.claims_status === 'failed' ? 'error' : ['queued', 'running'].includes(currentTranscript.record.claims_status) ? 'working' : 'queued'}>观点 · {claimsStatusLabel}</StatusPill>
+                  </div>
                 </div>
-              </section>
+              </header>
+
+              <nav aria-label="内容详情分区" className="sticky top-0 z-20 -mx-2 flex gap-1 overflow-x-auto border-y border-card-border bg-paper px-2 py-2 sm:mx-0 sm:rounded-xl sm:border">
+                <a href="#summary" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">核心摘要</a>
+                <a href="#metadata" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">资料与出处</a>
+                <a href="#claims" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">主要观点</a>
+                <a href="#speakers" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">说话人</a>
+                <a href="#transcript" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">逐字稿</a>
+              </nav>
 
               {shouldWarnSpeaker && (
                 <div className="rounded-2xl border border-lemon/50 bg-lemon/15 p-4 font-body text-[12px] leading-relaxed text-ink-soft">
@@ -162,25 +204,25 @@ export const TranscriptWorkspace: React.FC = () => {
               {remoteSummaryActive && (
                 <div className="flex flex-col gap-2 rounded-2xl border border-lilac/45 bg-lilac/10 p-4 font-body text-[12px] text-ink-soft sm:flex-row sm:items-center sm:justify-between">
                   <span>总结任务正在后台运行。即使离开页面，服务端租约也会阻止重复执行。</span>
-                  <button type="button" onClick={() => void load()} className="shrink-0 rounded-full bg-white/70 px-3 py-1.5 text-[10px] text-ink transition hover:bg-white">刷新状态</button>
+                  <button type="button" onClick={() => void load()} className="ui-pressable min-h-9 shrink-0 rounded-full bg-white/70 px-3 py-2 font-body text-[11px] text-ink hover:bg-white">刷新状态</button>
                 </div>
               )}
 
               <TranscriptSummaryPanel transcript={currentTranscript} isSummarizing={summaryIsActive} progress={remoteSummaryActive ? { phase: 'queued', percent: 0, current: 0, total: 0, message: '后台总结仍在进行' } : summaryProgress} onSummarize={handleSummarize} />
               <PodcastMetadataEditor key={currentTranscript.record.id} record={currentTranscript.record} onSave={async (metadata) => { await updateMetadata(transcriptionId, metadata); }} />
-              <TranscriptClaimsPanel
-                claims={currentTranscript.claims}
-                speakers={currentTranscript.speakers}
-                isAnalyzing={isAnalyzingClaims || ['queued', 'running'].includes(currentTranscript.record.claims_status)}
-                progress={claimProgress}
-                claimsStatus={currentTranscript.record.claims_status}
-                claimsError={currentTranscript.record.claims_error}
-                onAnalyze={() => void analyzeClaims(transcriptionId).catch((claimError) => setError(claimError instanceof Error ? claimError.message : '无法开始观点分析'))}
-                onOpenClaim={openClaim}
-                onUpdateClaim={updateClaim}
-              />
-              <TranscriptSpeakerPanel speakers={currentTranscript.speakers} onRename={handleRename} />
-              <TranscriptTurnList title={currentTranscript.record.relative_path || currentTranscript.record.file_name} turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => setIsConversationOpen(true)} onCorrect={handleCorrectTurn} />
+              <div id="claims" className="scroll-mt-20"><TranscriptClaimsPanel
+                  claims={currentTranscript.claims}
+                  speakers={currentTranscript.speakers}
+                  isAnalyzing={isAnalyzingClaims || ['queued', 'running'].includes(currentTranscript.record.claims_status)}
+                  progress={claimProgress}
+                  claimsStatus={currentTranscript.record.claims_status}
+                  claimsError={currentTranscript.record.claims_error}
+                  onAnalyze={() => void analyzeClaims(transcriptionId).catch((claimError) => setError(claimError instanceof Error ? claimError.message : '无法开始观点分析'))}
+                  onOpenClaim={openClaim}
+                  onUpdateClaim={updateClaim}
+                /></div>
+              <div id="speakers" className="scroll-mt-20"><TranscriptSpeakerPanel speakers={currentTranscript.speakers} onRename={handleRename} /></div>
+              <div id="transcript" className="scroll-mt-20"><TranscriptTurnList title={transcriptTitle} turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => setIsConversationOpen(true)} onCorrect={handleCorrectTurn} /></div>
               <ClaimDetailModal
                 key={selectedClaim ? `claim-${selectedClaim.id}` : `missing-${searchParams.get('claim') || 'claim'}`}
                 isOpen={hasClaimParam && (!isEvidenceMode || selectedClaim === null)}
@@ -198,7 +240,7 @@ export const TranscriptWorkspace: React.FC = () => {
               <TranscriptConversationModal
                 key={`${currentTranscript.record.id}-${selectedClaim?.evidence_start_index ?? 'browse'}-${selectedClaim?.evidence_end_index ?? 'browse'}-${isEvidenceMode ? 'evidence' : 'closed'}`}
                 isOpen={isConversationOpen || (isEvidenceMode && selectedClaim !== null)}
-                title={currentTranscript.record.relative_path || currentTranscript.record.file_name}
+                title={transcriptTitle}
                 turns={currentTranscript.turns}
                 speakers={currentTranscript.speakers}
                 onClose={closeConversation}

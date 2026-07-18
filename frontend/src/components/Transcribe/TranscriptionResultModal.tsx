@@ -77,7 +77,7 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
           <button
             onClick={handleFormat}
             disabled={!draftText.trim() || !canFormat || isFormatting}
-            className="relative overflow-hidden bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+            className="relative overflow-hidden bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-4 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider ui-transition duration-fast"
           >
             {isFormatting && <span className="absolute left-0 top-0 h-full w-2/3 bg-white/20 animate-pulse" />}
             <span className="relative">{isFormatting ? '排版中...' : 'AI 排版分段'}</span>
@@ -101,7 +101,7 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
             <button
               onClick={() => onImport(primaryText)}
               disabled={!primaryText}
-              className="px-4 py-2 font-body text-[12px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150"
+              className="px-4 py-2 font-body text-[12px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn ui-transition duration-fast"
             >
               导入稿件
             </button>
@@ -119,7 +119,7 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
         <div className="min-w-0">
           <div className="flex items-center justify-between mb-2">
             <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">原文</span>
-            <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftText.length} 字</span>
+            <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">{draftText.length} 字</span>
           </div>
           <textarea
             value={draftText}
@@ -131,7 +131,7 @@ export const TranscriptionResultModal: React.FC<TranscriptionResultModalProps> =
         <div className="min-w-0">
           <div className="flex items-center justify-between mb-2">
             <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55">AI 排版</span>
-            <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">{draftFormattedText.length} 字</span>
+            <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">{draftFormattedText.length} 字</span>
           </div>
           <textarea
             value={draftFormattedText}

@@ -57,38 +57,38 @@ function getPlayableDuration(audio: HTMLAudioElement): number {
 
 const PLAYBACK_STYLES: Record<AudioPlaybackVariant, AudioPlaybackStyle> = {
   regular: {
-    wrapper: 'animate-fade-in',
-    shell: 'bg-white/50 rounded-full px-4 py-3 flex items-center gap-3 border border-card-border',
-    playButton: 'w-9 h-9 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border',
+    wrapper: '',
+    shell: 'bg-white/55 rounded-2xl px-3 py-3 flex items-center gap-3 border border-card-border sm:px-4',
+    playButton: 'ui-pressable w-10 h-10 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center flex-shrink-0 border border-card-border',
     icon: 'w-4 h-4 text-ink',
     playIconOffset: 'ml-0.5',
     waveformHeight: 'h-7',
     waveformBarWidth: 'w-[3px]',
-    timeClass: 'font-body text-[11px] text-ink-soft/70 min-w-[72px] text-right tabular-nums',
+    timeClass: 'ui-metadata min-w-[72px] text-right text-ink-soft/70 tabular-nums',
     minimumWaveformBars: 12,
     defaultWaveformBars: 64,
   },
   compact: {
-    wrapper: 'animate-fade-in',
-    shell: 'bg-white/50 rounded-full px-3 py-2 flex items-center gap-2 border border-card-border',
-    playButton: 'w-7 h-7 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border',
+    wrapper: '',
+    shell: 'bg-white/50 rounded-xl px-3 py-2 flex items-center gap-2 border border-card-border',
+    playButton: 'ui-pressable w-9 h-9 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center flex-shrink-0 border border-card-border',
     icon: 'w-3 h-3 text-ink',
     playIconOffset: 'ml-0.5',
     waveformHeight: 'h-5',
     waveformBarWidth: 'w-[2px]',
-    timeClass: 'font-body text-[9px] text-ink-soft/70 min-w-[56px] text-right tabular-nums',
+    timeClass: 'ui-metadata min-w-[68px] text-right text-ink-soft/70 tabular-nums',
     minimumWaveformBars: 20,
     defaultWaveformBars: 20,
   },
   segment: {
-    wrapper: 'animate-fade-in',
+    wrapper: '',
     shell: 'bg-white/80 rounded-full px-2.5 py-1.5 border border-card-border flex items-center gap-2',
-    playButton: 'w-7 h-7 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center transition-colors flex-shrink-0 border border-card-border',
+    playButton: 'ui-pressable w-9 h-9 bg-pink/25 hover:bg-pink/35 rounded-full flex items-center justify-center flex-shrink-0 border border-card-border',
     icon: 'w-3 h-3 text-ink',
     playIconOffset: 'ml-0.5',
     waveformHeight: 'h-5',
     waveformBarWidth: 'w-[2px]',
-    timeClass: 'font-body text-[9px] text-ink-soft/70 min-w-[56px] text-right tabular-nums',
+    timeClass: 'ui-metadata min-w-[68px] text-right text-ink-soft/70 tabular-nums',
     minimumWaveformBars: 20,
     defaultWaveformBars: 20,
   },
@@ -265,10 +265,9 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
               <div
                 key={index}
                 data-waveform-bar="true"
-                className={`${styles.waveformBarWidth} rounded-full transition-all duration-100 ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
+                className={`${styles.waveformBarWidth} rounded-full transition-colors duration-fast ${isPlayed ? 'bg-pink' : 'bg-ink/10'}`}
                 style={{
                   height: `${variant === 'regular' ? height : height * 0.7}px`,
-                  ...(isPlaying && isPlayed ? { animation: `waveform-pulse 1.5s ease-in-out ${index * 0.05}s infinite` } : {}),
                 }}
               />
             );
@@ -277,6 +276,7 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
         <input
           type="range"
           aria-label="拖动调整播放进度"
+          aria-valuetext={`${formatAudioTime(currentTime)} / ${formatAudioTime(duration)}`}
           min={0}
           max={duration || 0}
           step="0.01"
@@ -284,7 +284,7 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
           onInput={handleSeek}
           onChange={handleSeek}
           disabled={duration <= 0}
-          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 focus-visible:opacity-100 focus-visible:accent-pink disabled:cursor-not-allowed"
         />
       </div>
       <span className={styles.timeClass}>
@@ -295,16 +295,11 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
 
   const progressBar = (
     <div className="min-w-0 flex-1">
-      <div className="relative flex h-5 items-center">
-        <div className="absolute left-0 right-0 h-1.5 overflow-hidden rounded-full bg-ink/10">
-          <div
-            className="h-full rounded-full bg-pink transition-[width] duration-100"
-            style={{ width: `${progress * 100}%` }}
-          />
-        </div>
+      <div className="relative flex h-7 items-center">
         <input
           type="range"
           aria-label="拖动调整播放进度"
+          aria-valuetext={`${formatAudioTime(currentTime)} / ${formatAudioTime(duration)}`}
           min={0}
           max={duration || 0}
           step="0.01"
@@ -312,11 +307,17 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
           onInput={handleSeek}
           onChange={handleSeek}
           disabled={duration <= 0}
-          className="relative z-10 h-5 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+          className="peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 focus-visible:outline-none disabled:cursor-not-allowed"
           title="拖动调整播放进度"
         />
+        <div className="pointer-events-none absolute left-0 right-0 h-1.5 overflow-hidden rounded-full bg-ink/10 ring-offset-2 ring-offset-paper peer-focus-visible:ring-2 peer-focus-visible:ring-sky-blue-light-600">
+          <div
+            className="h-full rounded-full bg-pink transition-[width] duration-fast"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
       </div>
-      <div className="flex justify-between font-body text-[9px] leading-none text-ink-soft/70 tabular-nums">
+      <div className="ui-metadata flex justify-between leading-none text-ink-soft/70 tabular-nums">
         <span>{formatAudioTime(currentTime)}</span>
         <span>
           {showPlaybackRate ? `${formatPlaybackRate(normalizedPlaybackRate)} · ` : ''}
@@ -335,13 +336,15 @@ export const AudioPlaybackBar: React.FC<AudioPlaybackBarProps> = ({
           onClick={togglePlay}
           className={styles.playButton}
           title={isPlaying ? `暂停${playLabel}` : `播放${playLabel}`}
+          aria-label={isPlaying ? `暂停${playLabel}` : `播放${playLabel}`}
+          aria-pressed={isPlaying}
         >
           {playIcon}
         </button>
         {visual === 'waveform' ? waveform : progressBar}
       </div>
       {hasPlaybackError && (
-        <p className="mt-1 font-body text-[10px] text-pink animate-shake">音频暂时无法播放</p>
+        <p className="ui-metadata mt-1 text-pink animate-shake">音频暂时无法播放</p>
       )}
     </div>
   );

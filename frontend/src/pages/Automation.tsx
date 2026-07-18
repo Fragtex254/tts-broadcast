@@ -85,7 +85,7 @@ export const Automation: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-5xl space-y-4">
-          <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in-up">
+          <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-2 h-2 rounded-full bg-lemon" />
               <h3 className="font-display italic text-[14px] font-medium text-ink-soft">新建自动任务</h3>
@@ -95,7 +95,7 @@ export const Automation: React.FC = () => {
             </p>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div>
-                <label className="mb-1 block font-body text-[10px] uppercase tracking-wider text-ink-soft/70">任务名称</label>
+                <label className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">任务名称</label>
                 <input
                   type="text"
                   value={form.name}
@@ -105,7 +105,7 @@ export const Automation: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="mb-1 block font-body text-[10px] uppercase tracking-wider text-ink-soft/70">执行时间</label>
+                <label className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">执行时间</label>
                 <select
                   value={form.cron_expression}
                   onChange={(event) => setForm((current) => ({ ...current, cron_expression: event.target.value }))}
@@ -116,7 +116,7 @@ export const Automation: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block font-body text-[10px] uppercase tracking-wider text-ink-soft/70">内容类型（可选）</label>
+                <label className="mb-1 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">内容类型（可选）</label>
                 <input
                   type="text"
                   value={form.content_types}
@@ -134,7 +134,7 @@ export const Automation: React.FC = () => {
                 type="button"
                 onClick={handleCreate}
                 disabled={isCreating}
-                className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none"
+                className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider ui-transition duration-fast active:translate-y-0 active:shadow-none"
               >
                 {isCreating ? '创建中...' : '添加任务'}
               </button>
@@ -143,14 +143,14 @@ export const Automation: React.FC = () => {
 
           <section
             className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-            style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both' }}
+
           >
             <div className="flex items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-sage" />
                 <h3 className="font-display italic text-[14px] font-medium text-ink-soft">任务列表</h3>
               </div>
-              <span className="rounded-full bg-white/60 px-3 py-1 font-body text-[10px] uppercase tracking-wider text-ink-soft">{schedules.length} 个任务</span>
+              <span className="rounded-full bg-white/60 px-3 py-1 font-body text-[11px] uppercase tracking-wider text-ink-soft">{schedules.length} 个任务</span>
             </div>
             {schedules.length === 0 ? (
               <div className="p-10 text-center animate-fade-in">
@@ -159,11 +159,11 @@ export const Automation: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {schedules.map((schedule, index) => (
+                {schedules.map((schedule) => (
                   <article
                     key={schedule.id}
-                    className={`flex flex-col gap-3 rounded-2xl border p-4 transition-all sm:flex-row sm:items-center sm:justify-between ${schedule.is_active ? 'border-card-border bg-white/55' : 'border-card-border bg-white/25 opacity-60'}`}
-                    style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.04}s both` }}
+                    className={`flex flex-col gap-3 rounded-2xl border p-4 ui-transition sm:flex-row sm:items-center sm:justify-between ${schedule.is_active ? 'border-card-border bg-white/55' : 'border-card-border bg-white/25 opacity-60'}`}
+
                   >
                     <div className="flex items-center gap-3">
                       <button
@@ -178,9 +178,9 @@ export const Automation: React.FC = () => {
                       </button>
                       <div>
                         <p className="font-body text-[13px] font-medium text-ink">{schedule.name}</p>
-                        <p className="mt-0.5 font-body text-[10px] text-ink-soft/70">{formatCron(schedule.cron_expression)}</p>
+                        <p className="mt-0.5 font-body text-[11px] text-ink-soft/70">{formatCron(schedule.cron_expression)}</p>
                         {schedule.last_run_at && (
-                          <p className="mt-0.5 font-body text-[10px] text-ink-soft/40">上次运行：{new Date(schedule.last_run_at).toLocaleString('zh-CN')}</p>
+                          <p className="mt-0.5 font-body text-[11px] text-ink-soft/40">上次运行：{new Date(schedule.last_run_at).toLocaleString('zh-CN')}</p>
                         )}
                       </div>
                     </div>

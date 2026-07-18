@@ -231,7 +231,7 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
   };
 
   const searchInput = (
-    <label className="relative hidden w-56 sm:block">
+    <label className="relative hidden w-64 sm:block">
       <span className="sr-only">搜索逐字稿</span>
       <MagnifyingGlass aria-hidden="true" size={14} weight="regular" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft/45" />
       <input
@@ -241,14 +241,14 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
         onKeyDown={handleSearchKeyDown}
         aria-keyshortcuts="Enter Shift+Enter"
         placeholder="搜索逐字稿"
-        className="w-full rounded-xl border border-card-border bg-white/70 py-2.5 pl-9 pr-3.5 font-body text-[11px] text-ink outline-none transition-colors placeholder:text-ink-soft/40 focus:border-ink/20"
+        className="w-full rounded-xl border border-card-border bg-white/70 py-2.5 pl-9 pr-3.5 font-body text-[12px] text-ink outline-none transition-colors placeholder:text-ink-soft/50 focus:border-ink/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac"
       />
     </label>
   );
 
   const readerContent = (
-      <div className={`grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper lg:grid-cols-[220px_minmax(0,1fr)] lg:grid-rows-1 ${presentation === 'modal' ? 'xl:grid-cols-[220px_minmax(0,1fr)_220px]' : 'xl:grid-cols-[200px_minmax(0,1fr)_190px]'}`}>
-        <aside className="border-b border-card-border bg-white/30 p-4 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r" aria-label="说话人筛选">
+      <div className={`grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper lg:grid-cols-[210px_minmax(0,1fr)] lg:grid-rows-1 ${presentation === 'modal' ? 'xl:grid-cols-[210px_minmax(0,1fr)_210px]' : 'xl:grid-cols-[190px_minmax(0,1fr)_180px]'}`}>
+        <aside className="border-b border-card-border bg-white/30 p-3.5 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r" aria-label="说话人筛选">
           <label className="relative mb-3 block sm:hidden">
             <span className="sr-only">在逐字稿中搜索</span>
             <MagnifyingGlass aria-hidden="true" size={14} weight="regular" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft/45" />
@@ -259,18 +259,31 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
               onKeyDown={handleSearchKeyDown}
               aria-keyshortcuts="Enter Shift+Enter"
               placeholder="搜索逐字稿"
-              className="w-full rounded-xl border border-card-border bg-white/70 py-2.5 pl-9 pr-3.5 font-body text-[11px] text-ink outline-none transition-colors placeholder:text-ink-soft/40 focus:border-ink/20"
+              className="w-full rounded-xl border border-card-border bg-white/70 py-2.5 pl-9 pr-3.5 font-body text-[12px] text-ink outline-none transition-colors placeholder:text-ink-soft/50 focus:border-ink/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac"
             />
           </label>
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="flex items-center gap-1.5 font-display text-[13px] font-medium text-ink"><Funnel aria-hidden="true" size={13} weight="regular" />说话人</h2>
+            <h2 className="flex items-center gap-1.5 font-display text-[14px] font-medium text-ink"><Funnel aria-hidden="true" size={13} weight="regular" />说话人</h2>
             {speakerFilter && (
-              <button type="button" onClick={() => applySpeakerFilter(null)} className="font-body text-[9px] text-ink-soft underline decoration-card-border underline-offset-4 hover:text-ink">
+              <button type="button" onClick={() => applySpeakerFilter(null)} className="ui-pressable min-h-9 rounded-lg px-2 font-body text-[11px] text-ink-soft underline decoration-card-border underline-offset-4 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">
                 显示全部
               </button>
             )}
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+            <button
+              type="button"
+              aria-pressed={speakerFilter === null}
+              onClick={() => applySpeakerFilter(null)}
+              className={`ui-pressable min-w-[164px] rounded-xl border px-3 py-2.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac lg:min-w-0 ${
+                speakerFilter === null
+                  ? 'border-ink/15 bg-white/80'
+                  : 'border-transparent bg-transparent hover:border-card-border hover:bg-white/55'
+              }`}
+            >
+              <span className="block font-body text-[12px] font-semibold text-ink">全部发言</span>
+              <span className="mt-0.5 block font-body text-[11px] text-ink-soft/65">{turns.length} 个阅读轮次</span>
+            </button>
             {speakers.map((speaker, index) => {
               const tone = getTranscriptSpeakerTone(index);
               const isCurrentSpeaker = activeSpeakerKey === speaker.speaker_key;
@@ -284,22 +297,22 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
                   disabled={isBlockedByEditing}
                   title={isBlockedByEditing ? '请先保存或取消当前校对' : undefined}
                   onClick={() => toggleSpeakerFilter(speaker.speaker_key)}
-                  className={`min-w-[178px] rounded-2xl border p-3 text-left transition-all duration-200 disabled:opacity-40 lg:min-w-0 ${
+                  className={`ui-pressable min-w-[164px] rounded-xl border px-3 py-2.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac disabled:cursor-not-allowed disabled:opacity-40 lg:min-w-0 ${
                     isCurrentSpeaker || isFiltered
-                      ? `${tone.strongSurface} ${tone.mutedBorder} shadow-card`
-                      : 'border-card-border bg-white/50 hover:bg-white/75'
+                      ? `${tone.strongSurface} ${tone.mutedBorder}`
+                      : 'border-transparent bg-transparent hover:border-card-border hover:bg-white/55'
                   }`}
                 >
                   <span className="flex items-center gap-2.5">
-                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-[14px] font-medium text-ink ${tone.badge}`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-display text-[13px] font-medium text-ink ${tone.badge}`}>
                       {getTranscriptSpeakerInitial(speaker.display_name, speaker.speaker_key)}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate font-body text-[12px] font-semibold text-ink">{speaker.display_name}</span>
-                      <span className="mt-0.5 block font-body text-[9px] text-ink-soft/55">发言 {speakerCounts.get(speaker.speaker_key) || 0} 轮</span>
+                      <span className="block break-words font-body text-[12px] font-semibold leading-snug text-ink">{speaker.display_name}</span>
+                      <span className="mt-0.5 block font-body text-[11px] text-ink-soft/65">发言 {speakerCounts.get(speaker.speaker_key) || 0} 轮</span>
                     </span>
                   </span>
-                  <span className="mt-2 flex items-center gap-1 font-body text-[9px] text-ink-soft/65"><Eye aria-hidden="true" size={11} weight="regular" />{isFiltered ? '再次点击显示全部' : '只看此人'}</span>
+                  <span className="mt-2 flex items-center gap-1 font-body text-[11px] text-ink-soft/70"><Eye aria-hidden="true" size={11} weight="regular" />{isFiltered ? '再次点击显示全部' : '只看此人'}</span>
                 </button>
               );
             })}
@@ -308,37 +321,37 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
 
         <section className="flex min-h-0 flex-col bg-white/25" aria-label="对话逐字稿">
           <div className="shrink-0 px-3 pt-4 sm:px-6 sm:pt-5 lg:px-8">
-            <div className="mx-auto max-w-3xl">
+            <div className="mx-auto max-w-[48rem]">
             {closeNotice && (
               <p className="mb-3 animate-shake rounded-xl border border-pink/30 bg-pink/10 px-3 py-2 font-body text-[11px] text-ink" role="alert">请先保存或取消当前校对，再关闭逐字稿。</p>
             )}
             {(hasQuery || speakerFilter) && (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-white/60 px-4 py-3">
-                <p className="font-body text-[10px] text-ink-soft" role="status" aria-live="polite">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-y border-card-border bg-white/35 px-1 py-3 sm:px-3">
+                <p className="font-body text-[11px] leading-relaxed text-ink-soft" role="status" aria-live="polite">
                   {hasQuery ? `找到 ${matchingTurns.length} 个匹配` : `正在查看 ${displayedTurns.length} 个发言`}{speakerFilter ? ` · ${speakerNames.get(speakerFilter) || speakerFilter}` : ''}{hasQuery ? ` · “${query.trim()}”` : ''}
                 </p>
                 <div className="flex items-center gap-2">
                   {hasQuery && matchingTurns.length > 0 && (
                     <>
-                      <span aria-live="polite" className="min-w-12 text-center font-body text-[10px] tabular-nums text-ink-soft">{safeCurrentMatchIndex + 1} / {matchingTurns.length}</span>
-                      <button type="button" onClick={() => jumpToMatch(-1)} title="上一处匹配（Shift+Enter）" aria-label="上一处匹配" className="rounded-lg border border-card-border bg-white/70 p-1.5 text-ink-soft transition-colors hover:text-ink">
+                      <span aria-live="polite" className="min-w-12 text-center font-body text-[11px] tabular-nums text-ink-soft">{safeCurrentMatchIndex + 1} / {matchingTurns.length}</span>
+                      <button type="button" onClick={() => jumpToMatch(-1)} title="上一处匹配（Shift+Enter）" aria-label="上一处匹配" className="ui-pressable flex h-9 w-9 items-center justify-center rounded-lg border border-card-border bg-white/70 text-ink-soft transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">
                         <CaretUp aria-hidden="true" size={13} weight="bold" />
                       </button>
-                      <button type="button" onClick={() => jumpToMatch(1)} title="下一处匹配（Enter）" aria-label="下一处匹配" className="rounded-lg border border-card-border bg-white/70 p-1.5 text-ink-soft transition-colors hover:text-ink">
+                      <button type="button" onClick={() => jumpToMatch(1)} title="下一处匹配（Enter）" aria-label="下一处匹配" className="ui-pressable flex h-9 w-9 items-center justify-center rounded-lg border border-card-border bg-white/70 text-ink-soft transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">
                         <CaretDown aria-hidden="true" size={13} weight="bold" />
                       </button>
                     </>
                   )}
-                  <button type="button" onClick={clearFilters} className="font-body text-[10px] text-ink-soft underline decoration-card-border underline-offset-4 hover:text-ink">
+                  <button type="button" onClick={clearFilters} className="ui-pressable min-h-9 rounded-lg px-2 font-body text-[11px] text-ink-soft underline decoration-card-border underline-offset-4 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">
                     清除筛选
                   </button>
                 </div>
               </div>
             )}
-            <div className="mb-3 flex items-center gap-3 px-1 font-body text-[9px] text-ink-soft/55">
+            <div className="mb-3 flex items-center gap-3 px-1 font-body text-[11px] text-ink-soft/65">
               <span className="shrink-0 tabular-nums">当前位置 {Math.min(visibleEndIndex + 1, displayedTurns.length)} / {displayedTurns.length}</span>
               <div className="h-1 flex-1 overflow-hidden rounded-full bg-ink/5" role="progressbar" aria-label="逐字稿阅读进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} aria-valuetext={`当前位置 ${Math.min(visibleEndIndex + 1, displayedTurns.length)} / ${displayedTurns.length}`}>
-                <div className="h-full rounded-full bg-lilac transition-[width] duration-150" style={{ width: `${progressPercent}%` }} />
+                <div className="h-full rounded-full bg-lilac transition-[width] duration-normal" style={{ width: `${progressPercent}%` }} />
               </div>
               <span className="w-8 text-right tabular-nums">{progressPercent}%</span>
             </div>
@@ -346,7 +359,7 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
           </div>
 
           <div ref={scrollContainerRef} data-testid="transcript-virtual-scroll" className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 sm:px-6 sm:pb-5 lg:px-8">
-            <div className="relative mx-auto max-w-3xl" style={{ height: `${layout.totalSize}px` }} role="feed" aria-label="发言列表" aria-busy="false">
+            <div className="relative mx-auto max-w-[48rem]" style={{ height: `${layout.totalSize}px` }} role="feed" aria-label="发言列表" aria-busy="false">
             {virtualItems.map((virtualItem) => {
               const turn = displayedTurns[virtualItem.index];
               const speakerIndex = speakerIndexes.get(turn.speaker_key) || 0;
@@ -384,8 +397,8 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
 
             {displayedTurns.length === 0 && (
               <div className="p-12 text-center animate-fade-in">
-                <p className="font-display italic text-[16px] text-ink-soft/40">没有找到匹配的发言</p>
-                <button type="button" onClick={clearFilters} className="mt-2 font-body text-[11px] text-ink-soft underline decoration-card-border underline-offset-4 hover:text-ink">清除筛选</button>
+                <p className="font-display italic text-[16px] text-ink-soft/60">没有找到匹配的发言</p>
+                <button type="button" onClick={clearFilters} className="ui-pressable mt-2 min-h-9 rounded-lg px-2 font-body text-[11px] text-ink-soft underline decoration-card-border underline-offset-4 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">清除筛选</button>
               </div>
             )}
             </div>
@@ -394,19 +407,19 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
 
         <aside className="hidden min-h-0 border-l border-card-border bg-white/30 p-4 xl:block" aria-label="当前定位">
           <div className="sticky top-0">
-            <h2 className="font-display text-[13px] font-medium text-ink">当前定位</h2>
+            <h2 className="font-display text-[14px] font-medium text-ink">当前定位</h2>
             {activeTurn ? (
-              <div data-testid="active-turn-context" className={`mt-3 rounded-2xl border p-4 ${getTranscriptSpeakerTone(speakerIndexes.get(activeTurn.speaker_key) || 0).strongSurface} ${getTranscriptSpeakerTone(speakerIndexes.get(activeTurn.speaker_key) || 0).mutedBorder}`}>
+              <div data-testid="active-turn-context" className={`mt-3 border-l-2 py-1 pl-3 ${getTranscriptSpeakerTone(speakerIndexes.get(activeTurn.speaker_key) || 0).border}`}>
                 <p className="font-body text-[13px] font-semibold text-ink">{speakerNames.get(activeTurn.speaker_key) || activeTurn.speaker_key}</p>
                 <p className="mt-1 font-body text-[11px] tabular-nums text-ink-soft/70">{formatTranscriptTime(activeTurn.start_seconds)}–{formatTranscriptTime(activeTurn.end_seconds)}</p>
                 <div className="my-3 border-t border-card-border" />
-                <p className="font-body text-[10px] text-ink-soft">发言 {activeTurn.turn_index + 1} / {turns.length}</p>
-                <p className="mt-3 font-body text-[10px] leading-relaxed text-ink-soft/65">可在高亮发言区域筛选该说话人或校对文字。</p>
+                <p className="font-body text-[11px] text-ink-soft">发言 {activeTurn.turn_index + 1} / {turns.length}</p>
+                <p className="mt-3 font-body text-[11px] leading-relaxed text-ink-soft/70">可在高亮发言区域筛选该说话人或校对文字。</p>
               </div>
             ) : (
-              <div className="mt-3 rounded-2xl border border-dashed border-card-border bg-white/35 p-4">
-                <p className="font-display italic text-[13px] text-ink-soft/45">悬浮或聚焦一段发言</p>
-                <p className="mt-2 font-body text-[10px] leading-relaxed text-ink-soft/50">这里会同步显示说话人、时间和发言序号。</p>
+              <div className="mt-3 border-l-2 border-card-border py-1 pl-3">
+                <p className="font-display italic text-[13px] text-ink-soft/60">悬浮或聚焦一段发言</p>
+                <p className="mt-2 font-body text-[11px] leading-relaxed text-ink-soft/65">这里会同步显示说话人、时间和发言序号。</p>
               </div>
             )}
           </div>
@@ -416,18 +429,18 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
 
   if (presentation === 'embedded') {
     return (
-      <section className="bg-white/80 backdrop-blur-sm rounded-card p-5 sm:p-6 shadow-card border border-card-border">
+      <section className="rounded-card border border-card-border bg-white/80 p-5 shadow-card sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-pink" /><h2 className="font-display italic text-[14px] font-medium text-ink-soft">逐字稿阅读</h2></div>
-            <p className="mt-1 font-body text-[10px] text-ink-soft/55">复用完整阅读器，在固定内容空间内连续阅读、搜索、筛选与校对</p>
+            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-pink" aria-hidden="true" /><h2 className="font-display text-[17px] font-medium text-ink">逐字稿</h2></div>
+            <p className="mt-1 font-body text-[12px] leading-relaxed text-ink-soft/70">连续阅读、按说话人筛选，并在原位置校对文字</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {searchInput}
-            {onOpenFull && <button type="button" onClick={onOpenFull} className="rounded-xl bg-lilac px-3.5 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0">打开全屏阅读</button>}
+            {onOpenFull && <button type="button" onClick={onOpenFull} className="ui-pressable min-h-10 rounded-xl bg-lilac px-3.5 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">打开全屏阅读</button>}
           </div>
         </div>
-        <p className="mt-3 truncate font-body text-[10px] text-ink-soft/45">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</p>
+        <p className="mt-3 break-words font-body text-[11px] leading-relaxed text-ink-soft/60">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</p>
         <div className="mt-4 h-[680px] overflow-hidden rounded-2xl border border-card-border bg-paper">
           {readerContent}
         </div>
@@ -439,7 +452,7 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
     <ModalShell
       isOpen={isOpen}
       title="逐字稿阅读"
-      subtitle={<span className="block max-w-[680px] truncate">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</span>}
+      subtitle={<span className="block max-w-[680px] break-words leading-relaxed">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</span>}
       onClose={handleClose}
       headerActions={searchInput}
       size="xl"

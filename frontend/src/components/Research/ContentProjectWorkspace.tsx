@@ -231,16 +231,16 @@ export const ContentProjectWorkspace: React.FC<ContentProjectWorkspaceProps> = (
   const textareaClass = 'mt-1 w-full resize-none rounded-xl border border-card-border bg-white/70 px-3.5 py-2.5 font-body text-[12px] leading-relaxed text-ink outline-none focus:border-ink/20';
 
   return <>
-    <aside className="order-first min-w-0 max-w-full rounded-card border border-card-border bg-white/80 p-5 shadow-card lg:order-none lg:sticky lg:top-0" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22,1,0.36,1) 0.06s both' }}>
+    <aside className="order-first min-w-0 max-w-full rounded-card border border-card-border bg-white/80 p-5 shadow-card lg:order-none lg:sticky lg:top-0">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-sage" /><h2 className="font-display text-[15px] font-medium text-ink-soft">我的洞察项目</h2></div>
-        <div className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-body text-[9px] text-ink ${saveStatus === 'error' ? 'bg-pink/20' : saveStatus === 'saving' ? 'bg-lemon/35' : 'bg-sage/35'}`} role="status">
+        <div className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-body text-[11px] text-ink ${saveStatus === 'error' ? 'bg-pink/20' : saveStatus === 'saving' ? 'bg-lemon/35' : 'bg-sage/35'}`} role="status">
           {saveStatus === 'error' ? <Warning aria-hidden="true" size={11} /> : <Check aria-hidden="true" size={11} />}
           {saveStatus === 'error' ? '保存失败' : saveStatus === 'saving' ? '保存中…' : '已保存'}
         </div>
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">
-        <div className="min-w-0"><h3 className="font-display text-[22px] font-medium leading-tight text-ink">{project.title}</h3><p className="mt-1 font-body text-[10px] text-ink-soft/55">{PLATFORM_LABELS[project.target_platform]} · {project.status === 'draft' ? '研究中' : project.status}</p></div>
+        <div className="min-w-0"><h3 className="font-display text-[22px] font-medium leading-tight text-ink">{project.title}</h3><p className="mt-1 font-body text-[11px] text-ink-soft/55">{PLATFORM_LABELS[project.target_platform]} · {project.status === 'draft' ? '研究中' : project.status}</p></div>
         <CheckCircle aria-hidden="true" size={22} className="shrink-0 text-ink-soft/45" />
       </div>
 
@@ -250,11 +250,11 @@ export const ContentProjectWorkspace: React.FC<ContentProjectWorkspaceProps> = (
       <label className="mt-5 block font-body text-[11px] font-medium text-ink-soft">研究问题<textarea rows={2} value={draft.topic} onChange={(event) => updateDraft('topic', event.target.value)} onBlur={() => void saveDraft()} placeholder="这个项目要回答什么问题？" className={`${textareaClass} bg-lilac/10`} /></label>
 
       <div className="mt-4 rounded-xl bg-paper/45 px-3 py-3">
-        <p className="font-body text-[10px] font-medium text-ink-soft">{PLATFORM_LABELS[project.target_platform]}内容重点</p>
-        <div className="mt-2 flex flex-wrap gap-1.5">{fieldCopy.focus.map((item) => <span key={item} className="rounded-full bg-lilac/20 px-2.5 py-1 font-body text-[9px] text-ink-soft">{item}</span>)}</div>
+        <p className="font-body text-[11px] font-medium text-ink-soft">{PLATFORM_LABELS[project.target_platform]}内容重点</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">{fieldCopy.focus.map((item) => <span key={item} className="rounded-full bg-lilac/20 px-2.5 py-1 font-body text-[11px] text-ink-soft">{item}</span>)}</div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between rounded-xl bg-paper/45 px-3 py-2.5 font-body text-[11px] text-ink-soft"><span>项目资料</span><span className="rounded-full bg-lilac/25 px-2.5 py-1 text-[10px] text-ink">已收集 {project.claims.length} 条观点</span></div>
+      <div className="mt-4 flex items-center justify-between rounded-xl bg-paper/45 px-3 py-2.5 font-body text-[11px] text-ink-soft"><span>项目资料</span><span className="rounded-full bg-lilac/25 px-2.5 py-1 text-[11px] text-ink">已收集 {project.claims.length} 条观点</span></div>
 
       <div className="mt-5">
         <h4 className="font-body text-[11px] font-medium text-ink-soft">已选观点</h4>
@@ -263,16 +263,16 @@ export const ContentProjectWorkspace: React.FC<ContentProjectWorkspaceProps> = (
             const usage = usageDrafts[item.claim_id] || { tag: null, note: '' };
             return <li key={item.id} className="border-b border-card-border p-3 last:border-b-0">
               <div className="flex items-start gap-2">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-lilac/20 font-display text-[10px] text-ink-soft">{index + 1}</span>
-                <button type="button" onClick={() => onOpenClaim?.(item.claim)} className="min-w-0 flex-1 text-left"><span className="font-body text-[12px] font-medium leading-relaxed text-ink">{compactResearchText(item.claim.claim, 72)}</span><span className="mt-1 block truncate font-body text-[9px] text-ink-soft/50">{item.claim.podcast_name || item.claim.episode_title || '未填写播客'} · {item.claim.speaker_name || item.claim.speaker_key}</span></button>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-lilac/20 font-display text-[11px] text-ink-soft">{index + 1}</span>
+                <button type="button" onClick={() => onOpenClaim?.(item.claim)} className="min-w-0 flex-1 text-left"><span className="font-body text-[12px] font-medium leading-relaxed text-ink">{compactResearchText(item.claim.claim, 72)}</span><span className="mt-1 block truncate font-body text-[11px] text-ink-soft/50">{item.claim.podcast_name || item.claim.episode_title || '未填写播客'} · {item.claim.speaker_name || item.claim.speaker_key}</span></button>
                 <span className="flex shrink-0 flex-col">
                   <button title="上移" type="button" disabled={index === 0 || mutatingClaimId !== null} onClick={() => void move(index, -1)} className="rounded-full p-1 text-ink-soft disabled:opacity-20"><CaretUp aria-hidden="true" size={13} /></button>
                   <button title="下移" type="button" disabled={index === project.claims.length - 1 || mutatingClaimId !== null} onClick={() => void move(index, 1)} className="rounded-full p-1 text-ink-soft disabled:opacity-20"><CaretDown aria-hidden="true" size={13} /></button>
                   <button title="移出项目" type="button" disabled={mutatingClaimId !== null} onClick={() => void remove(item.claim_id)} className="rounded-full p-1 text-pink disabled:opacity-30"><X aria-hidden="true" size={13} /></button>
                 </span>
               </div>
-              <div className="mt-2 flex flex-wrap gap-1">{CLAIM_USAGE_TAGS.map((tag) => <button key={tag} type="button" disabled={mutatingClaimId !== null} onClick={() => chooseUsageTag(item.claim_id, tag)} className={`rounded-full px-2 py-1 font-body text-[9px] transition-colors disabled:opacity-40 ${usage.tag === tag ? 'bg-sage text-ink' : 'bg-paper text-ink-soft hover:bg-sage/25'}`}>{tag}</button>)}</div>
-              <textarea aria-label={`观点用途备注：${item.claim.claim}`} rows={2} value={usage.note} onChange={(event) => setUsageDrafts((current) => ({ ...current, [item.claim_id]: { ...usage, note: event.target.value } }))} onBlur={() => void saveUsage(item.claim_id)} placeholder="补充自由文本备注（可选）" className="mt-2 w-full resize-none rounded-xl border border-card-border bg-paper/45 px-3 py-2 font-body text-[10px] leading-relaxed text-ink outline-none focus:border-ink/20" />
+              <div className="mt-2 flex flex-wrap gap-1">{CLAIM_USAGE_TAGS.map((tag) => <button key={tag} type="button" disabled={mutatingClaimId !== null} onClick={() => chooseUsageTag(item.claim_id, tag)} className={`rounded-full px-2 py-1 font-body text-[11px] transition-colors disabled:opacity-40 ${usage.tag === tag ? 'bg-sage text-ink' : 'bg-paper text-ink-soft hover:bg-sage/25'}`}>{tag}</button>)}</div>
+              <textarea aria-label={`观点用途备注：${item.claim.claim}`} rows={2} value={usage.note} onChange={(event) => setUsageDrafts((current) => ({ ...current, [item.claim_id]: { ...usage, note: event.target.value } }))} onBlur={() => void saveUsage(item.claim_id)} placeholder="补充自由文本备注（可选）" className="mt-2 w-full resize-none rounded-xl border border-card-border bg-paper/45 px-3 py-2 font-body text-[11px] leading-relaxed text-ink outline-none focus:border-ink/20" />
             </li>;
           })}
         </ol>}
@@ -281,8 +281,8 @@ export const ContentProjectWorkspace: React.FC<ContentProjectWorkspaceProps> = (
       <div className="mt-5 space-y-3">{fieldCopy.fields.map((field) => <label key={field.key} className="block font-body text-[11px] font-medium text-ink-soft">{field.label}<textarea rows={field.rows} value={draft[field.key]} onChange={(event) => updateDraft(field.key, event.target.value)} onBlur={() => void saveDraft()} placeholder={field.placeholder} className={textareaClass} /></label>)}</div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => setPendingExportPlatform('xiaohongshu')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-lilac px-3 py-2.5 font-body text-[10px] text-ink"><Export aria-hidden="true" size={13} />小红书结构</button>
-        <button type="button" onClick={() => setPendingExportPlatform('wechat')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-lemon px-3 py-2.5 font-body text-[10px] text-ink"><Export aria-hidden="true" size={13} />公众号结构</button>
+        <button type="button" onClick={() => setPendingExportPlatform('xiaohongshu')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-lilac px-3 py-2.5 font-body text-[11px] text-ink"><Export aria-hidden="true" size={13} />小红书结构</button>
+        <button type="button" onClick={() => setPendingExportPlatform('wechat')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-lemon px-3 py-2.5 font-body text-[11px] text-ink"><Export aria-hidden="true" size={13} />公众号结构</button>
       </div>
     </aside>
 

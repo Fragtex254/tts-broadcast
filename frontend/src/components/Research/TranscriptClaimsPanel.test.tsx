@@ -87,7 +87,7 @@ describe('TranscriptClaimsPanel', () => {
     await waitFor(() => expect(onUpdateClaim).toHaveBeenCalledWith(hidden.id, { isHidden: false }));
   });
 
-  test('首次移入后保持展开，悬停的观点卡片置于最前', () => {
+  test('观点以无需悬停的网格呈现并直接展示推理', () => {
     render(
       <TranscriptClaimsPanel
         claims={[
@@ -106,19 +106,8 @@ describe('TranscriptClaimsPanel', () => {
       />,
     );
 
-    const spread = screen.getByLabelText('观点卡片展开区');
-    const firstCard = screen.getByTestId('claim-spread-3');
-    expect(firstCard.style.transform).toContain('-24px');
-
-    fireEvent.mouseEnter(spread);
-    expect(firstCard.style.transform).toContain('-246px');
-    expect(screen.getByText('已固定展开')).toBeTruthy();
-
-    fireEvent.mouseLeave(spread);
-    expect(firstCard.style.transform).toContain('-246px');
-
-    fireEvent.mouseEnter(firstCard);
-    expect(firstCard.style.zIndex).toBe('100');
-    expect(screen.getAllByText('第一条观点的推理过程需要在卡片上直接展示。').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('观点卡片列表')).toBeTruthy();
+    expect(screen.getByText('第一条观点的推理过程需要在卡片上直接展示。')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /打开观点详情/ })).toHaveLength(3);
   });
 });

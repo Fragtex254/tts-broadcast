@@ -52,7 +52,7 @@ function App() {
 
   return (
     <Router>
-      <div className="flex h-screen bg-paper text-ink overflow-hidden">
+      <div className="flex h-screen min-w-0 overflow-hidden bg-paper text-ink">
         {/* 侧边栏 */}
         <Sidebar />
 

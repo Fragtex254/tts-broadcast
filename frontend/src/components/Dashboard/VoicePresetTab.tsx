@@ -204,7 +204,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
           <button
             type="button"
             onClick={fetchPresets}
-            className="mt-4 rounded-xl bg-sage px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105"
+            className="mt-4 rounded-xl bg-sage px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105"
           >
             重新加载
           </button>
@@ -242,7 +242,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
           return (
             <div
               key={preset.id}
-              className={`min-h-48 cursor-pointer rounded-card border p-4 text-left transition-all duration-150 hover:-translate-y-px active:translate-y-0 ${
+              className={`min-h-48 cursor-pointer rounded-card border p-4 text-left ui-transition duration-fast active:translate-y-0 ${
                 isExpanded
                   ? 'border-ink/20 bg-white/85 shadow-card'
                   : 'border-card-border bg-white/60 hover:border-ink/15 hover:bg-white/80'
@@ -352,7 +352,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                   {editingId === preset.id ? (
                     <div className="space-y-2 pt-1">
                       <div>
-                        <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">预设名称</span>
+                        <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">预设名称</span>
                         <input
                           type="text"
                           value={editName}
@@ -361,7 +361,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                         />
                       </div>
                       <div>
-                        <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">风格提示词</span>
+                        <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">风格提示词</span>
                         <input
                           type="text"
                           value={editStylePrompt}
@@ -372,7 +372,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                       </div>
                       {preset.type === 'design' && (
                         <div>
-                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
                           <textarea
                             value={editDesignPrompt}
                             onChange={(e) => setEditDesignPrompt(e.target.value)}
@@ -382,7 +382,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                       )}
                       {preset.type === 'design' && (
                         <div>
-                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">角色立绘</span>
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">角色立绘</span>
                           {(editCharacterImagePreviewUrl || (!editRemoveCharacterImage && preset.character_image_path)) && (
                             editCharacterImagePreviewUrl ? (
                               <img
@@ -402,7 +402,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                             type="file"
                             accept="image/png,image/jpeg,image/webp"
                             onChange={handleEditCharacterImageChange}
-                            className="mt-1 block w-full cursor-pointer rounded-xl border border-card-border bg-white/70 px-2 py-1.5 font-body text-[10px] text-ink file:mr-2 file:rounded-lg file:border-0 file:bg-lilac file:px-2 file:py-1 file:font-body file:text-[10px] file:text-ink"
+                            className="mt-1 block w-full cursor-pointer rounded-xl border border-card-border bg-white/70 px-2 py-1.5 font-body text-[11px] text-ink file:mr-2 file:rounded-lg file:border-0 file:bg-lilac file:px-2 file:py-1 file:font-body file:text-[11px] file:text-ink"
                           />
                           {preset.character_image_path && (
                             <button
@@ -411,7 +411,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                                 setEditCharacterImageFile(null);
                                 setEditRemoveCharacterImage(true);
                               }}
-                              className="mt-1 font-body text-[10px] text-ink-soft/70 hover:text-ink"
+                              className="mt-1 font-body text-[11px] text-ink-soft/70 hover:text-ink"
                             >
                               移除已保存立绘
                             </button>
@@ -419,7 +419,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                         </div>
                       )}
                       {editError && (
-                        <div className="bg-pink/10 border border-pink/30 rounded-xl p-2 text-ink text-[10px] font-body animate-shake">
+                        <div className="bg-pink/10 border border-pink/30 rounded-xl p-2 text-ink text-[11px] font-body animate-shake">
                           {editError}
                         </div>
                       )}
@@ -433,7 +433,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                         <button
                           onClick={(e) => handleSaveEdit(e, preset)}
                           disabled={isSavingEdit}
-                          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[10px] rounded-xl px-3 py-1.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
+                          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[11px] rounded-xl px-3 py-1.5 shadow-btn ui-transition duration-fast uppercase tracking-wider"
                         >
                           {isSavingEdit ? '保存中...' : '保存修改'}
                         </button>
@@ -445,16 +445,16 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                       {/* 风格提示词 */}
                       {preset.style_prompt && (
                         <div>
-                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">风格</span>
-                          <p className="font-body text-[10px] text-ink-soft/70">{preset.style_prompt}</p>
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">风格</span>
+                          <p className="font-body text-[11px] text-ink-soft/70">{preset.style_prompt}</p>
                         </div>
                       )}
 
                       {/* 设计描述 */}
                       {preset.type === 'design' && preset.design_prompt && (
                         <div>
-                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
-                          <p className="font-body text-[10px] text-ink-soft/70">{preset.design_prompt}</p>
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">音色描述</span>
+                          <p className="font-body text-[11px] text-ink-soft/70">{preset.design_prompt}</p>
                         </div>
                       )}
 
@@ -463,7 +463,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                           type="button"
                           onClick={(e) => handleToggleUseTrialAudioAsClone(e, preset)}
                           disabled={togglingCloneId === preset.id}
-                          className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-2 font-body text-[10px] transition-all duration-150 ${
+                          className={`flex w-full items-center justify-between rounded-xl border px-2.5 py-2 font-body text-[11px] ui-transition duration-fast ${
                             preset.use_trial_audio_as_clone
                               ? 'border-sage/40 bg-sage/25 text-ink'
                               : 'border-card-border bg-white/45 text-ink-soft hover:bg-white/70 hover:text-ink'
@@ -482,7 +482,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
 
                       {preset.type === 'design' && preset.character_image_path && (
                         <div>
-                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">角色立绘</span>
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">角色立绘</span>
                           <PresetCharacterImage
                             src={preset.character_image_path}
                             alt=""
@@ -494,7 +494,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                       {/* 原始音频（克隆） */}
                       {preset.type === 'clone' && preset.original_audio_path && (
                         <div>
-                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">参考音频</span>
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">参考音频</span>
                           <div className="mt-0.5"><MiniAudioPlayer src={preset.original_audio_path} /></div>
                         </div>
                       )}
@@ -502,7 +502,7 @@ export const VoicePresetTab: React.FC<VoicePresetTabProps> = ({ onApplyPreset })
                       {/* 试听音频 */}
                       {preset.trial_audio_path && (
                         <div>
-                          <span className="font-body text-[9px] uppercase tracking-wider text-ink-soft/70">试听音频</span>
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">试听音频</span>
                           <div className="mt-0.5 space-y-1">
                             <MiniAudioPlayer src={preset.trial_audio_path} />
                             <AudioDownloadLink

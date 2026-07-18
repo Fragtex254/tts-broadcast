@@ -73,7 +73,7 @@ export const ResearchCandidateShelf: React.FC<ResearchCandidateShelfProps> = ({
         <p className="mt-1 font-body text-[11px] text-ink-soft/55">横向浏览候选，点击卡片在下方查看证据</p>
       </div>
       <div className="flex items-center gap-2">
-        <span className="font-body text-[10px] tabular-nums text-ink-soft/55">{visibleRange.start}–{visibleRange.end} / {results.length}</span>
+        <span className="font-body text-[11px] tabular-nums text-ink-soft/55">{visibleRange.start}–{visibleRange.end} / {results.length}</span>
         <button title="向左浏览" type="button" disabled={!visibleRange.canScrollLeft} onClick={() => scroll(-1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-card-border bg-white/70 text-ink-soft transition-colors hover:bg-lilac/20 disabled:opacity-30">
           <CaretLeft aria-hidden="true" size={16} />
         </button>
@@ -84,15 +84,14 @@ export const ResearchCandidateShelf: React.FC<ResearchCandidateShelfProps> = ({
     </div>
 
     <div ref={shelfRef} role="list" tabIndex={0} onScroll={updateScrollState} aria-label="候选观点横向列表" className="flex max-w-full snap-x snap-mandatory gap-3 overflow-x-auto pb-3 outline-none focus-visible:ring-2 focus-visible:ring-lilac/70">
-      {results.map(({ claim, similarity, search_mode }, index) => {
+      {results.map(({ claim, similarity, search_mode }) => {
         const isActive = activeClaimId === claim.id;
         const isAdded = projectClaimIds.has(claim.id);
         const isSelected = selectedIds.has(claim.id);
         return <article
           key={claim.id}
           role="listitem"
-          className={`flex h-[228px] w-[278px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border p-4 transition-all duration-150 ${isActive ? 'border-ink-soft bg-lilac/10 shadow-card' : 'border-card-border bg-white/70 hover:-translate-y-px hover:shadow-card'}`}
-          style={index < 4 ? { animation: `fade-in-up 0.3s cubic-bezier(0.22,1,0.36,1) ${index * 0.04}s both` } : undefined}
+          className={`flex h-[228px] w-[278px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border p-4 ui-transition duration-fast ${isActive ? 'border-ink-soft bg-lilac/10 shadow-card' : 'border-card-border bg-white/70 hover:shadow-card'}`}
         >
           <button type="button" onClick={() => onPreview(claim)} aria-label={`预览观点：${claim.claim}`} className="min-h-0 flex-1 overflow-hidden text-left outline-none focus-visible:ring-2 focus-visible:ring-lilac/70">
             <span className="flex items-start gap-3">
@@ -101,11 +100,11 @@ export const ResearchCandidateShelf: React.FC<ResearchCandidateShelfProps> = ({
               </span>
               <span className="min-w-0">
                 <span className="block truncate font-display text-[13px] font-medium text-ink">{claim.podcast_name || claim.episode_title || '未填写播客'}</span>
-                <span className="mt-1 block truncate font-body text-[10px] text-ink-soft/55">{claim.speaker_name || claim.speaker_key}</span>
+                <span className="mt-1 block truncate font-body text-[11px] text-ink-soft/55">{claim.speaker_name || claim.speaker_key}</span>
               </span>
             </span>
             <span className="mt-4 block font-display text-[15px] font-medium leading-relaxed text-ink">{compactResearchText(claim.claim, 34)}</span>
-            <span className="mt-3 block font-body text-[10px] text-ink-soft/50">{search_mode === 'embedding' ? `语义相似度 ${(similarity * 100).toFixed(0)}%` : '关键词命中'}</span>
+            <span className="mt-3 block font-body text-[11px] text-ink-soft/50">{search_mode === 'embedding' ? `语义相似度 ${(similarity * 100).toFixed(0)}%` : '关键词命中'}</span>
           </button>
 
           <div className="mt-3 flex items-center gap-2 border-t border-card-border pt-3">
@@ -122,7 +121,7 @@ export const ResearchCandidateShelf: React.FC<ResearchCandidateShelfProps> = ({
               <span aria-live="polite">{isAdded ? '已加入项目' : addingClaimId === claim.id ? '加入中…' : hasProject ? '加入项目' : '先选择项目'}</span>
             </button>
           </div>
-          {errorClaimId === claim.id && <p role="alert" className="mt-2 font-body text-[10px] text-pink">加入失败，请重试</p>}
+          {errorClaimId === claim.id && <p role="alert" className="mt-2 font-body text-[11px] text-pink">加入失败，请重试</p>}
         </article>;
       })}
     </div>

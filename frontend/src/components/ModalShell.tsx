@@ -163,7 +163,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     return (
       <div
         ref={panelRef}
-        className={`fixed inset-0 z-50 flex flex-col bg-paper animate-fade-in ${panelClassName}`}
+        className={`ui-fullscreen-panel fixed inset-0 z-50 flex flex-col bg-paper ${panelClassName}`}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel || title}
@@ -181,12 +181,12 @@ export const ModalShell: React.FC<ModalShellProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 px-4 py-6 backdrop-blur-sm"
+      className="ui-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-ink/25 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-6"
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
         ref={panelRef}
-        className={`flex max-h-[calc(100vh-3rem)] w-full ${SIZE_CLASS[size]} flex-col overflow-hidden rounded-card border border-card-border bg-paper shadow-card animate-fade-in ${panelClassName}`}
+        className={`ui-modal-panel flex max-h-[calc(100vh-2rem)] w-full ${SIZE_CLASS[size]} flex-col overflow-hidden rounded-card border border-card-border bg-paper shadow-card sm:max-h-[calc(100vh-3rem)] ${panelClassName}`}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel || title}

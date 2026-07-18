@@ -69,7 +69,7 @@ export const ResearchProjectBar: React.FC<ResearchProjectBarProps> = ({
           <FolderOpen aria-hidden="true" size={20} weight="duotone" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-body text-[10px] text-ink-soft/55">当前项目</span>
+          <span className="block font-body text-[11px] text-ink-soft/55">当前项目</span>
           <select
             aria-label="当前内容项目"
             value={currentProject?.id || ''}
@@ -87,14 +87,14 @@ export const ResearchProjectBar: React.FC<ResearchProjectBarProps> = ({
       </label>
 
       {currentProject && <div className="flex items-center gap-2 sm:px-4">
-        <span className="rounded-full bg-sage/35 px-3 py-1.5 font-body text-[10px] text-ink">{PLATFORM_LABELS[currentProject.target_platform]}</span>
-        <span className="rounded-full bg-lilac/25 px-3 py-1.5 font-body text-[10px] text-ink">{currentProject.status === 'draft' ? '研究中' : currentProject.status}</span>
+        <span className="rounded-full bg-sage/35 px-3 py-1.5 font-body text-[11px] text-ink">{PLATFORM_LABELS[currentProject.target_platform]}</span>
+        <span className="rounded-full bg-lilac/25 px-3 py-1.5 font-body text-[11px] text-ink">{currentProject.status === 'draft' ? '研究中' : currentProject.status}</span>
       </div>}
 
       <button
         type="button"
         onClick={() => { setError(null); setIsCreateOpen(true); }}
-        className="inline-flex items-center justify-center gap-2 rounded-full bg-sage px-5 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0"
+        className="inline-flex items-center justify-center gap-2 rounded-full bg-sage px-5 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 active:translate-y-0"
       >
         <Plus aria-hidden="true" size={16} />
         新建项目
@@ -155,7 +155,7 @@ export const ResearchProjectBar: React.FC<ResearchProjectBarProps> = ({
         <button
           type="submit"
           disabled={isCreating || !title.trim() || !topic.trim()}
-          className="w-full rounded-full bg-sage px-5 py-3 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40"
+          className="w-full rounded-full bg-sage px-5 py-3 font-body text-[12px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 disabled:opacity-40"
         >
           {isCreating ? '创建中…' : '创建并开始研究'}
         </button>

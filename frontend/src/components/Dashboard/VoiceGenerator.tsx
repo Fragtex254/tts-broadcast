@@ -235,7 +235,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
             key={voice.value}
             type="button"
             onClick={() => selectBuiltinVoice(voice.value)}
-            className={`min-h-24 rounded-2xl border px-4 py-3 text-left transition-all duration-150 hover:-translate-y-px active:translate-y-0 ${
+            className={`min-h-24 rounded-2xl border px-4 py-3 text-left ui-transition duration-fast active:translate-y-0 ${
               isSelected
                 ? 'border-ink/20 bg-lemon/30 shadow-card'
                 : 'border-card-border bg-white/70 hover:border-ink/15 hover:bg-white/90'
@@ -244,7 +244,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
             <span className="flex items-center justify-between gap-2">
               <span className="font-display text-[20px] font-medium italic text-ink">{voice.label}</span>
               {isRecommended && (
-                <span className="rounded-full bg-sage/35 px-2 py-0.5 font-body text-[9px] uppercase tracking-wider text-ink">推荐</span>
+                <span className="rounded-full bg-sage/35 px-2 py-0.5 font-body text-[11px] uppercase tracking-wider text-ink">推荐</span>
               )}
             </span>
             <span className="mt-2 block font-body text-[11px] uppercase tracking-wider text-ink-soft/70">{voice.description}</span>
@@ -265,7 +265,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
         >
           <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">精细控制</span>
           <span
-            className="font-body text-[10px] text-ink-soft/70 transition-transform duration-150"
+            className="font-body text-[11px] text-ink-soft/70 transition-transform duration-fast"
             style={{ transform: showFineControls ? 'rotate(90deg)' : 'rotate(0deg)' }}
           >
             ▸
@@ -315,7 +315,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
               <button
                 type="button"
                 onClick={handleResetFineControls}
-                className="rounded-lg px-2 py-1 font-body text-[10px] uppercase tracking-wider text-ink-soft/70 transition-all duration-150 hover:bg-white/50 hover:text-ink"
+                className="rounded-lg px-2 py-1 font-body text-[11px] uppercase tracking-wider text-ink-soft/70 ui-transition duration-fast hover:bg-white/50 hover:text-ink"
               >
                 重置
               </button>
@@ -337,7 +337,6 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
       ariaLabel="选择音色"
       contentClassName="p-5"
       panelClassName="origin-bottom-right"
-      panelStyle={{ animation: 'voice-selector-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both' }}
     >
           <div className="mb-4 inline-flex rounded-xl border border-card-border bg-white/55 p-1">
             {VOICE_TYPES.map((type) => (
@@ -345,7 +344,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
                 key={type.value}
                 type="button"
                 onClick={() => handlePanelTypeChange(type.value)}
-                className={`rounded-lg px-4 py-2 font-body text-[12px] font-medium transition-all duration-150 ${
+                className={`rounded-lg px-4 py-2 font-body text-[12px] font-medium ui-transition duration-fast ${
                   panelType === type.value
                     ? 'border border-card-border bg-white/85 text-ink shadow-card'
                     : 'text-ink-soft hover:bg-white/35 hover:text-ink'
@@ -379,7 +378,7 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
     <>
       <section
         className="bg-white/80 backdrop-blur-sm rounded-card p-4 shadow-card border border-card-border"
-        style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0s both' }}
+
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
@@ -387,19 +386,19 @@ export const VoiceGenerator: React.FC<VoiceGeneratorProps> = ({ onManagePresets 
               <span className={`h-2.5 w-2.5 rounded-full ${hasVoice ? 'bg-sage' : 'bg-blush animate-breathe'}`} />
             </span>
             <div className="min-w-0">
-              <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/60">当前音色</p>
+              <p className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">当前音色</p>
               <p className="truncate font-display text-[18px] font-medium text-ink">
                 {hasVoice ? currentVoiceName : '未选择'}
               </p>
               {!hadInitialVoice && hasVoice && (
-                <p className="font-body text-[10px] text-ink-soft/60">已应用默认音色，可随时更换</p>
+                <p className="font-body text-[11px] text-ink-soft/60">已应用默认音色，可随时更换</p>
               )}
             </div>
           </div>
           <button
             type="button"
             onClick={openVoiceSelector}
-            className="rounded-xl bg-blush px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0 active:shadow-none"
+            className="rounded-xl bg-blush px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 active:translate-y-0 active:shadow-none"
           >
             {hasVoice ? '更换音色' : '选择音色'}
           </button>

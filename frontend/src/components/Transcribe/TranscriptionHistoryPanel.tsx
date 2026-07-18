@@ -1,4 +1,6 @@
 import React from 'react';
+import { ActionButton } from '../ui/ActionButton';
+import { WorkbenchCard } from '../ui/WorkbenchCard';
 import type { TranscriptionRecord } from '../../store';
 import { formatAsrSource } from '../../pages/transcribeUtils';
 
@@ -12,11 +14,6 @@ interface TranscriptionHistoryPanelProps {
   onImport: (record: TranscriptionRecord) => void;
   onDelete: (record: TranscriptionRecord) => void;
 }
-
-const ACTION_BUTTON_NEUTRAL = 'px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-lg border border-card-border transition-all duration-150';
-const ACTION_BUTTON_FORMAT = 'px-3 py-1.5 font-body text-[11px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-all duration-150';
-const ACTION_BUTTON_IMPORT = 'px-3 py-1.5 font-body text-[11px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-lg transition-all duration-150';
-const ACTION_BUTTON_DANGER = 'px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-pink bg-white/70 hover:bg-white/90 rounded-lg border border-card-border transition-all duration-150';
 
 function formatRecordDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -76,117 +73,131 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
   onDelete,
 }) => {
   return (
-    <section
-      className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-      style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both' }}
-    >
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-2 h-2 rounded-full bg-blush" />
-          <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录文稿</h3>
+    <WorkbenchCard className="p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-blush" />
+            <h2 className="font-display text-[18px] font-medium text-ink">转录与播客内容</h2>
+          </div>
+          <p className="mt-1.5 font-body text-[12px] leading-relaxed text-ink-soft/70">
+            {records.length > 0 ? `当前显示 ${records.length} 条，打开后可阅读、整理或继续写作。` : '音视频转成的文字会按时间保存在这里。'}
+          </p>
         </div>
-        <button
-          type="button"
+        <ActionButton
+          tone="secondary"
+          size="sm"
           onClick={onRefresh}
           disabled={isLoading}
-          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/60 hover:bg-white/80 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
+          isLoading={isLoading}
+          loadingLabel="刷新中"
+          className="shrink-0"
         >
-          {isLoading ? '刷新中...' : '刷新'}
-        </button>
+          刷新
+        </ActionButton>
       </div>
 
       {isLoading && (
-        <div className="space-y-3">
+        <div className="divide-y divide-card-border">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white/60 rounded-2xl p-4 border border-card-border animate-pulse">
-              <div className="h-3 bg-ink/5 rounded w-3/4 mb-3" />
-              <div className="h-2 bg-ink/5 rounded w-full mb-2" />
-              <div className="h-2 bg-ink/5 rounded w-2/3" />
+            <div key={i} className="animate-pulse space-y-2 py-4 first:pt-0 last:pb-0">
+              <div className="h-4 w-3/5 rounded bg-ink/5" />
+              <div className="h-3 w-2/5 rounded bg-ink/5" />
+              <div className="h-3 w-full rounded bg-ink/5" />
             </div>
           ))}
         </div>
       )}
 
       {error && !isLoading && (
-        <div className="bg-pink/10 border border-pink/30 rounded-xl p-3 text-ink text-[12px] font-body animate-shake">
-          {error}
+        <div className="rounded-xl border border-pink/30 bg-pink/10 p-4 font-body text-[12px] text-ink animate-shake">
+          <p>{error}</p>
+          <ActionButton tone="secondary" size="sm" onClick={onRefresh} className="mt-3">
+            重新加载
+          </ActionButton>
         </div>
       )}
 
       {!isLoading && !error && records.length === 0 && (
-        <div className="p-8 text-center animate-fade-in">
-          <p className="font-display italic text-[16px] text-ink-soft/70 mb-1">暂无转录文稿</p>
-          <p className="font-body text-[12px] text-ink-soft/30">完成转录后会自动保存到这里</p>
+        <div className="rounded-2xl border border-dashed border-card-border bg-white/35 p-8 text-center">
+          <p className="font-display text-[18px] font-medium text-ink">还没有转录内容</p>
+          <p className="mx-auto mt-2 max-w-md font-body text-[13px] leading-relaxed text-ink-soft/70">
+            完成音视频转录后，文字会自动保存到内容库；如果刚完成任务，可以重新检查一次。
+          </p>
+          <ActionButton tone="secondary" onClick={onRefresh} className="mt-4">
+            重新检查内容库
+          </ActionButton>
         </div>
       )}
 
       {!isLoading && !error && records.length > 0 && (
-        <div className="space-y-3">
-          {records.map((record, index) => {
+        <div className="divide-y divide-card-border">
+          {records.map((record) => {
             const text = preferredText(record);
             const preview = previewText(record);
             return (
               <article
                 key={record.id}
-                className="bg-white/60 rounded-2xl p-4 border border-card-border"
-                style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.03}s both` }}
+                className="py-4 first:pt-0 last:pb-0"
               >
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="min-w-0">
-                    <p className="font-body text-[12px] font-medium text-ink truncate" title={record.relative_path || record.file_name}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="break-words font-display text-[16px] font-medium leading-snug text-ink [overflow-wrap:anywhere]" title={record.relative_path || record.file_name}>
                       {record.relative_path || record.file_name}
-                    </p>
-                    <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mt-1">
-                      {formatRecordDate(record.created_at)} · {formatAsrSource(record)} · {record.model || '默认模型'}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                    {record.content_mode === 'podcast' && <span className="inline-flex items-center rounded-full bg-lilac/30 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">播客整理</span>}
-                    {record.summary_status === 'completed' && <span className="inline-flex items-center rounded-full bg-sage/30 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">已总结</span>}
-                    {record.summary_status === 'running' || record.summary_status === 'queued' ? <span className="inline-flex items-center rounded-full bg-lemon/30 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">总结中</span> : null}
-                    {record.formatted_text.trim() && <span className="inline-flex items-center rounded-full bg-sage/25 px-2.5 py-1 font-body text-[9px] font-medium uppercase tracking-wider text-ink">已排版</span>}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 font-body text-[11px] text-ink-soft/70 [overflow-wrap:anywhere]">
+                      {record.content_mode === 'podcast' && <span className="inline-flex items-center rounded-full bg-lilac/30 px-2.5 py-1 font-medium text-ink">播客内容</span>}
+                      {record.summary_status === 'completed' && <span className="inline-flex items-center rounded-full bg-sage/30 px-2.5 py-1 font-medium text-ink">摘要就绪</span>}
+                      {record.summary_status === 'running' || record.summary_status === 'queued' ? <span className="inline-flex items-center rounded-full bg-lemon/30 px-2.5 py-1 font-medium text-ink">正在总结</span> : null}
+                      {record.formatted_text.trim() && <span className="inline-flex items-center rounded-full bg-sage/25 px-2.5 py-1 font-medium text-ink">已整理排版</span>}
+                      <span>{formatAsrSource(record)}</span>
+                      <span>{formatRecordDate(record.created_at)}</span>
+                      <span>{record.model || '默认模型'}</span>
+                    </div>
                   </div>
                 </div>
 
-                <p className="font-body text-[12px] leading-[1.8] text-ink-soft/75 line-clamp-3">
+                <p className="mt-3 line-clamp-3 max-w-4xl break-words font-body text-[14px] leading-[1.85] text-ink-soft/80 [overflow-wrap:anywhere] sm:line-clamp-2">
                   {preview || '空文本'}
                 </p>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
-                  <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-body text-[11px] text-ink-soft/70">
                     {formatRecordStats(record, text.length)}
                   </span>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                    <ActionButton
+                      tone="edit"
+                      size="sm"
                       onClick={() => onOpen(record)}
-                      className={ACTION_BUTTON_FORMAT}
+                      className="col-span-2 sm:col-auto"
                     >
-                      {record.content_mode === 'podcast' && record.structure_status === 'ready' ? '打开内容工作区' : '查看 / 排版'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDownload(record)}
-                      disabled={!text}
-                      className={ACTION_BUTTON_NEUTRAL}
-                    >
-                      下载
-                    </button>
-                    <button
-                      type="button"
+                      {record.content_mode === 'podcast' && record.structure_status === 'ready' ? '打开播客工作区' : '阅读与整理'}
+                    </ActionButton>
+                    <ActionButton
+                      tone="primary"
+                      size="sm"
                       onClick={() => onImport(record)}
                       disabled={!text}
-                      className={ACTION_BUTTON_IMPORT}
                     >
-                      导入
-                    </button>
-                    <button
-                      type="button"
+                      导入写作
+                    </ActionButton>
+                    <ActionButton
+                      tone="secondary"
+                      size="sm"
+                      onClick={() => onDownload(record)}
+                      disabled={!text}
+                    >
+                      下载文本
+                    </ActionButton>
+                    <ActionButton
+                      tone="ghost"
+                      size="sm"
                       onClick={() => onDelete(record)}
-                      className={ACTION_BUTTON_DANGER}
+                      className="hover:text-pink"
                     >
                       删除
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               </article>
@@ -194,7 +205,7 @@ export const TranscriptionHistoryPanel: React.FC<TranscriptionHistoryPanelProps>
           })}
         </div>
       )}
-    </section>
+    </WorkbenchCard>
   );
 };
 

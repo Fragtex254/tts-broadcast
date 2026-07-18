@@ -206,12 +206,11 @@ export const Settings: React.FC = () => {
   const SectionCard: React.FC<{
     dotColor: string;
     title: string;
-    index: number;
     children: React.ReactNode;
-  }> = ({ dotColor, title, index, children }) => (
+  }> = ({ dotColor, title, children }) => (
     <section
       className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-      style={{ animation: `fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.1}s both` }}
+
     >
       <div className="flex items-center gap-2 mb-4">
         <span className={`w-2 h-2 rounded-full ${dotColor}`} />
@@ -243,24 +242,24 @@ export const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSettingsView('connections')}
-                className={`rounded-2xl px-4 py-3 text-left transition-all duration-150 ${settingsView === 'connections' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
+                className={`rounded-2xl px-4 py-3 text-left ui-transition duration-fast ${settingsView === 'connections' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
               >
                 <span className="block font-display text-[16px] font-medium text-ink">服务连接</span>
-                <span className="mt-1 block font-body text-[10px] text-ink-soft/60">LLM、TTS 与 ASR</span>
+                <span className="mt-1 block font-body text-[11px] text-ink-soft/60">LLM、TTS 与 ASR</span>
               </button>
               <button
                 type="button"
                 onClick={() => setSettingsView('preferences')}
-                className={`rounded-2xl px-4 py-3 text-left transition-all duration-150 ${settingsView === 'preferences' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
+                className={`rounded-2xl px-4 py-3 text-left ui-transition duration-fast ${settingsView === 'preferences' ? 'bg-white/90 shadow-card' : 'hover:bg-white/45'}`}
               >
                 <span className="block font-display text-[16px] font-medium text-ink">默认偏好</span>
-                <span className="mt-1 block font-body text-[10px] text-ink-soft/60">界面、音色与播报文案</span>
+                <span className="mt-1 block font-body text-[11px] text-ink-soft/60">界面、音色与播报文案</span>
               </button>
             </nav>
           )}
 
           {!isLoadingSettings && settingsView === 'preferences' && (
-            <SectionCard dotColor="bg-lilac" title="界面字体" index={0}>
+            <SectionCard dotColor="bg-lilac" title="界面字体">
               <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5">
                 <div className="space-y-4">
                   <div>
@@ -271,7 +270,7 @@ export const Settings: React.FC = () => {
                           key={option.value}
                           type="button"
                           onClick={() => handleImmediateSettingChange('ui_font_preset', option.value)}
-                          className={`text-left p-4 rounded-2xl border transition-all ${
+                          className={`text-left p-4 rounded-2xl border ui-transition ${
                             formData.ui_font_preset === option.value
                               ? 'bg-lilac/55 border-ink/15 shadow-btn'
                               : 'bg-white/45 border-card-border hover:border-ink/15'
@@ -292,7 +291,7 @@ export const Settings: React.FC = () => {
                           key={option.value}
                           type="button"
                           onClick={() => handleImmediateSettingChange('ui_font_scale', option.value)}
-                          className={`p-4 rounded-2xl border transition-all ${
+                          className={`p-4 rounded-2xl border ui-transition ${
                             formData.ui_font_scale === option.value
                               ? 'bg-sage/60 border-ink/15 shadow-btn'
                               : 'bg-white/45 border-card-border hover:border-ink/15'
@@ -322,13 +321,13 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && settingsView === 'connections' && (
-            <SectionCard dotColor="bg-pink" title="API 配置" index={1}>
+            <SectionCard dotColor="bg-pink" title="API 配置">
               <div className="space-y-5">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">LLM API</label>
-                      <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">用于资讯改写、文本切分和模型发现</p>
+                      <p className="font-body text-[11px] text-ink-soft/70 mt-0.5">用于资讯改写、文本切分和模型发现</p>
                     </div>
                     <div className="inline-flex rounded-full bg-white/50 border border-card-border p-1">
                       {([
@@ -339,7 +338,7 @@ export const Settings: React.FC = () => {
                           key={option.value}
                           type="button"
                           onClick={() => handleApiFormatChange(option.value)}
-                          className={`px-3 py-1.5 rounded-full font-body text-[11px] transition-all ${formData.llm_api_format === option.value ? 'bg-lilac text-ink shadow-btn' : 'text-ink-soft hover:text-ink'}`}
+                          className={`px-3 py-1.5 rounded-full font-body text-[11px] ui-transition ${formData.llm_api_format === option.value ? 'bg-lilac text-ink shadow-btn' : 'text-ink-soft hover:text-ink'}`}
                         >
                           {option.label}
                         </button>
@@ -349,7 +348,7 @@ export const Settings: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM API Key</label>
+                      <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM API Key</label>
                       <PasswordField
                         value={formData.mimo_api_key}
                         onChange={(v) => handleChange('mimo_api_key', v)}
@@ -358,7 +357,7 @@ export const Settings: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM Base URL</label>
+                      <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM Base URL</label>
                       <input
                         type="text"
                         value={formData.llm_base_url}
@@ -371,7 +370,7 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM 模型</label>
+                    <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM 模型</label>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
@@ -396,7 +395,7 @@ export const Settings: React.FC = () => {
                         type="button"
                         onClick={handleFetchModels}
                         disabled={isFetchingModels || !formData.llm_base_url || !formData.mimo_api_key}
-                        className="px-4 py-2.5 bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
+                        className="px-4 py-2.5 bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn ui-transition duration-fast flex items-center justify-center gap-2 whitespace-nowrap"
                       >
                         {isFetchingModels ? (
                           <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>获取中...</>
@@ -415,7 +414,7 @@ export const Settings: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">改写系统提示词</label>
+                      <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">改写系统提示词</label>
                       <textarea
                         value={formData.llm_rewrite_system_prompt}
                         onChange={(e) => {
@@ -428,7 +427,7 @@ export const Settings: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">切分系统提示词</label>
+                      <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">切分系统提示词</label>
                       <textarea
                         value={formData.llm_split_system_prompt}
                         onChange={(e) => {
@@ -466,7 +465,7 @@ export const Settings: React.FC = () => {
                     <button
                       onClick={() => handleTestKey('llm')}
                       disabled={isTestingKey === 'llm' || !formData.mimo_api_key}
-                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
+                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn ui-transition duration-fast flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'llm' ? (
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
@@ -487,14 +486,14 @@ export const Settings: React.FC = () => {
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <div><label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">Embedding 搜索</label><p className="mt-0.5 font-body text-[10px] text-ink-soft/70">用于跨播客语义搜索；关闭或连接失败时自动使用关键词检索</p></div>
+                    <div><label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">Embedding 搜索</label><p className="mt-0.5 font-body text-[11px] text-ink-soft/70">用于跨播客语义搜索；关闭或连接失败时自动使用关键词检索</p></div>
                     <label className="flex cursor-pointer items-center gap-2 font-body text-[11px] text-ink-soft"><input type="checkbox" checked={formData.embedding_enabled} onChange={(event) => void handleImmediateSettingChange('embedding_enabled', event.target.checked)} />启用</label>
                   </div>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <label className="font-body text-[10px] text-ink-soft">OpenAI-compatible Base URL<input value={formData.embedding_base_url} onChange={(event) => handleChange('embedding_base_url', event.target.value)} onBlur={() => handleAutoSave('embedding_base_url')} placeholder="https://api.openai.com/v1" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
-                    <label className="font-body text-[10px] text-ink-soft">Embedding 模型<input value={formData.embedding_model} onChange={(event) => handleChange('embedding_model', event.target.value)} onBlur={() => handleAutoSave('embedding_model')} placeholder="text-embedding-3-small" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
+                    <label className="font-body text-[11px] text-ink-soft">OpenAI-compatible Base URL<input value={formData.embedding_base_url} onChange={(event) => handleChange('embedding_base_url', event.target.value)} onBlur={() => handleAutoSave('embedding_base_url')} placeholder="https://api.openai.com/v1" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
+                    <label className="font-body text-[11px] text-ink-soft">Embedding 模型<input value={formData.embedding_model} onChange={(event) => handleChange('embedding_model', event.target.value)} onBlur={() => handleAutoSave('embedding_model')} placeholder="text-embedding-3-small" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
                   </div>
-                  <div><label className="mb-1 block font-body text-[10px] text-ink-soft">Embedding API Key</label><PasswordField value={formData.embedding_api_key} onChange={(value) => handleChange('embedding_api_key', value)} onBlur={() => handleAutoSave('embedding_api_key')} placeholder="输入 Embedding API Key" /></div>
+                  <div><label className="mb-1 block font-body text-[11px] text-ink-soft">Embedding API Key</label><PasswordField value={formData.embedding_api_key} onChange={(value) => handleChange('embedding_api_key', value)} onBlur={() => handleAutoSave('embedding_api_key')} placeholder="输入 Embedding API Key" /></div>
                 </div>
 
                 <div className="border-t border-dashed border-card-border" />
@@ -502,7 +501,7 @@ export const Settings: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">TTS API Key</label>
-                    <span className="font-body text-[10px] text-ink-soft/70">用于语音合成和 MiMo 云端转录</span>
+                    <span className="font-body text-[11px] text-ink-soft/70">用于语音合成和 MiMo 云端转录</span>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <PasswordField
@@ -515,7 +514,7 @@ export const Settings: React.FC = () => {
                     <button
                       onClick={() => handleTestKey('tts')}
                       disabled={isTestingKey === 'tts' || !formData.mimo_tts_api_key}
-                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn transition-all duration-150 flex items-center justify-center gap-2 whitespace-nowrap"
+                      className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn ui-transition duration-fast flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'tts' ? (
                         <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>测试中...</>
@@ -537,7 +536,7 @@ export const Settings: React.FC = () => {
                 <div className="space-y-3">
                   <div>
                     <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60">ASR 服务连接</label>
-                    <p className="font-body text-[10px] text-ink-soft/70 mt-0.5">这里只维护各服务的连接参数；当前任务使用哪个服务，请在转录页选择</p>
+                    <p className="font-body text-[11px] text-ink-soft/70 mt-0.5">这里只维护各服务的连接参数；当前任务使用哪个服务，请在转录页选择</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -546,10 +545,10 @@ export const Settings: React.FC = () => {
                         key={option.value}
                         type="button"
                         onClick={() => setAsrConfigTab(option.value)}
-                        className={`text-left p-3.5 rounded-2xl border transition-all ${asrConfigTab === option.value ? 'bg-lilac/35 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
+                        className={`text-left p-3.5 rounded-2xl border ui-transition ${asrConfigTab === option.value ? 'bg-lilac/35 border-ink/15 shadow-btn' : 'bg-white/35 border-card-border hover:border-ink/15'}`}
                       >
                         <span className="block font-body text-[12px] font-medium text-ink">{option.label}</span>
-                        <span className="block mt-1 font-body text-[10px] text-ink-soft/70 leading-relaxed">{option.description}</span>
+                        <span className="block mt-1 font-body text-[11px] text-ink-soft/70 leading-relaxed">{option.description}</span>
                       </button>
                     ))}
                   </div>
@@ -563,7 +562,7 @@ export const Settings: React.FC = () => {
                   {asrConfigTab === 'qwen_mlx' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR Base URL</label>
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR Base URL</label>
                         <input
                           type="text"
                           value={formData.qwen_asr_base_url}
@@ -574,7 +573,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR 模型</label>
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR 模型</label>
                         <input
                           type="text"
                           value={formData.qwen_asr_model}
@@ -585,7 +584,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR API Key（可选）</label>
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR API Key（可选）</label>
                         <PasswordField
                           value={formData.qwen_asr_api_key}
                           onChange={(v) => handleChange('qwen_asr_api_key', v)}
@@ -602,7 +601,7 @@ export const Settings: React.FC = () => {
                   {asrConfigTab === 'wsl_asr' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in">
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR Base URL</label>
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR Base URL</label>
                         <input
                           type="text"
                           value={formData.wsl_asr_base_url}
@@ -613,7 +612,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认识别引擎</label>
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认识别引擎</label>
                         <select
                           value={formData.wsl_asr_engine}
                           onChange={(e) => handleChange('wsl_asr_engine', e.target.value as AppSettings['wsl_asr_engine'])}
@@ -625,7 +624,7 @@ export const Settings: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认模型</label>
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">默认模型</label>
                         <input
                           type="text"
                           value={formData.wsl_asr_model}
@@ -636,7 +635,7 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR API Key（可选）</label>
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR API Key（可选）</label>
                         <PasswordField
                           value={formData.wsl_asr_api_key}
                           onChange={(v) => handleChange('wsl_asr_api_key', v)}
@@ -655,7 +654,7 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && settingsView === 'preferences' && (
-            <SectionCard dotColor="bg-blush" title="音色设置" index={2}>
+            <SectionCard dotColor="bg-blush" title="音色设置">
               <div>
                 <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">默认音色</label>
                 <select
@@ -672,7 +671,7 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && settingsView === 'preferences' && (
-            <SectionCard dotColor="bg-sage" title="播报设置" index={3}>
+            <SectionCard dotColor="bg-sage" title="播报设置">
               <div className="space-y-4">
                 <div>
                   <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/60 mb-2 block">开场白</label>
@@ -707,7 +706,7 @@ export const Settings: React.FC = () => {
           )}
 
           {!isLoadingSettings && (
-            <div className="flex items-center justify-between" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both' }}>
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {saveSuccess && (
                   <span className="font-body text-[12px] text-sage flex items-center gap-1.5 animate-fade-in">
@@ -724,7 +723,7 @@ export const Settings: React.FC = () => {
               <button
                 onClick={handleSave}
                 disabled={isSaving || dirtyFields.size === 0}
-                className="px-6 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body font-medium text-[12px] shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 flex items-center gap-2 uppercase tracking-wider"
+                className="px-6 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body font-medium text-[12px] shadow-btn ui-transition duration-fast active:translate-y-0 flex items-center gap-2 uppercase tracking-wider"
               >
                 {isSaving ? (
                   <><div className="w-3 h-1 bg-ink/20 rounded-full overflow-hidden"><div className="h-full bg-ink/50 rounded-full animate-pulse" style={{ width: '60%' }} /></div>保存中...</>

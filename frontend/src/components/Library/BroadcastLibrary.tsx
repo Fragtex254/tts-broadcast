@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AudioPlayer } from '../Dashboard/AudioPlayer';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { ActionButton } from '../ui/ActionButton';
+import { WorkbenchCard } from '../ui/WorkbenchCard';
 import { createScopedLogger, toLogError } from '../../services/logger';
 import useStore from '../../store';
 import type { Broadcast } from '../../store';
@@ -29,13 +31,19 @@ const formatDate = (dateStr: string): string => {
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    completed: 'bg-sage/30 text-ink',
-    generating: 'bg-lemon/25 text-ink',
+    pending: 'bg-paper-2 text-ink-soft',
+    generated: 'bg-sage/30 text-ink',
+    generating: 'bg-lilac/30 text-ink',
     failed: 'bg-pink/20 text-ink',
   };
-  const labels: Record<string, string> = { completed: '✓ 已完成', generating: '◌ 生成中', failed: '✕ 失败' };
+  const labels: Record<string, string> = {
+    pending: '文字草稿',
+    generated: '音频就绪',
+    generating: '正在生成音频',
+    failed: '音频生成失败',
+  };
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-body font-medium uppercase tracking-wider ${styles[status] || 'bg-paper-2 text-ink-soft'}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 font-body text-[11px] font-medium ${styles[status] || 'bg-paper-2 text-ink-soft'}`}>
       {labels[status] || status}
     </span>
   );
@@ -184,156 +192,182 @@ export const BroadcastLibrary: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <section className="flex flex-col gap-3 rounded-card border border-card-border bg-white/65 p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+      <WorkbenchCard tone="secondary" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-display text-[17px] font-medium text-ink">已保存播报</p>
-          <p className="mt-1 font-body text-[11px] text-ink-soft/60">共 {total} 条，可重新编辑、播放或批量清理</p>
+          <h2 className="font-display text-[18px] font-medium text-ink">已保存的成稿与音频</h2>
+          <p className="mt-1 font-body text-[12px] leading-relaxed text-ink-soft/70">
+            共 {total} 条；选择标题可预览全文和音频，也可以直接继续编辑。
+          </p>
         </div>
-        <div>
-          {
-          isMultiSelectMode ? (
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
+        {isMultiSelectMode ? (
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-xl px-1">
                 <input
                   type="checkbox"
                   checked={broadcasts.length > 0 && broadcasts.every((b) => selectedIds.has(b.id))}
                   onChange={handleToggleSelectAll}
-                  className="w-4 h-4 rounded border-card-border text-pink focus:ring-pink/30"
+                  className="h-4 w-4 rounded border-card-border text-pink focus:ring-pink/30"
                 />
                 <span className="font-body text-[12px] text-ink-soft">全选当前页</span>
               </label>
-              <span className="font-body text-[12px] text-ink-soft">
+              <span className="rounded-full bg-white/60 px-2.5 py-1 font-body text-[11px] text-ink-soft">
                 已选 {selectedIds.size} 项
               </span>
-              <button
+              <ActionButton
+                tone="danger"
+                size="sm"
                 onClick={handleDeleteClick}
                 disabled={selectedIds.size === 0 || isBatchDeleting}
-                className="px-3 py-1.5 bg-pink text-ink font-body text-[11px] font-medium rounded-lg shadow-btn hover:brightness-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                isLoading={isBatchDeleting}
+                loadingLabel="正在删除"
               >
-                🗑️ 删除
-              </button>
-              <button
+                删除所选
+              </ActionButton>
+              <ActionButton
+                tone="secondary"
+                size="sm"
                 onClick={handleExitMultiSelect}
-                className="px-3 py-1.5 bg-white border border-card-border text-ink-soft font-body text-[11px] font-medium rounded-lg hover:bg-paper-2 transition-colors"
               >
                 取消
-              </button>
+              </ActionButton>
             </div>
           ) : (
-            <button
+            <ActionButton
+              tone="secondary"
+              size="sm"
               onClick={handleEnterMultiSelect}
-              className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none"
             >
-              ✓ 多选
-            </button>
-          )
-          }
-        </div>
-      </section>
+              批量管理
+            </ActionButton>
+          )}
+      </WorkbenchCard>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-card shadow-card border border-card-border overflow-hidden">
+          <WorkbenchCard className="overflow-hidden">
             {isLoading && (
-              <div className="p-6 space-y-4">
+              <div className="space-y-5 p-5 sm:p-6">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="flex items-center gap-4 animate-pulse" style={{ animationDelay: `${i * 0.05}s` }}>
-                    <div className="h-4 bg-ink/5 rounded w-2/5" />
-                    <div className="h-3 bg-ink/5 rounded w-1/6" />
-                    <div className="h-3 bg-ink/5 rounded w-1/12" />
-                    <div className="h-5 bg-ink/5 rounded-full w-16" />
+                  <div key={i} className="animate-pulse space-y-2">
+                    <div className="h-4 w-3/5 rounded bg-ink/5" />
+                    <div className="h-3 w-2/5 rounded bg-ink/5" />
                   </div>
                 ))}
               </div>
             )}
 
             {error && !isLoading && (
-              <div className="p-12 text-center">
-                <p className="font-body text-[13px] text-pink mb-3">{error}</p>
-                <button onClick={() => loadBroadcasts(page)} className="font-body text-[12px] text-ink-soft hover:text-ink transition-colors">重新加载</button>
+              <div className="p-8 text-center sm:p-12">
+                <p className="mb-3 font-body text-[13px] text-ink">{error}</p>
+                <ActionButton tone="secondary" size="sm" onClick={() => loadBroadcasts(page)}>
+                  重新加载
+                </ActionButton>
               </div>
             )}
 
             {!isLoading && !error && broadcasts.length === 0 && (
-              <div className="p-12 text-center animate-fade-in">
-                <p className="font-display italic text-[16px] text-ink-soft/70 mb-1">暂无已保存播报</p>
-                <p className="font-body text-[12px] text-ink-soft/30">在播放器点击保存后，播报才会出现在这里</p>
+              <div className="p-8 text-center sm:p-12">
+                <p className="font-display text-[18px] font-medium text-ink">这里还没有成稿</p>
+                <p className="mx-auto mt-2 max-w-md font-body text-[13px] leading-relaxed text-ink-soft/70">
+                  从内容工作台开始写作，保存后的文字和生成音频会集中出现在这里。
+                </p>
+                <ActionButton tone="primary" className="mt-4" onClick={() => navigate('/')}>
+                  开始一次创作
+                </ActionButton>
               </div>
             )}
 
-            {!isLoading && !error && broadcasts.map((broadcast, index) => {
+            {!isLoading && !error && broadcasts.map((broadcast) => {
               const isSelected = selectedBroadcast?.id === broadcast.id;
               const isChecked = selectedIds.has(broadcast.id);
               return (
-                <div
+                <article
                   key={broadcast.id}
-                  className={`flex items-center gap-4 px-5 py-3.5 border-b border-card-border transition-all duration-200 ${
+                  className={`border-b border-card-border px-4 py-4 last:border-b-0 sm:px-5 ${
                     isMultiSelectMode && isChecked
                       ? 'bg-sage/10'
                       : isSelected
                       ? 'bg-sage/10'
                       : 'hover:bg-white/30'
                   }`}
-                  style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.03}s both` }}
                 >
-                  {isMultiSelectMode && (
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleToggleSelect(broadcast)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-4 h-4 rounded border-card-border text-pink focus:ring-pink/30"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast) : handleSelectBroadcast(broadcast)}
-                    className="flex-1 min-w-0 flex items-center gap-2 text-left"
-                  >
-                    <p className={`font-display text-[15px] font-medium truncate ${isSelected ? 'text-ink' : 'text-ink/80'}`}>{broadcast.title}</p>
-                    {broadcast.saved === 1 && (
-                      <svg className="w-3 h-3 text-lemon flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                      </svg>
+                  <div className="flex items-start gap-3">
+                    {isMultiSelectMode && (
+                      <input
+                        type="checkbox"
+                        aria-label={`选择「${broadcast.title}」`}
+                        checked={isChecked}
+                        onChange={() => handleToggleSelect(broadcast)}
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-card-border text-pink focus:ring-pink/30"
+                      />
                     )}
-                  </button>
-                  <span className="font-body text-[12px] text-ink-soft/60 min-w-[80px]">{formatDate(broadcast.created_at)}</span>
-                  <span className="font-body text-[12px] text-ink-soft/60 min-w-[50px]">{formatDuration(broadcast.duration)}</span>
-                  {getStatusBadge(broadcast.status)}
-                  {!isMultiSelectMode && (
-                    <button
-                      onClick={(e) => handleReEdit(broadcast, e)}
-                      className="px-3 py-1.5 bg-lilac hover:brightness-105 text-ink font-body text-[11px] font-medium rounded-lg shadow-btn transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:shadow-none whitespace-nowrap"
-                    >
-                      ✏️ 重新编辑
-                    </button>
-                  )}
-                </div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+                      <button
+                        type="button"
+                        onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast) : handleSelectBroadcast(broadcast)}
+                        aria-pressed={isMultiSelectMode ? undefined : isSelected}
+                        className="ui-pressable min-w-0 flex-1 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lilac/80"
+                      >
+                        <span className="flex items-start gap-2">
+                          <span className={`min-w-0 break-words font-display text-[16px] font-medium leading-snug ${isSelected ? 'text-ink' : 'text-ink/90'}`}>
+                            {broadcast.title || '未命名成稿'}
+                          </span>
+                          {broadcast.saved === 1 && (
+                            <span aria-label="已保存" title="已保存" className="mt-0.5 shrink-0 text-lemon">
+                              <svg aria-hidden="true" className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                              </svg>
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 font-body text-[11px] text-ink-soft/70">
+                          {getStatusBadge(broadcast.status)}
+                          <span>{broadcast.mode === 'segmented' ? '分段成稿' : '整篇成稿'}</span>
+                          <span>更新于 {formatDate(broadcast.updated_at)}</span>
+                          <span>{broadcast.content.length} 字</span>
+                          {broadcast.duration !== null && <span>音频 {formatDuration(broadcast.duration)}</span>}
+                        </span>
+                      </button>
+                      {!isMultiSelectMode && (
+                        <ActionButton
+                          tone="edit"
+                          size="sm"
+                          onClick={(e) => handleReEdit(broadcast, e)}
+                          className="w-full shrink-0 sm:w-auto"
+                        >
+                          继续编辑
+                        </ActionButton>
+                      )}
+                    </div>
+                  </div>
+                </article>
               );
             })}
-          </div>
+          </WorkbenchCard>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="font-body text-[11px] text-ink-soft/70 uppercase tracking-wider">第 {page} / {totalPages} 页，共 {total} 条</p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="font-body text-[11px] text-ink-soft/70">第 {page} / {totalPages} 页，共 {total} 条</p>
               <div className="flex items-center gap-2">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-4 py-1.5 font-body text-[12px] bg-white/50 text-ink-soft rounded-full border border-card-border hover:bg-white/70 disabled:opacity-40 transition-colors">上一页</button>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="px-4 py-1.5 font-body text-[12px] bg-white/50 text-ink-soft rounded-full border border-card-border hover:bg-white/70 disabled:opacity-40 transition-colors">下一页</button>
+                <ActionButton tone="secondary" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>上一页</ActionButton>
+                <ActionButton tone="secondary" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>下一页</ActionButton>
               </div>
             </div>
           )}
 
           {selectedBroadcast?.content && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border animate-fade-in">
-              <div className="flex items-center gap-2 mb-3">
+            <WorkbenchCard className="p-5">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-pink" />
-                <h3 className="font-display italic text-[14px] font-medium text-ink-soft">口播稿预览</h3>
-                <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 ml-auto">
-                  {selectedBroadcast.content.length} 字 · ≈ {Math.ceil(selectedBroadcast.content.length / 4)} 秒
+                <h3 className="font-display text-[17px] font-medium text-ink">成稿预览</h3>
+                <span className="ml-auto font-body text-[11px] text-ink-soft/70">
+                  {selectedBroadcast.content.length} 字 · 预计口播 {Math.ceil(selectedBroadcast.content.length / 4)} 秒
                 </span>
               </div>
-              <div className="bg-white/60 rounded-2xl p-4 border border-card-border">
-                <pre className="text-ink font-body text-[13px] leading-[1.9] whitespace-pre-wrap">{selectedBroadcast.content}</pre>
+              <div className="rounded-2xl border border-card-border bg-white/60 p-4 sm:p-5">
+                <p className="ui-reading-body mx-auto max-w-3xl whitespace-pre-wrap break-words text-ink">
+                  {selectedBroadcast.content}
+                </p>
               </div>
-            </div>
+            </WorkbenchCard>
           )}
 
           {selectedBroadcast && (

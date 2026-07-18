@@ -89,7 +89,7 @@ describe('TranscriptConversationModal', () => {
     const zaraTurn = screen.getByLabelText('发言 2，Zara，0:29 到 1:07');
     fireEvent.mouseEnter(zaraTurn);
 
-    expect(within(zaraTurn).getByText('当前悬浮区域')).toBeTruthy();
+    expect(within(zaraTurn).getByText('当前发言')).toBeTruthy();
     const context = screen.getByTestId('active-turn-context');
     expect(within(context).getByText('Zara')).toBeTruthy();
     expect(within(context).getByText('0:29–1:07')).toBeTruthy();

@@ -49,7 +49,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="px-5 py-2 bg-lemon hover:brightness-105 text-ink rounded-full font-body text-[12px] font-medium shadow-btn transition-all duration-150"
+              className="px-5 py-2 bg-lemon hover:brightness-105 text-ink rounded-full font-body text-[12px] font-medium shadow-btn ui-transition duration-fast"
             >
               刷新页面
             </button>

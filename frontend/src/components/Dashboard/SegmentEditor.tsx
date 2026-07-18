@@ -31,7 +31,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     failed: '✕ 失败',
   };
   return (
-    <span className={`inline-flex items-center gap-1 text-[9px] px-2.5 py-1 rounded-full font-body font-medium uppercase tracking-wider ${styles[status] || ''}`}>
+    <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-body font-medium uppercase tracking-wider ${styles[status] || ''}`}>
       {labels[status] || status}
     </span>
   );
@@ -213,7 +213,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   }
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both' }}>
+    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-lilac" />
@@ -238,7 +238,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
             type="button"
             onClick={() => setIsRefineOpen(true)}
             disabled={hasLocalGenerating}
-            className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn transition-all duration-150 uppercase tracking-wider"
+            className="bg-lilac/30 hover:bg-lilac/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-3.5 py-2 shadow-btn ui-transition duration-fast uppercase tracking-wider"
           >
             切分精修
           </button>
@@ -256,7 +256,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
           </div>
           <div className="w-full h-1.5 bg-ink/10 rounded-full overflow-hidden">
             <div
-              className="h-full bg-lilac rounded-full transition-all duration-300"
+              className="h-full rounded-full bg-lilac transition-[width] duration-normal"
               style={{
                 width: `${(segments.filter(s => s.status === 'generated').length / segments.length) * 100}%`
               }}
@@ -266,14 +266,14 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
       )}
 
       <div className="space-y-2 mb-4">
-        {segments.map((seg, index) => (
+        {segments.map((seg) => (
           (() => {
             const segmentBusy = isSegmentBusy(seg);
             const displayStatus: Segment['status'] = seg.status === 'generating' && !segmentBusy ? 'pending' : seg.status;
             return (
           <div
             key={seg.id}
-            className={`bg-white/45 rounded-2xl p-3 border transition-all duration-300 ${
+            className={`bg-white/45 rounded-2xl p-3 border ui-transition duration-slow ${
               segmentBusy
                 ? 'border-lilac/40 bg-lilac/5 animate-pulse'
                 : seg.status === 'generated'
@@ -282,7 +282,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                 ? 'border-pink/30 bg-pink/5'
                 : 'border-card-border'
             }`}
-            style={{ animation: `fade-in-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.05}s both` }}
+
           >
             {/* 第一行：序号 + 文本 + 状态 + 音频 + 操作 */}
             <div className="flex items-start gap-3">
@@ -353,7 +353,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
             {/* 第二行：风格标签 meta（编辑态隐藏） */}
             {editingId !== seg.id && (
               <div className="relative flex flex-wrap items-center gap-2 mt-2 pl-[34px]">
-                <span className="text-[10px] text-ink-soft/60">风格</span>
+                <span className="text-[11px] text-ink-soft/60">风格</span>
                 <button
                   type="button"
                   onClick={() => setOpenTagPickerId(openTagPickerId === seg.id ? null : seg.id)}
@@ -370,7 +370,7 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
                     onClose={() => setOpenTagPickerId(null)}
                   />
                 )}
-                <span className="ml-2 text-[10px] text-ink-soft/60">倍速</span>
+                <span className="ml-2 text-[11px] text-ink-soft/60">倍速</span>
                 <select
                   value={seg.playback_rate || 1}
                   onChange={(event) => handleSetSegmentPlaybackRate(seg.id, Number(event.target.value))}
@@ -409,21 +409,21 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
         <button
           onClick={handleSuggestTags}
           disabled={isSuggestingTags || segments.length === 0}
-          className="flex-1 bg-lemon/30 hover:bg-lemon/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
+          className="flex-1 bg-lemon/30 hover:bg-lemon/40 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn ui-transition duration-fast uppercase tracking-wider"
         >
           {isSuggestingTags ? '优化中...' : 'AI 标签优化'}
         </button>
         <button
           onClick={handleBatchGenerate}
           disabled={!hasPendingOrFailed || isSuggestingTags || !canGenerateVoice || isBatchGenerating}
-          className="flex-1 bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider"
+          className="flex-1 bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn ui-transition duration-fast uppercase tracking-wider"
         >
           {isBatchGenerating ? '生成中...' : canGenerateVoice ? '全部生成' : '先选音色'}
         </button>
         <button
           onClick={handleMerge}
           disabled={!allGenerated || isMerging}
-          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150 uppercase tracking-wider flex items-center justify-center gap-2"
+          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[12px] rounded-xl px-4 py-2.5 shadow-btn ui-transition duration-fast uppercase tracking-wider flex items-center justify-center gap-2"
         >
           {isMerging ? (
             <>
