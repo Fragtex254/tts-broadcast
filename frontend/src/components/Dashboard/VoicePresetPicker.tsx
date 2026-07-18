@@ -25,7 +25,7 @@ export const VoicePresetPicker: React.FC<VoicePresetPickerProps> = ({
         <button
           type="button"
           onClick={onManage}
-          className="mt-4 rounded-xl bg-lilac px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn transition-all duration-150 hover:-translate-y-px hover:brightness-105 active:translate-y-0 active:shadow-none"
+          className="mt-4 rounded-xl bg-lilac px-4 py-2.5 font-body text-[12px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 active:translate-y-0 active:shadow-none"
         >
           前往音色库
         </button>
@@ -53,7 +53,7 @@ export const VoicePresetPicker: React.FC<VoicePresetPickerProps> = ({
           return (
             <section
               key={preset.id}
-              className={`rounded-card border p-4 transition-all duration-150 ${
+              className={`rounded-card border p-4 ui-transition duration-fast ${
                 isSelected
                   ? 'border-ink/20 bg-lemon/20 shadow-card'
                   : 'border-card-border bg-white/65 hover:border-ink/15 hover:bg-white/85'
@@ -61,13 +61,13 @@ export const VoicePresetPicker: React.FC<VoicePresetPickerProps> = ({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <span className={`inline-flex rounded-full px-2 py-0.5 font-body text-[10px] text-ink ${preset.type === 'design' ? 'bg-lilac/35' : 'bg-blush/45'}`}>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 font-body text-[11px] text-ink ${preset.type === 'design' ? 'bg-lilac/35' : 'bg-blush/45'}`}>
                     {preset.type === 'design' ? '设计' : '克隆'}
                   </span>
                   <h4 className="mt-2 truncate font-display text-[18px] font-medium text-ink">{preset.name}</h4>
                 </div>
                 {isSelected && (
-                  <span className="rounded-full bg-sage/35 px-2 py-1 font-body text-[9px] uppercase tracking-wider text-ink">当前</span>
+                  <span className="rounded-full bg-sage/35 px-2 py-1 font-body text-[11px] uppercase tracking-wider text-ink">当前</span>
                 )}
               </div>
               <p className="mt-2 line-clamp-3 min-h-14 font-body text-[11px] leading-relaxed text-ink-soft/70">{description}</p>
@@ -79,7 +79,7 @@ export const VoicePresetPicker: React.FC<VoicePresetPickerProps> = ({
               <button
                 type="button"
                 onClick={() => onSelect(preset)}
-                className={`mt-3 w-full rounded-xl px-3 py-2 font-body text-[11px] font-medium transition-all duration-150 ${
+                className={`mt-3 w-full rounded-xl px-3 py-2 font-body text-[11px] font-medium ui-transition duration-fast ${
                   isSelected
                     ? 'bg-sage/45 text-ink'
                     : 'bg-white/70 text-ink-soft shadow-btn hover:bg-lemon/35 hover:text-ink'

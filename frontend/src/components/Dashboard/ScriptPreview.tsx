@@ -62,17 +62,17 @@ export const ScriptPreview: React.FC = () => {
   const estimatedDuration = Math.ceil(wordCount / 4);
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}>
+    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border">
       {/* 标题 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full bg-pink transition-transform duration-300 ${showSaved ? 'animate-scale-bounce' : ''}`} />
+          <span className={`w-2 h-2 rounded-full bg-pink transition-transform duration-slow ${showSaved ? 'animate-scale-bounce' : ''}`} />
           <h3 className="font-display italic text-[14px] font-medium text-ink-soft">口播稿预览</h3>
         </div>
         <div className="flex items-center gap-2">
           {!isEditing && script && (
             <>
-              <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
+              <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">
                 {wordCount} 字 · ≈ {estimatedDuration} 秒
               </span>
               <button
@@ -107,7 +107,7 @@ export const ScriptPreview: React.FC = () => {
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 font-body text-[12px] bg-sage hover:brightness-105 text-ink rounded-xl shadow-btn transition-all duration-150"
+              className="px-4 py-2 font-body text-[12px] bg-sage hover:brightness-105 text-ink rounded-xl shadow-btn ui-transition duration-fast"
             >
               保存
             </button>

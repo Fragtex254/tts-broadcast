@@ -63,7 +63,7 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
           onClick={() => onContentModeChange('standard')}
           disabled={isDisabled}
           aria-pressed={contentMode === 'standard'}
-          className={`rounded-2xl border p-3 text-left transition-all duration-150 disabled:opacity-40 ${
+          className={`rounded-2xl border p-3 text-left ui-transition duration-fast disabled:opacity-40 ${
             contentMode === 'standard' ? 'border-lilac/60 bg-lilac/20' : 'border-card-border bg-white/55 hover:bg-white/75'
           }`}
         >
@@ -75,7 +75,7 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
           onClick={() => onContentModeChange('podcast')}
           disabled={isDisabled}
           aria-pressed={contentMode === 'podcast'}
-          className={`rounded-2xl border p-3 text-left transition-all duration-150 disabled:opacity-40 ${
+          className={`rounded-2xl border p-3 text-left ui-transition duration-fast disabled:opacity-40 ${
             contentMode === 'podcast' ? 'border-lemon/60 bg-lemon/20' : 'border-card-border bg-white/55 hover:bg-white/75'
           }`}
         >
@@ -162,7 +162,7 @@ export const TranscribeProviderControls: React.FC<TranscribeProviderControlsProp
                 type="button"
                 onClick={onRefreshMossModels}
                 disabled={isDisabled || isFetchingMossModels || !wslBaseUrl}
-                className="px-3.5 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn font-body text-[12px] transition-all duration-150 whitespace-nowrap"
+                className="px-3.5 py-2.5 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn font-body text-[12px] ui-transition duration-fast whitespace-nowrap"
               >
                 {isFetchingMossModels ? '获取中...' : '刷新模型'}
               </button>

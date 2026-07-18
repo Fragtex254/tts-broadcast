@@ -26,7 +26,7 @@ export const TranscriptionStatsCenter: React.FC<TranscriptionStatsCenterProps> =
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blush" />
           <h3 className="font-display italic text-[14px] font-medium text-ink-soft">转录统计中心</h3>
-          <span className="px-2 py-1 rounded-full bg-white/70 border border-card-border font-body text-[10px] text-ink-soft">
+          <span className="px-2 py-1 rounded-full bg-white/70 border border-card-border font-body text-[11px] text-ink-soft">
             {formatInteger(stats.total_count)} 条记录
           </span>
         </div>
@@ -34,7 +34,7 @@ export const TranscriptionStatsCenter: React.FC<TranscriptionStatsCenterProps> =
           type="button"
           onClick={onRefresh}
           disabled={isLoading}
-          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
+          className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border ui-transition duration-fast"
         >
           {isLoading ? '刷新中...' : '刷新'}
         </button>
@@ -42,7 +42,7 @@ export const TranscriptionStatsCenter: React.FC<TranscriptionStatsCenterProps> =
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {items.map((item) => (
           <div key={item.label} className="bg-white/65 rounded-2xl border border-card-border p-3 min-h-20">
-            <p className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 mb-2">
+            <p className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-2">
               {item.label}
             </p>
             <p className="font-display italic text-[20px] leading-tight text-ink break-words">

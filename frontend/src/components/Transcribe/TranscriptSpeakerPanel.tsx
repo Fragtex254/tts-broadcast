@@ -39,7 +39,7 @@ export const TranscriptSpeakerPanel: React.FC<TranscriptSpeakerPanelProps> = ({ 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {speakers.map((speaker) => (
           <div key={speaker.id} className="rounded-2xl border border-card-border bg-white/60 p-3">
-            <label className="font-body text-[10px] uppercase tracking-wider text-ink-soft/55" htmlFor={`speaker-${speaker.id}`}>
+            <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/55" htmlFor={`speaker-${speaker.id}`}>
               {speaker.speaker_key}
             </label>
             <div className="mt-1.5 flex gap-2">
@@ -54,7 +54,7 @@ export const TranscriptSpeakerPanel: React.FC<TranscriptSpeakerPanelProps> = ({ 
                 type="button"
                 onClick={() => void handleSave(speaker)}
                 disabled={savingId === speaker.id || (drafts[speaker.id] ?? speaker.display_name).trim() === speaker.display_name}
-                className="rounded-xl bg-sage px-3 py-2 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40"
+                className="rounded-xl bg-sage px-3 py-2 font-body text-[11px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 disabled:opacity-40"
               >
                 {savingId === speaker.id ? '保存中' : '保存'}
               </button>

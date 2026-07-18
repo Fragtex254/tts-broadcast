@@ -236,7 +236,7 @@ const DropSlot: React.FC<DropSlotProps> = ({ position, isSelected, onDropSnippet
         setIsOver(false);
         if (snippet) onDropSnippet(snippet, position);
       }}
-      className={`h-8 w-2 shrink-0 rounded-full border transition-all duration-150 ${
+      className={`h-8 w-2 shrink-0 rounded-full border ui-transition duration-fast ${
         isOver || isSelected
           ? 'w-7 border-lilac/50 bg-lilac/60'
           : 'border-transparent bg-ink/5 hover:w-5 hover:border-card-border hover:bg-white/70'
@@ -324,7 +324,7 @@ export const AudioTagTextEditor: React.FC<AudioTagTextEditorProps> = ({
             draggable
             onDragStart={(event) => handleDragStart(event, tag)}
             onClick={() => insertTag(tag)}
-            className={`rounded-full px-3 py-1.5 font-body text-[12px] text-ink transition-all duration-150 hover:-translate-y-px hover:brightness-105 ${
+            className={`rounded-full px-3 py-1.5 font-body text-[12px] text-ink ui-transition duration-fast hover:brightness-105 ${
               group.kind === 'style' ? 'bg-sage/45' : 'bg-lilac/55'
             }`}
           >
@@ -410,7 +410,7 @@ export const AudioTagTextEditor: React.FC<AudioTagTextEditorProps> = ({
                 type="button"
                 onClick={handleSuggest}
                 disabled={isSuggesting}
-                className="rounded-xl bg-lilac px-4 py-2 font-body text-[13px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40"
+                className="rounded-xl bg-lilac px-4 py-2 font-body text-[13px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 disabled:opacity-40"
               >
                 {isSuggesting ? '处理中...' : 'AI 自动优化'}
               </button>
@@ -418,7 +418,7 @@ export const AudioTagTextEditor: React.FC<AudioTagTextEditorProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl bg-sage px-4 py-2 font-body text-[13px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105"
+              className="rounded-xl bg-sage px-4 py-2 font-body text-[13px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105"
             >
               完成
             </button>

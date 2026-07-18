@@ -181,7 +181,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
         <button
           onClick={handleTrial}
           disabled={isTrialLoading || !voiceClone}
-          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-2xl px-4 py-3 shadow-btn transition-all duration-150 flex items-center justify-center gap-2"
+          className="flex-1 bg-lilac hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-2xl px-4 py-3 shadow-btn ui-transition duration-fast flex items-center justify-center gap-2"
         >
           {isTrialLoading ? (
             <>
@@ -198,7 +198,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
           onClick={() => setShowSaveDialog(true)}
           disabled={!canSave}
           title={presets.length >= 20 ? '预设已满（上限 20）' : !trialAudioUrl ? '请先试听' : '保存预设'}
-          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-2xl px-5 py-3 shadow-btn transition-all duration-150"
+          className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-2xl px-5 py-3 shadow-btn ui-transition duration-fast"
         >
           保存预设
         </button>
@@ -240,7 +240,7 @@ export const CloneTrialPanel: React.FC<CloneTrialPanelProps> = ({
             <button
               onClick={handleSave}
               disabled={isSaving || !presetName.trim()}
-              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-xl px-4 py-2.5 shadow-btn transition-all duration-150"
+              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink font-body font-medium text-[14px] rounded-xl px-4 py-2.5 shadow-btn ui-transition duration-fast"
             >
               {isSaving ? '保存中...' : '保存'}
             </button>

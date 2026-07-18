@@ -1,6 +1,6 @@
 ---
 name: frontend-component
-description: 新增或修改 React 组件、页面时使用。涵盖组件文件组织顺序、单一职责拆分（超300行）、props 下传 events 上抛、不在组件内直接调 API、具名+默认双导出、interface {Name}Props、入场动画交错延迟、加载骨架屏（不用 spinner）、错误 animate-shake、空状态、路由懒加载、TypeScript 严格规则、命名规范、错误边界、无障碍、lint/build/test。触发场景：加组件、加页面、改组件、新 tsx、卡片、按钮交互、骨架屏、错误状态、加路由、ErrorBoundary。
+description: 新增或修改 React 组件、页面时使用。涵盖组件文件组织顺序、单一职责拆分（超300行）、props 下传 events 上抛、不在组件内直接调 API、具名+默认双导出、interface {Name}Props、加载骨架屏（不用 spinner）、错误与空状态、路由懒加载、TypeScript 严格规则、命名规范、错误边界、无障碍、lint/build/test。触发场景：加组件、加页面、改组件、新 tsx、卡片、按钮交互、骨架屏、错误状态、加路由、ErrorBoundary。
 ---
 
 # 前端组件与页面开发
@@ -13,7 +13,7 @@ description: 新增或修改 React 组件、页面时使用。涵盖组件文件
 
 ## 核心铁则
 
-1. 卡片基类固定：`bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border`。
+1. 设计规则以根目录 `DESIGN.md` 为准；主要卡片、次级内容区与列表行必须使用不同层级，不再给所有区域套同一张白卡。
 2. 加载用骨架屏（`animate-pulse` + `bg-ink/5`），**不用 spinner**；错误用 `animate-shake` + `bg-pink/10`；空状态用斜体衬线。
 3. 组件单一职责，超 **300 行**考虑拆分；props 下传、events 上抛；**不在组件内直接调 API**（走 store action）。
 4. 同时提供 `export const` 具名导出和 `export default`；props 用 `interface {Component}Props`。
@@ -80,23 +80,12 @@ export default MyComponent;
    export default MyComponent;
    ```
 
-### 入场动画
+### 动效边界
 
-每个卡片/区块使用 `style` 内联动画实现交错入场：
-
-```tsx
-<div
-  className="bg-white/[0.55] backdrop-blur-sm rounded-card ..."
-  style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
->
-```
-
-**延迟分配：**
-- 第 1 个卡片：`0s` 或不设置
-- 第 2 个卡片：`0.04s`
-- 第 3 个卡片：`0.08s`
-- 第 4 个卡片：`0.12s`
-- 列表项 stagger：`index * 0.03s` ~ `index * 0.05s`
+- Header、Sidebar、筛选、列表和高频卡片静态呈现，不做路由入场或长列表 stagger。
+- Modal、Popover 和显著状态切换才使用短促动效，常规时长不超过 300ms。
+- 禁止 `transition-all`，只声明实际变化的颜色、边框、透明度、transform 或 width。
+- 按钮使用即时按压反馈，不使用 hover 浮起；reduced-motion 下移除位移和缩放。
 
 ### 加载状态
 
@@ -275,9 +264,9 @@ npm run test
 - [ ] `App.tsx` — 非首屏页面用 `React.lazy()` 添加 `<Route path="/new" element={<NewPage />} />`
 - [ ] `Sidebar.tsx` — 在 `navItems` 添加导航项
 - [ ] 确认 `NotFound` 兜底路由仍保留
-- [ ] 使用 `bg-white/[0.55] backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border` 作为卡片基类
-- [ ] 卡片标题使用 `font-display italic` + 色点
-- [ ] 添加入场动画 `style={{ animation: 'fade-in-up ...' }}`
+- [ ] 卡片层级遵循根目录 `DESIGN.md`，主要区块、次级内容和列表行有清楚差异
+- [ ] 页面与区块标题使用对应 `ui-page-title` / `ui-section-title` 语义角色；色点只在表达内容类型时使用
+- [ ] 高频组件没有无必要的入场动画，动效遵循 `DESIGN.md`
 - [ ] 加载状态使用骨架屏，错误状态使用 `animate-shake`
 - [ ] 按钮使用语义色（lemon/sage/lilac/pink）
 - [ ] 二级界面使用 `ModalShell`，未手写固定遮罩/对话框基础逻辑

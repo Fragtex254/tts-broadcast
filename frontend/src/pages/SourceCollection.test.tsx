@@ -4,16 +4,18 @@ import { describe, expect, test } from 'vitest';
 import { SourceCollection } from './SourceCollection';
 
 describe('SourceCollection', () => {
-  test('点击 AI 今日资讯入口会打开明确的采集任务界面', () => {
+  test('只挂载一份资讯采集任务，并在点击入口后把焦点交给筛选器', () => {
     render(
       <MemoryRouter>
         <SourceCollection />
       </MemoryRouter>
     );
 
-    expect(screen.queryByRole('dialog', { name: 'AI 今日资讯' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /AI 今日资讯/ }));
+    const filters = screen.getAllByRole('combobox');
+    expect(filters).toHaveLength(2);
 
-    expect(screen.getByRole('dialog', { name: 'AI 今日资讯' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /采集资讯并写成稿/ }));
+
+    expect(document.activeElement).toBe(filters[0]);
   });
 });

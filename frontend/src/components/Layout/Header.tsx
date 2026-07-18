@@ -8,14 +8,14 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
   return (
-    <header className="px-5 py-5 sm:px-6 border-b border-rule-soft bg-paper/75 animate-fade-in-up">
+    <header className="border-b border-rule-soft bg-paper/90 px-5 py-4 sm:px-6 sm:py-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-display text-[30px] sm:text-[32px] font-medium text-ink leading-[0.95] tracking-tight">
+          <h2 className="ui-page-title">
             {title}
           </h2>
           {subtitle && (
-            <p className="font-body text-[11px] uppercase tracking-[0.1em] text-ink-soft mt-1.5 max-w-[18rem] sm:max-w-none">
+            <p className="ui-body mt-1 max-w-[34rem] text-ink-soft/75">
               {subtitle}
             </p>
           )}

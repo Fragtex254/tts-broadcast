@@ -170,7 +170,7 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
               type="button"
               onClick={handleSave}
               disabled={isSaving || hasInvalidDraft}
-              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+              className="bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider ui-transition duration-fast"
             >
               {isSaving ? '保存中...' : '保存整理'}
             </button>
@@ -188,7 +188,7 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
                   className={`bg-white/80 backdrop-blur-sm rounded-card border p-4 transition-colors ${
                     isTooLong ? 'border-pink/40 bg-pink/5' : 'border-card-border'
                   }`}
-                  style={{ animation: `fade-in-up 0.25s cubic-bezier(0.22, 1, 0.36, 1) ${index * 0.02}s both` }}
+
                 >
                   <div className="flex items-start gap-3">
                     <span className="font-display italic text-[18px] font-medium text-lilac min-w-[28px]">
@@ -249,7 +249,7 @@ export const SegmentRefineModal: React.FC<SegmentRefineModalProps> = ({
                       >
                         拆分
                       </button>
-                      <span className={`block text-right font-body text-[10px] ${isTooLong ? 'text-pink' : 'text-ink-soft/70'}`}>
+                      <span className={`block text-right font-body text-[11px] ${isTooLong ? 'text-pink' : 'text-ink-soft/70'}`}>
                         {textLength}/{MAX_SEGMENT_TEXT_LENGTH}
                       </span>
                     </div>

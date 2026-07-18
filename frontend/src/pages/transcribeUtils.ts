@@ -47,9 +47,9 @@ export const BATCH_STATUS_DOTS: Record<BatchTranscriptionItem['status'], string>
   failed: 'bg-pink',
 };
 
-export const ACTION_BUTTON_NEUTRAL = 'px-3.5 py-2 font-body text-[12px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150';
-export const ACTION_BUTTON_FORMAT = 'px-3.5 py-2 font-body text-[12px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150';
-export const ACTION_BUTTON_IMPORT = 'px-3.5 py-2 font-body text-[12px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150';
+export const ACTION_BUTTON_NEUTRAL = 'px-3.5 py-2 font-body text-[12px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border ui-transition duration-fast';
+export const ACTION_BUTTON_FORMAT = 'px-3.5 py-2 font-body text-[12px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn ui-transition duration-fast';
+export const ACTION_BUTTON_IMPORT = 'px-3.5 py-2 font-body text-[12px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn ui-transition duration-fast';
 
 interface ApiErrorLike {
   response?: {

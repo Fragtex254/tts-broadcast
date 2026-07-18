@@ -8,6 +8,7 @@
 - `.claude/skills/` 是项目级规范来源，不只给 Claude Code 使用；不支持 Skill 工具的 agent 直接读取 `SKILL.md`。
 - 项目事实、技术栈、目录、数据库、外部 API 与持久化背景见 `docs/project-facts.md`。
 - 后端背景规范见 `backend/BACKEND_CONVENTIONS.md`，前端背景规范见 `frontend/FRONTEND_CONVENTIONS.md`。
+- 前端产品设计、排版层级、组件状态、动效、响应式与可访问性规范统一以根目录 `DESIGN.md` 为准；项目级前端 skill 必须与其保持一致。
 
 ## Skill Routing
 

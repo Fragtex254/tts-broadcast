@@ -46,7 +46,7 @@ const RecentPresetPanel: React.FC<RecentPresetPanelProps> = ({ onOpenSaved }) =>
             <button
               key={preset.id}
               onClick={onOpenSaved}
-              className="w-full text-left bg-white/60 hover:bg-white/85 border border-card-border hover:border-ink/15 rounded-card p-4 transition-all duration-150"
+              className="ui-pressable w-full rounded-card border border-card-border bg-white/60 p-4 text-left hover:border-ink/15 hover:bg-white/85"
             >
               <div className="flex items-center gap-2 mb-2">
                 <span className={`px-2.5 py-1 rounded-full font-body text-[12px] text-ink ${preset.type === 'design' ? 'bg-lilac/45' : 'bg-blush/55'}`}>
@@ -92,15 +92,12 @@ export const VoicePresets: React.FC = () => {
   }, [fetchPresets]);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <Header title="音色库" subtitle="创建、试听并管理可复用音色" />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto space-y-5">
-          <div
-            className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-            style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both' }}
-          >
+          <div className="rounded-card border border-card-border bg-white/80 p-5 shadow-card">
             <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blush" />
@@ -111,7 +108,7 @@ export const VoicePresets: React.FC = () => {
                   <button
                     key={tab.value}
                     onClick={() => setActiveTab(tab.value)}
-                    className={`min-w-24 px-4 py-2.5 rounded-xl font-body text-[14px] font-medium transition-all duration-150 ${
+                    className={`ui-pressable min-w-24 rounded-xl px-4 py-2.5 font-body text-[13px] font-medium ${
                       activeTab === tab.value
                         ? 'bg-white text-ink shadow-card border border-card-border'
                         : 'text-ink-soft hover:text-ink hover:bg-white/50'

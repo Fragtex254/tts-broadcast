@@ -52,13 +52,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   if (!audioUrl) {
     return (
-      <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
+      <div className="rounded-card border border-card-border bg-white/80 p-5 shadow-card">
         <div className="flex items-center gap-2 mb-3">
           <span className="w-2 h-2 rounded-full bg-sage" />
           <h3 className="font-display italic text-[14px] font-medium text-ink-soft">播放器</h3>
         </div>
         <div className="bg-white/40 rounded-2xl p-8 flex items-center justify-center border border-card-border">
-          <p className="font-body text-[12px] text-ink-soft/70 animate-fade-in">
+          <p className="font-body text-[12px] text-ink-soft/70">
             {mode === 'segmented' ? '请先合并所有句子音频' : '生成语音后在此播放'}
           </p>
         </div>
@@ -67,7 +67,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   }
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border" style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both' }}>
+    <div className="rounded-card border border-card-border bg-white/80 p-5 shadow-card">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-sage" />

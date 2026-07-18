@@ -470,7 +470,7 @@ export const Transcribe: React.FC = () => {
             <>
               <section
                 className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both' }}
+
               >
                 <div className="flex items-center gap-2 mb-4">
                   <span className="w-2 h-2 rounded-full bg-lilac" />
@@ -532,7 +532,7 @@ export const Transcribe: React.FC = () => {
                   <button
                     onClick={handleSubmit}
                     disabled={isTranscribing || isMossModelMissing || isPodcastUnavailable}
-                    className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+                    className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider ui-transition duration-fast"
                   >
                     {isTranscribing && (
                       <span className="absolute left-0 top-0 h-full w-2/3 bg-white/20 animate-pulse" />
@@ -564,7 +564,7 @@ export const Transcribe: React.FC = () => {
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-white/70 border border-card-border">
                       <div
-                        className="h-full rounded-full bg-lilac transition-all duration-300"
+                        className="h-full rounded-full bg-lilac transition-[width] duration-normal"
                         style={{ width: `${Math.min(Math.max(transcribeProgress.percent, 0), 100)}%` }}
                       />
                     </div>
@@ -594,7 +594,7 @@ export const Transcribe: React.FC = () => {
             <>
               <section
                 className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both' }}
+
               >
                 <div className="flex items-center gap-2 mb-4">
                   <span className="w-2 h-2 rounded-full bg-lilac" />
@@ -659,7 +659,7 @@ export const Transcribe: React.FC = () => {
                   <button
                     onClick={handleBatchSubmit}
                     disabled={isBatchTranscribing || selectedIndexes.size === 0 || isMossModelMissing || isPodcastUnavailable}
-                    className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider transition-all duration-150"
+                    className="relative overflow-hidden bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-full px-5 py-2.5 shadow-btn font-body text-[12px] font-medium uppercase tracking-wider ui-transition duration-fast"
                   >
                     {isBatchTranscribing && (
                       <span className="absolute left-0 top-0 h-full w-2/3 bg-white/20 animate-pulse" />
@@ -695,7 +695,7 @@ export const Transcribe: React.FC = () => {
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-white/70 border border-card-border">
                       <div
-                        className="h-full rounded-full bg-lilac transition-all duration-300"
+                        className="h-full rounded-full bg-lilac transition-[width] duration-normal"
                         style={{ width: `${Math.min(Math.max(batchTranscribeProgress.percent, 0), 100)}%` }}
                       />
                     </div>
@@ -712,7 +712,7 @@ export const Transcribe: React.FC = () => {
               {showBatchItems ? (
                 <section
                   className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                  style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
+
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -723,14 +723,14 @@ export const Transcribe: React.FC = () => {
                       <button
                         onClick={handleDownloadAll}
                         disabled={completedCount === 0 || isBatchTranscribing || isZipping}
-                        className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/60 hover:bg-white/80 disabled:opacity-40 rounded-xl border border-card-border transition-all duration-150"
+                        className="px-3 py-1.5 font-body text-[11px] text-ink-soft hover:text-ink bg-white/60 hover:bg-white/80 disabled:opacity-40 rounded-xl border border-card-border ui-transition duration-fast"
                       >
                         {isZipping ? '打包中...' : `下载压缩包（${completedCount}）`}
                       </button>
                       <button
                         onClick={handleMergeAll}
                         disabled={completedCount === 0 || isBatchTranscribing}
-                        className="px-3 py-1.5 font-body text-[11px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn transition-all duration-150"
+                        className="px-3 py-1.5 font-body text-[11px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn ui-transition duration-fast"
                       >
                         合并全部导入（{completedCount}）
                       </button>
@@ -745,7 +745,7 @@ export const Transcribe: React.FC = () => {
                           <p className="font-body text-[12px] text-ink truncate flex-1" title={item.relativePath}>
                             {item.relativePath}
                           </p>
-                          <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70 shrink-0">
+                          <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 shrink-0">
                             {BATCH_STATUS_LABELS[item.status]}
                           </span>
                         </div>
@@ -761,7 +761,7 @@ export const Transcribe: React.FC = () => {
                             ) : (
                               <div className="flex h-full flex-col items-center justify-center text-center">
                                 <p className="font-display italic text-[13px] text-ink-soft/45">等待首个音频片段完成</p>
-                                <p className="mt-1 font-body text-[9px] text-ink-soft/35">当前区域只读，完成的分片会自动追加。</p>
+                                <p className="mt-1 font-body text-[11px] text-ink-soft/35">当前区域只读，完成的分片会自动追加。</p>
                               </div>
                             )}
                           </div>
@@ -769,7 +769,7 @@ export const Transcribe: React.FC = () => {
 
                         {item.status === 'completed' && item.text && (
                           <div className="flex items-center justify-between mt-2">
-                            <span className="font-body text-[10px] uppercase tracking-wider text-ink-soft/70">
+                            <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">
                               {item.text.length} 字
                             </span>
                             <div className="flex gap-2">
@@ -809,7 +809,7 @@ export const Transcribe: React.FC = () => {
                 batchFiles.length > 0 && (
                   <section
                     className="bg-white/80 backdrop-blur-sm rounded-card p-5 shadow-card border border-card-border"
-                    style={{ animation: 'fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both' }}
+
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
@@ -872,7 +872,7 @@ export const Transcribe: React.FC = () => {
                             <p className={`font-body text-[11px] truncate flex-1 ${isSelected ? 'text-ink' : 'text-ink-soft/60'}`} title={getRelativePath(f)}>
                               {getRelativePath(f)}
                             </p>
-                            <span className="font-body text-[10px] text-ink-soft/70 shrink-0">
+                            <span className="font-body text-[11px] text-ink-soft/70 shrink-0">
                               {formatBytes(f.size)}
                             </span>
                             <button

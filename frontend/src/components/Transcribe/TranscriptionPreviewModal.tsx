@@ -53,11 +53,11 @@ export const TranscriptionPreviewModal: React.FC<TranscriptionPreviewModalProps>
           <button type="button" onClick={onCopy} disabled={!text.trim()} className="inline-flex items-center gap-1.5 px-4 py-2 font-body text-[11px] text-ink-soft transition-colors hover:text-ink disabled:opacity-40">
             <Copy aria-hidden="true" size={13} />{isCopied ? '已复制' : '复制'}
           </button>
-          <button type="button" onClick={onDownload} disabled={!text.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-sage px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40">
+          <button type="button" onClick={onDownload} disabled={!text.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-sage px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 disabled:opacity-40">
             <DownloadSimple aria-hidden="true" size={13} />下载 TXT
           </button>
           {onImport && (
-            <button type="button" onClick={onImport} disabled={!text.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-lemon px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn transition-all duration-150 hover:brightness-105 disabled:opacity-40">
+            <button type="button" onClick={onImport} disabled={!text.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-lemon px-4 py-2.5 font-body text-[11px] font-medium text-ink shadow-btn ui-transition duration-fast hover:brightness-105 disabled:opacity-40">
               导入稿件<ArrowRight aria-hidden="true" size={13} />
             </button>
           )}
@@ -73,7 +73,7 @@ export const TranscriptionPreviewModal: React.FC<TranscriptionPreviewModalProps>
           <div className="mx-auto max-w-3xl space-y-3">
             {chunks.length > 0 ? chunks.map((chunk) => (
               <article key={chunk.index} className="grid gap-2 rounded-2xl border border-card-border bg-white/60 p-4 sm:grid-cols-[88px_minmax(0,1fr)]">
-                <span className="font-body text-[10px] tabular-nums text-ink-soft/50">片段 {chunk.index}</span>
+                <span className="font-body text-[11px] tabular-nums text-ink-soft/50">片段 {chunk.index}</span>
                 <p className="whitespace-pre-wrap font-body text-[14px] leading-[1.9] text-ink-soft/90">{chunk.text}</p>
               </article>
             )) : text.trim() ? (
