@@ -91,9 +91,15 @@ cd ../frontend && npm install
 ```env
 PORT=3001
 NODE_ENV=development
+HOST=127.0.0.1
+# CORS_ORIGINS=https://studio.example
 ```
 
 模型、API Key、Base URL 和提示词可在应用的「设置」中配置，并持久化到本地 SQLite。
+
+后端默认只监听 `127.0.0.1`，浏览器跨域白名单默认仅包含 `http://localhost:5173` 与 `http://127.0.0.1:5173`。`CORS_ORIGINS` 接受逗号分隔的附加来源，不会替换这两个本机来源。
+
+如确需从局域网访问，可显式设置 `HOST=0.0.0.0`，并把实际前端地址（例如 `http://192.168.1.20:5173`）加入 `CORS_ORIGINS`。本项目当前没有账号与鉴权边界；只应在可信局域网和受控防火墙内这样运行，禁止把服务端口直接暴露到公网。
 
 ### 启动
 

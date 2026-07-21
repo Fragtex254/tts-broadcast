@@ -7,19 +7,39 @@ const { audioDir, assetDir } = require('./utils/validation');
 const app = express();
 const logger = createScopedLogger('app');
 const PORT = process.env.PORT || 3001;
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const HOST = process.env.HOST || '127.0.0.1';
+
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
+function getAllowedCorsOrigins(value = process.env.CORS_ORIGINS) {
+  const configuredOrigins = typeof value === 'string'
+    ? value.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : [];
+  return new Set([...DEFAULT_CORS_ORIGINS, ...configuredOrigins]);
+}
 
 // CORS 配置
+const allowedCorsOrigins = getAllowedCorsOrigins();
 const corsOptions = {
-  origin: NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL || 'http://localhost:5173'  // 生产环境限制来源
-    : true,  // 开发环境允许所有来源
+  origin(origin, callback) {
+    callback(null, !origin || allowedCorsOrigins.has(origin));
+  },
   credentials: true,
 };
 
 const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || '20mb';
 
 // 中间件
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  if (origin && !allowedCorsOrigins.has(origin)) {
+    return res.status(403).json({ error: '不允许的跨域来源' });
+  }
+  next();
+});
 app.use(cors(corsOptions));
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
@@ -65,8 +85,8 @@ function start() {
   const scheduler = require('./services/scheduler');
   scheduler.init();
 
-  return app.listen(PORT, () => {
-    logger.info({ port: PORT }, `服务器运行在 http://localhost:${PORT}`);
+  return app.listen(PORT, HOST, () => {
+    logger.info({ host: HOST, port: PORT }, `服务器运行在 http://${HOST}:${PORT}`);
   });
 }
 
@@ -76,3 +96,4 @@ if (require.main === module) {
 
 module.exports = app;
 module.exports.start = start;
+module.exports.getAllowedCorsOrigins = getAllowedCorsOrigins;
