@@ -37,7 +37,16 @@ export function useVirtualTranscriptTurns({ isEnabled, turnIds, pinnedTurnId }: 
     () => getVisibleTranscriptVirtualItems(layout, scrollTop, viewportHeight, 0, null),
     [layout, scrollTop, viewportHeight],
   );
+  const visibleStartIndex = viewportItems.length > 0 ? viewportItems[0].index : 0;
   const visibleEndIndex = viewportItems.length > 0 ? viewportItems[viewportItems.length - 1].index : 0;
+  const viewportCenter = scrollTop + viewportHeight / 2;
+  const visibleFocusIndex = viewportItems.length === 0
+    ? 0
+    : viewportItems.reduce((closest, item) => {
+      const closestDistance = Math.abs(closest.start + closest.size / 2 - viewportCenter);
+      const itemDistance = Math.abs(item.start + item.size / 2 - viewportCenter);
+      return itemDistance < closestDistance ? item : closest;
+    }).index;
   const progressPercent = layout.items.length === 0
     ? 0
     : Math.min(100, Math.round(((visibleEndIndex + 1) / layout.items.length) * 100));
@@ -110,7 +119,9 @@ export function useVirtualTranscriptTurns({ isEnabled, turnIds, pinnedTurnId }: 
     scrollContainerRef,
     scrollToIndex,
     virtualItems,
+    visibleStartIndex,
     visibleEndIndex,
+    visibleFocusIndex,
     progressPercent,
   };
 }

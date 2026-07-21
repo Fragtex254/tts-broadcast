@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 import type { TranscriptSpeaker, TranscriptTurn } from '../../store';
 import { TranscriptTurnList } from './TranscriptTurnList';
@@ -78,5 +78,35 @@ describe('TranscriptTurnList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '打开全屏阅读' }));
     expect(onOpenConversation).toHaveBeenCalledTimes(1);
+  });
+
+  test('Bilibili 来源在底部嵌入播放器，并支持双击、键盘与显式按钮定位', () => {
+    const onSeekToVideo = vi.fn();
+    render(
+      <TranscriptTurnList
+        title="测试播客"
+        turns={turns}
+        speakers={speakers}
+        onOpenConversation={vi.fn()}
+        onCorrect={vi.fn().mockResolvedValue(undefined)}
+        bilibiliVideo={{ idType: 'bvid', id: 'BV1B7411m7LV', page: 1, initialSeconds: 0 }}
+        sourceUrl="https://www.bilibili.com/video/BV1B7411m7LV"
+        videoSeekSeconds={12}
+        videoSeekRequestId={1}
+        onSeekToVideo={onSeekToVideo}
+      />,
+    );
+
+    const secondTurn = screen.getByLabelText('发言 2，嘉宾，0:12 到 0:32');
+    fireEvent.doubleClick(secondTurn);
+    fireEvent.keyDown(secondTurn, { key: 'Enter' });
+    fireEvent.click(within(secondTurn).getByRole('button', { name: '播放此处' }));
+
+    expect(onSeekToVideo).toHaveBeenNthCalledWith(1, 12);
+    expect(onSeekToVideo).toHaveBeenNthCalledWith(2, 12);
+    expect(onSeekToVideo).toHaveBeenNthCalledWith(3, 12);
+    const player = screen.getByTitle('Bilibili 原视频，当前定位 0:12');
+    expect(player.getAttribute('src')).toContain('bvid=BV1B7411m7LV');
+    expect(player.getAttribute('src')).toContain('t=12');
   });
 });

@@ -20,7 +20,7 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 sm:gap-3">
           {actions}
         </div>
       </div>

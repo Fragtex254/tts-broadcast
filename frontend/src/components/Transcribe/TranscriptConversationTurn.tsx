@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, PencilSimple } from '@phosphor-icons/react';
+import { Eye, PencilSimple, PlayCircle } from '@phosphor-icons/react';
 import type { TranscriptTurn } from '../../store';
 import { formatTranscriptTime } from '../../pages/transcriptWorkspaceModel';
 import type { TranscriptSpeakerTone } from './transcriptConversationModel';
@@ -23,6 +23,7 @@ interface TranscriptConversationTurnProps {
   onNavigate: (direction: -1 | 1) => void;
   onStartEditing: (turnId: number, value: string) => void;
   onCorrect: (turnId: number, correctedText: string) => Promise<void>;
+  onSeekToVideo?: (seconds: number) => void;
 }
 
 export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProps> = ({
@@ -44,6 +45,7 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
   onNavigate,
   onStartEditing,
   onCorrect,
+  onSeekToVideo,
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +72,10 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
     onActiveChange(turn.id);
   };
 
+  const seekToVideo = () => {
+    onSeekToVideo?.(turn.start_seconds);
+  };
+
   return (
     <article
       id={`conversation-turn-${turn.id}`}
@@ -77,7 +83,7 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
       aria-current={isSearchTarget ? 'true' : undefined}
       aria-posinset={positionInSet}
       aria-setsize={setSize}
-      aria-keyshortcuts="ArrowUp ArrowDown"
+      aria-keyshortcuts={onSeekToVideo ? 'ArrowUp ArrowDown Enter' : 'ArrowUp ArrowDown'}
       aria-label={`发言 ${turn.turn_index + 1}，${speakerName}，${formatTranscriptTime(turn.start_seconds)} 到 ${formatTranscriptTime(turn.end_seconds)}`}
       onMouseEnter={() => onActiveChange(turn.id)}
       onMouseLeave={() => {
@@ -90,8 +96,20 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
         }
       }}
       onClick={() => onActiveChange(turn.id)}
+      onDoubleClick={(event) => {
+        if (!onSeekToVideo || isEditing) return;
+        const target = event.target;
+        if (target instanceof Element && target.closest('button, textarea, input, a, select')) return;
+        event.preventDefault();
+        seekToVideo();
+      }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' && onSeekToVideo && !isEditing) {
+          event.preventDefault();
+          seekToVideo();
+          return;
+        }
         if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
           event.preventDefault();
           onNavigate(event.key === 'ArrowUp' ? -1 : 1);
@@ -151,6 +169,11 @@ export const TranscriptConversationTurn: React.FC<TranscriptConversationTurnProp
                 <button type="button" onClick={startEditing} className="ui-pressable inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-body text-[11px] text-ink-soft underline decoration-card-border underline-offset-4 transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">
                   <PencilSimple aria-hidden="true" size={12} weight="regular" />校对文字
                 </button>
+                {onSeekToVideo && (
+                  <button type="button" onClick={seekToVideo} className="ui-pressable inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-body text-[11px] text-ink-soft underline decoration-card-border underline-offset-4 transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lilac">
+                    <PlayCircle aria-hidden="true" size={13} weight="regular" />播放此处
+                  </button>
+                )}
               </span>
               {turn.corrected_text && <span className="rounded-full bg-sage/35 px-2.5 py-1 font-body text-[11px] text-ink">已校对</span>}
             </div>

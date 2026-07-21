@@ -1,9 +1,11 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CaretDown, CaretUp, Eye, Funnel, MagnifyingGlass } from '@phosphor-icons/react';
-import type { TranscriptSpeaker, TranscriptTurn } from '../../store';
-import { formatTranscriptTime } from '../../pages/transcriptWorkspaceModel';
+import type { TranscriptSpeaker, TranscriptSummaryItem, TranscriptTurn } from '../../store';
 import { ModalShell } from '../ModalShell';
 import { TranscriptConversationTurn } from './TranscriptConversationTurn';
+import { BilibiliTranscriptPlayer } from './BilibiliTranscriptPlayer';
+import type { BilibiliVideoReference } from './bilibiliPlayerModel';
+import { TranscriptContextSidebar } from './TranscriptContextSidebar';
 import {
   createTranscriptSpeakerIndexes,
   filterTranscriptConversationTurns,
@@ -49,6 +51,14 @@ interface TranscriptConversationModalProps {
   onCorrect: (turnId: number, correctedText: string) => Promise<void>;
   initialEvidenceSegmentIndex?: number | null;
   evidenceEndSegmentIndex?: number | null;
+  bilibiliVideo?: BilibiliVideoReference | null;
+  sourceUrl?: string;
+  videoSeekSeconds?: number;
+  videoSeekRequestId?: number;
+  onSeekToVideo?: (seconds: number) => void;
+  playerContainerRef?: React.RefObject<HTMLElement | null>;
+  summaryItems?: TranscriptSummaryItem[];
+  isSummaryStale?: boolean;
 }
 
 interface TranscriptConversationReaderProps extends TranscriptConversationModalProps {
@@ -67,6 +77,14 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
   evidenceEndSegmentIndex = null,
   presentation,
   onOpenFull,
+  bilibiliVideo = null,
+  sourceUrl = '',
+  videoSeekSeconds = 0,
+  videoSeekRequestId = 0,
+  onSeekToVideo,
+  playerContainerRef,
+  summaryItems = [],
+  isSummaryStale = false,
 }) => {
   const requestedEvidenceEnd = evidenceEndSegmentIndex ?? initialEvidenceSegmentIndex;
   const evidenceRangeStart = initialEvidenceSegmentIndex === null || requestedEvidenceEnd === null
@@ -90,6 +108,9 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
   const [editingTurnId, setEditingTurnId] = useState<number | null>(null);
   const [editingDraft, setEditingDraft] = useState('');
   const [closeNotice, setCloseNotice] = useState(false);
+  const [hasWideSidebar, setHasWideSidebar] = useState(() => (
+    typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1536px)').matches
+  ));
   const pendingScrollTurnIdRef = useRef<number | null>(initialTurnId);
   const pendingFocusTurnIdRef = useRef<number | null>(null);
   const speakerNames = useMemo(() => new Map(speakers.map((speaker) => [speaker.speaker_key, speaker.display_name])), [speakers]);
@@ -117,16 +138,31 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
     scrollContainerRef,
     scrollToIndex,
     virtualItems,
+    visibleStartIndex,
     visibleEndIndex,
+    visibleFocusIndex,
   } = useVirtualTranscriptTurns({
     isEnabled: presentation === 'embedded' || isOpen,
     turnIds: displayedTurnIds,
     pinnedTurnId: editingTurnId || activeTurnId || searchTargetTurnId,
   });
   const activeTurn = activeTurnId === null ? null : turns.find((turn) => turn.id === activeTurnId) || null;
+  const activeDisplayedIndex = activeTurnId === null
+    ? -1
+    : displayedTurns.findIndex((turn) => turn.id === activeTurnId);
+  const isActiveTurnVisible = activeDisplayedIndex >= visibleStartIndex && activeDisplayedIndex <= visibleEndIndex;
+  const currentTurn = (isActiveTurnVisible ? activeTurn : null) || displayedTurns[visibleFocusIndex] || null;
   const editingTurn = editingTurnId === null ? null : turns.find((turn) => turn.id === editingTurnId) || null;
-  const activeSpeakerKey = activeTurn?.speaker_key || speakerFilter;
+  const activeSpeakerKey = currentTurn?.speaker_key || speakerFilter;
   const hasQuery = query.trim().length > 0;
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mediaQuery = window.matchMedia('(min-width: 1536px)');
+    const handleChange = (event: MediaQueryListEvent) => setHasWideSidebar(event.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   useLayoutEffect(() => {
     const pendingTurnId = pendingScrollTurnIdRef.current;
@@ -247,7 +283,7 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
   );
 
   const readerContent = (
-      <div className={`grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper lg:grid-cols-[210px_minmax(0,1fr)] lg:grid-rows-1 ${presentation === 'modal' ? 'xl:grid-cols-[210px_minmax(0,1fr)_210px]' : 'xl:grid-cols-[190px_minmax(0,1fr)_180px]'}`}>
+      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper lg:grid-cols-[210px_minmax(0,1fr)] lg:grid-rows-1 2xl:grid-cols-[210px_minmax(0,1fr)_380px]">
         <aside className="border-b border-card-border bg-white/30 p-3.5 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r" aria-label="说话人筛选">
           <label className="relative mb-3 block sm:hidden">
             <span className="sr-only">在逐字稿中搜索</span>
@@ -390,6 +426,7 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
                     onNavigate={(direction) => navigateFromTurn(turn.id, direction)}
                     onStartEditing={(turnId, value) => { setEditingTurnId(turnId); setEditingDraft(value); setCloseNotice(false); }}
                     onCorrect={onCorrect}
+                    onSeekToVideo={onSeekToVideo}
                   />
                 </VirtualTurnRow>
               );
@@ -405,25 +442,17 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
           </div>
         </section>
 
-        <aside className="hidden min-h-0 border-l border-card-border bg-white/30 p-4 xl:block" aria-label="当前定位">
-          <div className="sticky top-0">
-            <h2 className="font-display text-[14px] font-medium text-ink">当前定位</h2>
-            {activeTurn ? (
-              <div data-testid="active-turn-context" className={`mt-3 border-l-2 py-1 pl-3 ${getTranscriptSpeakerTone(speakerIndexes.get(activeTurn.speaker_key) || 0).border}`}>
-                <p className="font-body text-[13px] font-semibold text-ink">{speakerNames.get(activeTurn.speaker_key) || activeTurn.speaker_key}</p>
-                <p className="mt-1 font-body text-[11px] tabular-nums text-ink-soft/70">{formatTranscriptTime(activeTurn.start_seconds)}–{formatTranscriptTime(activeTurn.end_seconds)}</p>
-                <div className="my-3 border-t border-card-border" />
-                <p className="font-body text-[11px] text-ink-soft">发言 {activeTurn.turn_index + 1} / {turns.length}</p>
-                <p className="mt-3 font-body text-[11px] leading-relaxed text-ink-soft/70">可在高亮发言区域筛选该说话人或校对文字。</p>
-              </div>
-            ) : (
-              <div className="mt-3 border-l-2 border-card-border py-1 pl-3">
-                <p className="font-display italic text-[13px] text-ink-soft/60">悬浮或聚焦一段发言</p>
-                <p className="mt-2 font-body text-[11px] leading-relaxed text-ink-soft/65">这里会同步显示说话人、时间和发言序号。</p>
-              </div>
-            )}
-          </div>
-        </aside>
+        <TranscriptContextSidebar
+          currentTurn={currentTurn}
+          totalTurns={turns.length}
+          summaryItems={summaryItems}
+          speakerNames={speakerNames}
+          isSummaryStale={isSummaryStale}
+          bilibiliVideo={hasWideSidebar ? bilibiliVideo : null}
+          sourceUrl={sourceUrl}
+          videoSeekSeconds={videoSeekSeconds}
+          videoSeekRequestId={videoSeekRequestId}
+        />
       </div>
   );
 
@@ -444,6 +473,17 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
         <div className="mt-4 h-[680px] overflow-hidden rounded-2xl border border-card-border bg-paper">
           {readerContent}
         </div>
+        {!hasWideSidebar && bilibiliVideo && sourceUrl && (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-card-border bg-paper">
+            <BilibiliTranscriptPlayer
+              video={bilibiliVideo}
+              sourceUrl={sourceUrl}
+              seekSeconds={videoSeekSeconds}
+              seekRequestId={videoSeekRequestId}
+              containerRef={playerContainerRef}
+            />
+          </div>
+        )}
       </section>
     );
   }
@@ -455,11 +495,21 @@ export const TranscriptConversationReader: React.FC<TranscriptConversationReader
       subtitle={<span className="block max-w-[680px] break-words leading-relaxed">{title} · {speakers.length} 位说话人 · {turns.length} 个发言轮次</span>}
       onClose={handleClose}
       headerActions={searchInput}
+      footer={!hasWideSidebar && bilibiliVideo && sourceUrl ? (
+        <BilibiliTranscriptPlayer
+          video={bilibiliVideo}
+          sourceUrl={sourceUrl}
+          seekSeconds={videoSeekSeconds}
+          seekRequestId={videoSeekRequestId}
+          variant="compact"
+        />
+      ) : undefined}
       size="xl"
       accent="lilac"
       contentClassName="overflow-hidden p-0"
+      footerClassName="p-3 sm:p-4"
       panelClassName="h-[calc(100vh-3rem)]"
-      panelStyle={{ maxWidth: '1320px' }}
+      panelStyle={{ maxWidth: '1760px' }}
       closeOnBackdrop={false}
       ariaLabel="逐字稿阅读"
     >

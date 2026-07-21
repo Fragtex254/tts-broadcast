@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import type { TranscriptSpeaker, TranscriptTurn } from '../../store';
+import type { TranscriptSpeaker, TranscriptSummaryItem, TranscriptTurn } from '../../store';
 import {
   createTranscriptSpeakerIndexes,
+  findTranscriptViewpointsForTurn,
   filterTranscriptConversationTurns,
   getTranscriptSpeakerInitial,
   getTranscriptSpeakerTone,
@@ -34,6 +35,25 @@ describe('逐字稿对话视图模型', () => {
     expect(filterTranscriptConversationTurns(turns, names, 'learn', null).map((turn) => turn.id)).toEqual([2]);
     expect(filterTranscriptConversationTurns(turns, names, '', 'a').map((turn) => turn.id)).toEqual([1]);
     expect(filterTranscriptConversationTurns(turns, names, 'Zara', 'b').map((turn) => turn.id)).toEqual([2]);
+  });
+
+  test('只把时间范围与当前语块相交的 AI 人物观点放进跟随栏', () => {
+    const summaryItems: TranscriptSummaryItem[] = [
+      {
+        id: 11, transcription_id: 2, item_type: 'speaker_viewpoint', sort_order: 1,
+        speaker_key: 'b', title: '行动优先', content: '先行动再学习。', evidence_start_index: 1,
+        evidence_end_index: 1, start_seconds: 4, end_seconds: 9, created_at: '', updated_at: '',
+      },
+      {
+        id: 12, transcription_id: 2, item_type: 'chapter', sort_order: 0,
+        speaker_key: '', title: '章节', content: '不是核心观点。', evidence_start_index: 0,
+        evidence_end_index: 1, start_seconds: 0, end_seconds: 9, created_at: '', updated_at: '',
+      },
+    ];
+    expect(findTranscriptViewpointsForTurn(summaryItems, turns[1]).map((item) => item.id)).toEqual([11]);
+    expect(findTranscriptViewpointsForTurn(summaryItems, turns[0])).toEqual([]);
+    expect(findTranscriptViewpointsForTurn(summaryItems, { ...turns[1], start_seconds: 4, end_seconds: 4 }).map((item) => item.id)).toEqual([11]);
+    expect(findTranscriptViewpointsForTurn(summaryItems, null)).toEqual([]);
   });
 
   test('虚拟列表使用实测高度计算布局，并只返回视口与固定发言', () => {
