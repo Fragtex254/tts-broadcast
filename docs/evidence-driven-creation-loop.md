@@ -422,7 +422,7 @@ request key 在 project 内唯一，输入使用排序后的 ID、creator input 
 - 后端对抗性结构验证：200 个重复 Citation 在创建/读取中各只哈希唯一 Source 一次；跨项目 ID 在读取大 Source 前拒绝；Source K1/K2 重放、移出后旧 key 冲突、Evidence 第二次并发修正、项目删除保留 Source、prompt v2 隐私边界均通过。
 - 修复前最后一次完整后端门禁为 51 suites / 545 tests 通过。修复后 Supertest 仍需绑定临时环回端口，但桌面环境在执行时因授权额度限制拒绝提权，因此不能把旧的 545 结果冒充本次结果；必须在授权恢复后再跑 `cd backend && npm test -- --runInBand`。
 - 真实桌面浏览器已验证项目加载、粘贴 Source、人工 Evidence、服务端里程碑事件与局部正反馈；控制台只有 React DevTools 开发提示。继续操作和真实窄屏巡检同样被浏览器命令授权额度中止；窄屏目前由组件测试、响应式 CSS 审查和对抗审查覆盖，仍需在授权恢复后补真实 390px 巡检。
-- 浏览器验收只使用 `NODE_ENV=test` 的隔离数据库与测试项目；未触碰真实内容、音频或生产数据库。临时截图/快照未加入仓库，已移到 `/private/tmp/tts-broadcast-browser-evidence-20260719`。
+- 浏览器验收只使用 `NODE_ENV=test` 的隔离数据库与测试项目；未触碰真实内容、音频或生产数据库。临时截图/快照未加入仓库，已移到 `/private/tmp/hcds-studio-browser-evidence-20260719`。
 
 ### 本阶段明确不做
 

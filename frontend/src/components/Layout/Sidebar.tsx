@@ -16,7 +16,7 @@ export const Sidebar: React.FC = () => {
       <div className="p-4 lg:px-7 lg:py-7 border-b border-card-border text-center lg:text-left">
         <h1 className="font-display text-[20px] lg:text-[28px] font-medium text-ink leading-tight tracking-tight">
           <span className="lg:hidden">AI</span>
-          <span className="hidden lg:inline">AI 内容工作台</span>
+          <span className="hidden lg:inline">HCDS Studio</span>
         </h1>
         <p className="hidden lg:block font-body text-[13px] tracking-[0.08em] text-ink-soft mt-2">
           证据驱动创作
@@ -49,7 +49,7 @@ export const Sidebar: React.FC = () => {
 
       <div className="border-t border-card-border p-3 lg:px-5 lg:py-5">
         <a
-          href="https://github.com/Fragtex254/tts-broadcast"
+          href="https://github.com/Fragtex254/hcds-studio"
           target="_blank"
           rel="noopener noreferrer"
           title="在 GitHub 查看项目"

@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "hcds-studio-backend",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -10,7 +10,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Backend service for HCDS Studio",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.99.0",
     "axios": "^1.16.1",

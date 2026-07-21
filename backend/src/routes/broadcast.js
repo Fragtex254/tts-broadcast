@@ -67,11 +67,11 @@ function sendSeekableAudioBuffer(req, res, buffer, contentType) {
 }
 
 function sanitizeDownloadName(value) {
-  const base = String(value || 'tts-broadcast')
+  const base = String(value || 'hcds-studio')
     .replace(/[\\/:*?"<>|]/g, '_')
     .replace(/\s+/g, '_')
     .slice(0, 80);
-  return `${base || 'tts-broadcast'}.wav`;
+  return `${base || 'hcds-studio'}.wav`;
 }
 
 /**
@@ -469,7 +469,7 @@ router.get('/:id/download', async (req, res) => {
 
       const buffer = await audio.mergeSegmentAudioWithRates(segments);
       res.setHeader('Content-Type', 'audio/wav');
-      res.setHeader('Content-Disposition', `attachment; filename="tts-broadcast.wav"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      res.setHeader('Content-Disposition', `attachment; filename="hcds-studio.wav"; filename*=UTF-8''${encodeURIComponent(filename)}`);
       return res.send(buffer);
     }
 

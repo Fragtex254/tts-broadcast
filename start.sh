@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# TTS Broadcast 一键启动脚本
+# HCDS Studio 一键启动脚本
 
 set -e
 
@@ -52,7 +52,7 @@ FRONTEND_PID=$!
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  TTS Broadcast 已启动${NC}"
+echo -e "${GREEN}  HCDS Studio 已启动${NC}"
 echo -e "${GREEN}  前端: http://localhost:5173${NC}"
 echo -e "${GREEN}  后端: http://localhost:3001${NC}"
 echo -e "${GREEN}  按 Ctrl+C 停止所有服务${NC}"

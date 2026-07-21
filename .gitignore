@@ -50,4 +50,4 @@ backend/logs/
 .workbuddy/
 
 # Course (codebase-to-course output)
-.course-tts-broadcast/
+.course-hcds-studio/

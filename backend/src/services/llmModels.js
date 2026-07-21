@@ -92,7 +92,7 @@ async function fetchModelsForConfig({ baseUrl, apiKey }) {
         headers: {
           Authorization: `Bearer ${trimmedKey}`,
           'api-key': trimmedKey,
-          'User-Agent': 'tts-broadcast',
+          'User-Agent': 'hcds-studio',
         },
         timeout: MODEL_DISCOVERY_TIMEOUT_MS,
       });

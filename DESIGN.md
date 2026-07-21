@@ -1,8 +1,8 @@
-# TTS Broadcast Content Workbench Design System
+# HCDS Studio Content Workbench Design System
 
 ## 1. 产品定位
 
-TTS Broadcast 是面向长期使用的 AI 音频与内容生产工作台，不是营销落地页。界面首先帮助用户扫描信息、阅读长文本、判断生成任务状态、试听与比较音色、校对内容，并在多步骤流程中始终理解当前位置、当前任务和下一步动作。
+HCDS Studio 是面向长期使用的 AI 音频与内容生产工作台，不是营销落地页。界面首先帮助用户扫描信息、阅读长文本、判断生成任务状态、试听与比较音色、校对内容，并在多步骤流程中始终理解当前位置、当前任务和下一步动作。
 
 设计语言为 **Warm Workbench / Soft Editorial**：暖纸色提供耐看的工作背景，清晰的工作台结构承载高密度操作，柔和色彩仅表达动作、状态和内容类型。
 

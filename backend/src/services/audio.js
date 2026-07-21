@@ -309,7 +309,7 @@ async function mergeSegmentAudioWithRates(segments) {
     throw new Error('至少需要一个 segment 音频');
   }
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-speed-'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hcds-studio-speed-'));
   const mergePaths = [];
 
   try {

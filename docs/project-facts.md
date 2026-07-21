@@ -1,10 +1,10 @@
 # Project Facts
 
-本文件保存 TTS Broadcast 的项目事实、架构背景和持久化约定。Agent 入口与开发路由见根目录 `AGENTS.md`；Claude Code 通过 `CLAUDE.md -> AGENTS.md` 读取同一份入口。
+本文件保存 HCDS Studio 的项目事实、架构背景和持久化约定。Agent 入口与开发路由见根目录 `AGENTS.md`；Claude Code 通过 `CLAUDE.md -> AGENTS.md` 读取同一份入口。
 
 ## 项目概述
 
-TTS Broadcast 是一个以内容项目为主线、可选继续生成音频的全栈创作工作台。核心流程是 Brief → 原始来源 → 用户确认的证据 → 不可变提纲 / 主稿 Revision → 可选口播稿与 TTS Render；AI HOT、转录和播客观点仍作为既有研究能力保留，并逐步通过明确的来源适配器接入项目，而不是冒充已经入库的原始证据。
+HCDS Studio 是一个以内容项目为主线、可选继续生成音频的全栈创作工作台。核心流程是 Brief → 原始来源 → 用户确认的证据 → 不可变提纲 / 主稿 Revision → 可选口播稿与 TTS Render；AI HOT、转录和播客观点仍作为既有研究能力保留，并逐步通过明确的来源适配器接入项目，而不是冒充已经入库的原始证据。
 
 ## 技术栈
 
@@ -68,7 +68,7 @@ npm run preview      # 预览生产构建
 ## 目录结构
 
 ```
-tts-broadcast/
+hcds-studio/
 ├── backend/
 │   ├── src/
 │   │   ├── app.js            # Express 应用入口，中间件配置，路由挂载

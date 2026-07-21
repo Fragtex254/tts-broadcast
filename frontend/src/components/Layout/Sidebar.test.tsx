@@ -11,7 +11,7 @@ describe('Sidebar', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('AI 内容工作台')).not.toBeNull();
+    expect(screen.getByText('HCDS Studio')).not.toBeNull();
     expect(screen.getByText('证据驱动创作')).not.toBeNull();
     expect(screen.getByRole('link', { name: '工作台' })).not.toBeNull();
     expect(screen.getByRole('link', { name: '内容库' })).not.toBeNull();

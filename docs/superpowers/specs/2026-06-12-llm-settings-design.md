@@ -113,7 +113,7 @@ OpenAI-compatible thinking 参数没有统一标准，本次不向 OpenAI 格式
 - headers：
   - `Authorization: Bearer {apiKey}`
   - `api-key: {apiKey}`
-  - `User-Agent: tts-broadcast`
+  - `User-Agent: hcds-studio`
 
 成功响应必须兼容 OpenAI 格式：
 

@@ -75,7 +75,7 @@ async function fetchAsrModelsForConfig({ baseUrl, apiKey = '' }) {
 
   for (const candidate of candidates) {
     try {
-      const headers = { 'User-Agent': 'tts-broadcast' };
+      const headers = { 'User-Agent': 'hcds-studio' };
       if (trimmedKey) {
         headers.Authorization = `Bearer ${trimmedKey}`;
         headers['api-key'] = trimmedKey;

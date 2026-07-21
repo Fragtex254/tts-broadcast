@@ -1,238 +1,127 @@
-# TTS Broadcast
+# HCDS Studio
 
-把每天的 AI 资讯变成一段可以直接收听的中文播报。
+证据驱动的 AI 内容工作台。
 
-TTS Broadcast 是一个面向个人和小团队的 AI 新闻播报工作台：它从 AI HOT 拉取每日资讯，用 LLM 改写成更适合口播的稿件，再通过 MiMo TTS 生成音频。你可以手动编辑稿件、分段生成长音频、管理音色预设、上传音视频转写，也可以把整条流程交给定时任务自动运行。
+HCDS Studio 面向个人创作者和小团队，把资料收集、观点研究、证据筛选、提纲与正文生成、版本管理和多形态发布放进同一个项目工作区，让 AI 不只是“帮你写一段话”，而是参与一条可追溯、可校对、可持续积累的内容生产流程。
 
-![TTS Broadcast AI 新闻播报工作流](frontend/src/assets/tts-broadcast-workflow-hero.png)
+## 项目卖点
 
-## 为什么做这个
+### 1. 从素材直接进入创作
 
-每天都有太多 AI 资讯，但真正值得听完、转发、复盘的内容需要被筛选、改写和包装。这个项目把“找资讯 -> 写口播稿 -> 试音色 -> 生成音频 -> 保存归档”的链路放进一个本地全栈应用里，让日报、播客片段、内部分享和语音内容生产变得更轻。
+粘贴原始资料、导入音视频转录，或从播客中提取观点。不同来源最终都汇入同一个内容项目，不必在文档、播放器和聊天窗口之间反复搬运。
 
-## 核心能力
+### 2. 先选证据，再让 AI 动笔
 
-- **资讯采集**：从 AI HOT 获取每日 AI 新闻，支持分类与数量控制。
-- **稿件改写**：使用可配置 LLM 将资讯改写为中文口播稿，支持自定义开场白、结束语和系统提示词。
-- **整篇/分段 TTS**：短稿可一键生成，长稿可按语义切分为 100-200 字左右的文段分别合成；手工精修单段保留 1024 字兼容上限，段落编辑器支持二级弹窗合并、拆分、补充情绪铺垫、全局倍速和单段倍速。
-- **音色工作流**：支持预设音色、音色克隆、音色设计、试听音频和音色预设管理。
-- **音视频转写**：上传音频或视频，后端自动转码、切片并通过 ASR 输出文本，适合把素材快速变成稿件来源。支持批量转录：选择文件夹自动遍历子目录，勾选需要转录的文件，串行转录后每篇单独保存，可一键打包下载 ZIP 压缩包。
-- **播客观点研究**：为播客补充节目、单集、嘉宾和来源元数据，从真实 Segment 提取可核验观点卡，跨播客搜索共识与分歧，并把观点组织进内容项目。
-- **内容结构导出**：在内容项目中加入个人实践、阶段性判断和读者问题，导出带完整引用来源的小红书讨论帖或微信公众号文章 Markdown 结构。
-- **定时播报**：使用 cron 表达式配置自动任务，定期抓取、改写并生成播报。
-- **历史与资产管理**：保存播报记录、音频文件、分段状态和生成参数，支持回放与清理策略。
-- **实时进度**：长任务通过 SSE 推送开始、进度、完成和失败状态，前端可持续反馈。
+系统会从来源快照中提取可核验的证据卡。你可以选择、拒绝、修正证据，并补充自己的经验与判断；AI 生成提纲和正文时只使用当前有效的创作上下文，减少“写得顺，但没有依据”的内容。
 
-## 工作流
+### 3. 每个结论都能回到原文
+
+证据保留原文片段、位置和来源哈希，稿件引用保存独立快照。即使来源后来被移出项目或证据发生修正，历史稿件仍能说明当时引用了什么。
+
+### 4. 创作过程不会被覆盖
+
+提纲、主稿、平台稿和口播稿都以不可变 Revision 保存。每次显式保存都会产生新版本，方便回看创作路径，也避免 AI 重写或误操作覆盖已有成果。
+
+### 5. 一份研究，多种输出
+
+同一套来源和证据可以继续生成提纲、长文、小红书或微信公众号结构、口播稿，并按需进入 TTS。音频是内容资产的一种 Render，不再是项目的唯一主线。
+
+### 6. 数据与模型都由自己掌控
+
+项目默认使用本地 SQLite 保存内容资产，支持配置 Anthropic / OpenAI 兼容 LLM、MiMo TTS / ASR，以及 Mac 或 WSL 局域网 ASR。外部模型负责生成，本地系统负责保存事实、版本和任务状态。
+
+## 核心工作流
 
 ```mermaid
 flowchart LR
-  A["AI HOT 资讯"] --> B["筛选与汇总"]
-  B --> C["LLM 改写口播稿"]
-  C --> D{"生成方式"}
-  D -->|"整篇"| E["MiMo TTS"]
-  D -->|"分段"| F["语义块切分与精修"]
-  F --> E
-  E --> G["音频试听"]
-  G --> H["保存播报历史"]
-  I["音视频上传"] --> J["ASR 转写"]
-  J --> C
-  K["Cron 定时任务"] --> A
+  A["收集素材"] --> B["提取证据与观点"]
+  B --> C["人工选择和补充判断"]
+  C --> D["生成提纲"]
+  D --> E["生成并编辑主稿"]
+  E --> F{"选择输出"}
+  F --> G["平台稿"]
+  F --> H["口播稿"]
+  H --> I["可选 TTS 音频"]
 ```
 
-## 技术栈
+## 你可以用它做什么
 
-| 层 | 技术 |
+- 把文章、笔记和访谈素材整理成一篇有引用依据的长文。
+- 转录单个或整批音视频，并把文本沉淀为可复用的内容来源。
+- 从播客逐字稿中提取嘉宾观点，比较共识与分歧，再组织进新选题。
+- 围绕 Brief、受众、目标、角度和语气生成提纲与初稿。
+- 保留每次稿件修订和引用快照，在多个版本之间继续创作。
+- 将定稿改造成平台内容、口播稿或带自定义音色的音频。
+
+## 主要功能
+
+| 模块 | 能力 |
 | --- | --- |
-| 后端 | Node.js, Express 5, better-sqlite3, Jest, node-cron |
-| AI / 音频 | MiMo TTS, MiMo ASR, Anthropic/OpenAI 兼容 LLM 接口, ffmpeg-static, FFmpeg atempo 不变调变速 |
-| 前端 | React 19, TypeScript, Vite 8, Tailwind CSS 4, Zustand, React Router 7, Zod |
-| 工程化 | GitHub Actions, ESLint, Vitest, supertest |
+| 工作台 | 创建内容项目，维护 Brief、来源、证据、提纲与稿件 |
+| 内容库 | 管理项目、转录结果、文字成稿与音频 Render |
+| 研究 | 音视频转录、播客结构化阅读、观点提取与关系分析 |
+| AI 创作 | 证据提取、提纲草案、主稿草案和平台结构生成 |
+| 版本与引用 | 不可变 Revision、来源快照、证据卡与历史 Citation |
+| 音频 | 口播稿分段精修、TTS、音色设计、音色克隆与试听 |
+| 长任务 | 持久化 Job、实时进度、失败重试与重复请求收敛 |
+
+> 自动化页面目前保留配置与运行状态展示，但尚未接入真实内容生产执行器，因此不会把“保存了 cron”显示成“业务已执行”。
 
 ## 快速开始
 
-### 1. 准备环境
+### 环境要求
 
-- Node.js 20 推荐；本地启动脚本最低检查 Node.js 18
+- Node.js 20（最低支持版本由启动脚本检查）
 - npm
-- MiMo API Key
+- 至少一个可用的 LLM API Key
+- 如需转录或生成音频，再配置对应的 ASR / TTS 服务
 
-### 2. 安装依赖
+### 安装
 
 ```bash
-git clone https://github.com/Fragtex254/tts-broadcast.git
-cd tts-broadcast
+git clone https://github.com/Fragtex254/hcds-studio.git
+cd hcds-studio
 
-cd backend
-npm install
-
-cd ../frontend
-npm install
+cd backend && npm install
+cd ../frontend && npm install
 ```
 
-### 3. 配置服务与 API Key
-
-在 `backend/` 下创建 `.env`，用于服务级配置：
+在 `backend/` 下创建 `.env`：
 
 ```env
 PORT=3001
 NODE_ENV=development
 ```
 
-启动应用后，在设置页填写 LLM API Key、TTS/ASR API Key、LLM base URL、模型和提示词等运行时设置。它们会持久化到 SQLite，不需要写进 `.env`。
+模型、API Key、Base URL 和提示词可在应用的「设置」中配置，并持久化到本地 SQLite。
 
-### 4. 启动应用
-
-推荐使用一键启动脚本：
+### 启动
 
 ```bash
 ./start.sh
-```
-
-也可以手动启动：
-
-```bash
-cd backend
-npm run dev
-```
-
-```bash
-cd frontend
-npm run dev
 ```
 
 启动后访问：
 
-- 前端：http://localhost:5173
-- 后端：http://localhost:3001
+- 前端：<http://localhost:5173>
+- 后端：<http://localhost:3001>
 
-## 启动与停止服务
-
-### 启动前后端
-
-推荐方式是使用根目录脚本同时启动后端和前端：
-
-```bash
-./start.sh
-```
-
-脚本会启动：
-
-- 后端：`http://localhost:3001`
-- 前端：`http://localhost:5173`
-
-手动启动时，分别开两个终端：
-
-```bash
-cd backend
-npm run dev
-```
-
-```bash
-cd frontend
-npm run dev
-```
-
-### 启动 Mac 本地 Qwen ASR
-
-如果设置页选择了 `Qwen 本地（Mac MLX）`，还需要单独启动本地 ASR 服务。默认配置为：
-
-- Base URL：`http://127.0.0.1:8765/v1`
-- 模型：`Qwen/Qwen3-ASR-1.7B`
-- API Key：按本地服务启动参数填写
-
-首次准备环境示例：
-
-```bash
-brew install ffmpeg
-python3 -m venv ~/Library/Caches/tts-broadcast/qwen-asr-venv
-~/Library/Caches/tts-broadcast/qwen-asr-venv/bin/python -m pip install -U pip
-~/Library/Caches/tts-broadcast/qwen-asr-venv/bin/python -m pip install "mlx-qwen3-asr[serve]" socksio
-```
-
-官方服务启动方式：
-
-```bash
-~/Library/Caches/tts-broadcast/qwen-asr-venv/bin/mlx-qwen3-asr serve \
-  --host 127.0.0.1 \
-  --port 8765 \
-  --api-key local-qwen-asr \
-  --model Qwen/Qwen3-ASR-1.7B
-```
-
-实测注意：`mlx-qwen3-asr 0.3.5` 官方 `serve` 在某些 Mac/MLX 环境下可能触发 `There is no Stream(gpu, 1) in current thread.`。当前可用的规避方案是启动一个同步兼容服务，仍暴露 `/v1/audio/transcriptions`，但在主线程调用 `Session.transcribe()`。详细背景见 [docs/asr.md](docs/asr.md)。
-
-### 正常停止服务
-
-如果用 `./start.sh` 启动，回到启动脚本所在终端按：
-
-```bash
-Ctrl+C
-```
-
-脚本会同时停止后端和前端。
-
-如果手动启动，分别在后端、前端、Qwen ASR 服务所在终端按：
-
-```bash
-Ctrl+C
-```
-
-### 强制关闭所有项目相关服务
-
-如果终端被关掉、服务残留，推荐使用根目录关闭脚本：
+停止前台服务可在启动终端按 `Ctrl+C`；如有残留进程，可运行：
 
 ```bash
 ./shutdown.sh
 ```
 
-脚本会尝试关闭：
+## 技术栈
 
-- `3001`：后端 Express / nodemon
-- `5173`：前端 Vite
-- `8765`：Mac 本地 Qwen ASR
+| 层 | 技术 |
+| --- | --- |
+| 前端 | React 19、TypeScript、Vite 8、Tailwind CSS 4、Zustand、React Router 7 |
+| 后端 | Node.js、Express 5、better-sqlite3、Jest、SSE |
+| AI / 音频 | Anthropic / OpenAI 兼容 LLM、MiMo TTS / ASR、本地或局域网 ASR、FFmpeg |
+| 工程化 | GitHub Actions、ESLint、Vitest、supertest |
 
-如需手动排查，先查看常用端口：
-
-```bash
-lsof -nP -iTCP:3001 -sTCP:LISTEN
-lsof -nP -iTCP:5173 -sTCP:LISTEN
-lsof -nP -iTCP:8765 -sTCP:LISTEN
-```
-
-对应关系：
-
-- `3001`：后端 Express / nodemon
-- `5173`：前端 Vite
-- `8765`：Mac 本地 Qwen ASR
-
-按 PID 结束：
-
-```bash
-kill <PID>
-```
-
-如果普通 `kill` 后仍残留，再确认是本项目进程后强制结束：
-
-```bash
-kill -9 <PID>
-```
-
-也可以一次性查找本项目相关进程：
-
-```bash
-ps -axo pid,ppid,command | rg 'tts-broadcast|qwen_asr_sync_server|mlx-qwen3-asr|qwen-asr-venv'
-```
-
-确认无服务残留：
-
-```bash
-lsof -nP -iTCP:3001 -sTCP:LISTEN || true
-lsof -nP -iTCP:5173 -sTCP:LISTEN || true
-lsof -nP -iTCP:8765 -sTCP:LISTEN || true
-```
-
-## 常用命令
+## 常用开发命令
 
 后端：
 
@@ -255,83 +144,23 @@ npm run test
 ## 项目结构
 
 ```text
-tts-broadcast/
-├── backend/
-│   ├── src/
-│   │   ├── app.js              # Express 应用入口
-│   │   ├── db/                 # SQLite 初始化与 schema
-│   │   ├── routes/             # HTTP 路由
-│   │   ├── services/           # 业务逻辑、外部 API、DAL 与任务编排
-│   │   └── utils/              # 共享工具
-│   ├── tests/                  # Jest + supertest 测试
-│   ├── audio/                  # 生成音频，已 gitignore
-│   └── data/                   # SQLite 数据库，已 gitignore
-├── frontend/
-│   ├── src/
-│   │   ├── pages/              # SourceCollection, ScriptEditor, VoicePresets, Transcribe, History, Settings
-│   │   ├── components/         # 可复用 UI、工作台组件和转录子组件
-│   │   ├── services/           # API、SSE、错误处理与 schema 校验
-│   │   └── store/              # Zustand slices
-├── docs/                       # 项目事实、设计文档和外部 API 资料
-├── start.sh
-├── AGENTS.md                   # Agent 开发入口规范
+hcds-studio/
+├── backend/             # API、业务服务、任务编排、SQLite DAL
+├── frontend/            # 内容工作台、内容库、音色库、自动化与设置
+├── docs/                # 产品、架构、ASR、播客研究等文档
+├── start.sh             # 一键启动前后端
+├── shutdown.sh          # 清理项目相关服务
+├── AGENTS.md            # Agent 开发入口与硬性约束
 └── README.md
 ```
 
-## 主要 API
+## 进一步了解
 
-后端接口统一挂载在 `/api` 下。常用资源包括：
-
-| 资源 | 用途 |
-| --- | --- |
-| `/api/broadcast/*` | 获取资讯、改写稿件、生成音频、保存历史、获取播报详情 |
-| `/api/broadcast/:id/segments/*` | 分段稿件、语义块精修、分段 TTS 和片段状态管理 |
-| `/api/transcribe/*` | 音视频上传、ASR 转写、批量转录（文件夹遍历）和任务进度 |
-| `/api/settings/*` | API Key、LLM、TTS、提示词和默认偏好设置 |
-| `/api/schedules/*` | 定时任务的创建、更新、启停和删除 |
-| `/api/voice-presets/*` | 克隆/设计音色预设与试听资产管理 |
-| `/api/sse/:taskId` | 长任务实时事件流 |
-
-更完整的接口、数据模型和外部 API 背景见 [docs/project-facts.md](docs/project-facts.md)。
-
-## 数据与文件
-
-项目使用 SQLite 作为本地持久化层，主要保存播报、分段、设置、定时任务和音色预设。生成音频写入 `backend/audio/`，数据库文件写入 `backend/data/`，这两个目录都不会提交到 Git。
-
-音频生命周期由后端统一管理：
-
-- 原始整篇 TTS 音频和原始分段 TTS 音频按正常策略持久化到 `backend/audio/`。
-- 分段倍速只保存 `segments.playback_rate` 配置，不改写原始音频文件。
-- 单段预览使用浏览器原生 `playbackRate` 并保持音高；主播放器预览和下载由后端按需调用 FFmpeg `atempo` 生成不变调变速音频。
-- 变速后的分段合并音频不保存到服务端：`/api/broadcast/:id/audio` 和 `/api/broadcast/:id/download` 只在请求内临时生成并返回，临时文件在响应结束前后清理。
-- 未保存音频只保留最近 10 条。
-- 已保存音频最多保留 50 条，超出后淘汰最旧记录。
-- 删除音频统一走受保护的文件清理逻辑，避免误删任意路径。
-
-## 开发约定
-
-仓库根目录的 `CLAUDE.md` 是 `AGENTS.md` 的 symlink，所有 agent 开发任务都从这里读取规则。关键约束包括：
-
-- 后端路由只做 HTTP 翻译，不直接写 SQL。
-- 数据访问通过 `services/*Store.js` 等 DAL 层。
-- 外部 API 测试必须 mock，不依赖真实网络或真实业务密钥。
-- 长任务必须有 loading/error 状态；已接入 SSE 的任务必须推送开始、进度、完成和失败事件。
-- 新增持久化字段要同步 schema、迁移、后端返回、前端类型和 UI。
-
-详细背景见：
-
-- [docs/project-facts.md](docs/project-facts.md)
-- [backend/BACKEND_CONVENTIONS.md](backend/BACKEND_CONVENTIONS.md)
-- [frontend/FRONTEND_CONVENTIONS.md](frontend/FRONTEND_CONVENTIONS.md)
-
-## CI
-
-GitHub Actions 会在 PR 和 `main` 分支 push 时运行质量检查：
-
-- 后端：`npm ci` + `NODE_ENV=test npm test -- --runInBand`
-- 前端：`npm ci` + `npm run lint` + `npm run build`
-
-CI 不配置真实 MiMo、AI HOT、TTS 或 ASR Key。涉及外部服务的测试必须使用 mock。
+- [项目事实与技术约定](docs/project-facts.md)
+- [内容工作台架构](docs/content-workbench-architecture.md)
+- [证据驱动创作闭环](docs/evidence-driven-creation-loop.md)
+- [播客研究能力](docs/podcast-research.md)
+- [ASR 配置与说明](docs/asr.md)
 
 ## 许可证
 

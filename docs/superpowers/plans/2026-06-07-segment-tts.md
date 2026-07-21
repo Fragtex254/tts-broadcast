@@ -1878,7 +1878,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <Header title="控制台" subtitle="生成今日 AI 简讯播报" />
+      <Header title="控制台" subtitle="生成今日 AI 简讯" />
 
       <main className="flex-1 flex overflow-hidden p-6">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 w-full">
