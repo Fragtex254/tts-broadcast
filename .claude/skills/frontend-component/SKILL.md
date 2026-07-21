@@ -164,6 +164,7 @@ export default MyComponent;
 7. 导航使用 `<NavLink>`（不是 `<Link>`），以支持 `isActive` 高亮。
 8. 顶级导航只展示工作台、内容库、音色库和设置；编辑器与转录页由任务入口进入，不在 Sidebar 重复展示。自动化在真实执行器接入前属于 backlog，只保留 `/automation` 兼容直达路由，不展示导航入口。
 9. 播客不持久化上传源音频，也不为普通链接伪造“回到现场”。仅当 `source_url` 经严格域名与 BV/av ID 解析为 Bilibili 视频时，可使用 `BilibiliTranscriptPlayer` 嵌入官方外链播放器；Turn 定位只采用持久化 `start_seconds`，通过官方 `t` 参数重载播放器。双击之外必须同时提供键盘与显式按钮入口；第三方 iframe 不得冒充本地 `AudioPlaybackBar`。`2xl` 宽屏全屏阅读采用“说话人 / 逐字稿 / 上下文”三栏，右栏上部只展示与当前 Turn 时间范围相交的 `speaker_viewpoint`、下部固定播放器；当前 Turn 以仍在视口内的 hover/focus 为先，否则取视口中心。不得用最近观点强行补齐无交集语块；必须标注 AI 与 stale 状态。低于 `2xl` 时收回右栏并把播放器降级到阅读器下方。
+10. 跨路由后台任务统一由 Layout 的 `GlobalTaskProgressBar` 展示，位于主内容区顶部、`Outlet` 外；必须同时显示任务名称、阶段/百分比和可点击的任务上下文入口。连接中断用文字说明恢复路径并提供按原 taskId 重新连接动作，不能只改色点；组件只消费可序列化 store 快照，不持有 `EventSource`。
 
 ### TypeScript
 
@@ -278,6 +279,7 @@ npm run test
 - [ ] 二级界面使用 `ModalShell`，未手写固定遮罩/对话框基础逻辑
 - [ ] 音频播放条使用 `AudioPlaybackBar` / `AudioPlayer` / `MiniAudioPlayer`，未手写 `<audio>` 播放控制逻辑
 - [ ] Store 读取使用 selector，不写无 selector 的 `useStore()`
+- [ ] 跨路由长任务使用 `GlobalTaskProgressBar`，状态含文字且可返回任务上下文
 - [ ] 新增 API 响应字段时同步 `store/types.ts` 与 `services/schemas.ts`
 - [ ] 运行 `npm run lint`
 - [ ] 运行 `npm run build` 确认无 TypeScript 错误

@@ -112,8 +112,8 @@ export const broadcastApi = {
   regenerateSegment: (broadcastId: number, segId: number) =>
     api.post(`/broadcast/${broadcastId}/segments/${segId}/regenerate`),
 
-  batchGenerateSegments: (broadcastId: number) =>
-    api.post(`/broadcast/${broadcastId}/segments/batch-generate`),
+  batchGenerateSegments: (broadcastId: number, taskId?: string) =>
+    api.post(`/broadcast/${broadcastId}/segments/batch-generate`, taskId ? { taskId } : {}),
 
   mergeSegments: (broadcastId: number) =>
     api.post(`/broadcast/${broadcastId}/segments/merge`),

@@ -117,6 +117,7 @@ describe('projectWorkspaceSlice', () => {
       activeProjectTaskId: null,
       activeProjectJobOperation: null,
       projectWorkspaceJobError: null,
+      backgroundTasks: [],
     });
   });
 
@@ -388,6 +389,52 @@ describe('projectWorkspaceSlice', () => {
     expect(useStore.getState().projectWorkspace?.artifacts).toEqual([artifact]);
     expect(useStore.getState().projectWorkspace?.generation_jobs[0].status).toBe('failed');
     expect(useStore.getState().projectWorkspaceJobError).toBe('模型不可用');
+  });
+
+  test('离开项目页只清视图，后台 SSE 继续并在完成后收口全局任务', async () => {
+    const runningJob = {
+      id: 75, project_id: 12, operation: 'generate_outline' as const, request_key: 'server-key', status: 'running' as const,
+      phase: 'outlining', progress: 20, error: '', result_artifact_id: null, result_revision_id: null, created_at: '', updated_at: '',
+    };
+    const completedJob = {
+      ...runningJob,
+      status: 'completed' as const,
+      phase: 'completed',
+      progress: 100,
+      result_artifact_id: 30,
+      result_revision_id: 41,
+    };
+    apiMocks.createJob.mockResolvedValue({ status: 202, data: { job: runningJob } });
+
+    await useStore.getState().startProjectCreationJob(12, {
+      operation: 'generate_outline', evidenceIds: [5],
+    });
+    const taskId = useStore.getState().activeProjectTaskId;
+    expect(taskId).not.toBeNull();
+
+    useStore.getState().clearProjectWorkspace();
+
+    expect(useStore.getState().projectWorkspace).toBeNull();
+    expect(useStore.getState().activeProjectTaskId).toBe(taskId);
+    expect(useStore.getState().backgroundTasks).toHaveLength(1);
+    expect(sseMocks.close).not.toHaveBeenCalled();
+
+    sseMocks.handlers.get('progress')?.({ job: { ...runningJob, progress: 55 } });
+    expect(useStore.getState().backgroundTasks[0]).toMatchObject({
+      taskId,
+      status: 'running',
+      percent: 55,
+    });
+
+    sseMocks.handlers.get('complete')?.({
+      job: completedJob,
+      workspace: { ...workspace, generation_jobs: [completedJob] },
+    });
+
+    expect(useStore.getState().projectWorkspace).toBeNull();
+    expect(useStore.getState().activeProjectTaskId).toBeNull();
+    expect(useStore.getState().backgroundTasks).toEqual([]);
+    expect(sseMocks.close).toHaveBeenCalledOnce();
   });
 
   test('相同上下文重试复用 requestKey，Brief 事实变化后生成新 key', async () => {

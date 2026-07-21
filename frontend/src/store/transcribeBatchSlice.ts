@@ -10,8 +10,9 @@ import type {
   TranscribeOptions,
   TranscriptionRecord,
 } from './types';
-import type { StoreSet } from './storeTypes';
+import type { StoreGet, StoreSet } from './storeTypes';
 import { mergeTranscriptionText } from './transcriptionProgressModel';
+import { bindBackgroundTaskTransport } from './sseBackgroundTask';
 import {
   appendTranscribeOptions,
   createTranscriptionTaskId,
@@ -84,7 +85,7 @@ type TranscribeBatchSlice = Pick<
   | 'clearBatchTranscription'
 >;
 
-export function createTranscribeBatchSlice(set: StoreSet): TranscribeBatchSlice {
+export function createTranscribeBatchSlice(set: StoreSet, get: StoreGet): TranscribeBatchSlice {
   return {
     batchTranscriptionItems: [],
     isBatchTranscribing: false,
@@ -97,8 +98,31 @@ export function createTranscribeBatchSlice(set: StoreSet): TranscribeBatchSlice 
       options?: TranscribeOptions
     ) => {
       const taskId = createTranscriptionTaskId();
-      const sseClient = createSSEClient(taskId);
+      const sseClient = createSSEClient(taskId, 'batch-transcribe');
       const total = files.length;
+
+      get().startBackgroundTask({
+        taskId,
+        kind: 'batch-transcribe',
+        title: `批量转录：${total} 个文件`,
+        href: '/transcribe',
+        phase: 'uploading',
+        percent: 0,
+        message: '正在上传文件',
+      });
+      bindBackgroundTaskTransport(sseClient, taskId, get, () => {
+        set({
+          isBatchTranscribing: true,
+          batchTranscribeProgress: {
+            phase: 'failed',
+            percent: 0,
+            currentIndex: 0,
+            total,
+            currentFileName: '',
+            message: '连接中断，请在顶部任务条重新连接',
+          },
+        });
+      });
 
       const initialItems: BatchTranscriptionItem[] = files.map((file) => ({
         fileName: file.name,
@@ -113,6 +137,13 @@ export function createTranscribeBatchSlice(set: StoreSet): TranscribeBatchSlice 
         const phase = progress.phase;
         const idx = progress.index ?? 0;
         const totalCount = progress.total ?? total;
+
+        get().updateBackgroundTask(taskId, {
+          status: 'running',
+          phase: phase ?? 'transcribing',
+          percent: progress.percent ?? 0,
+          message: progress.message ?? progress.fileName ?? '正在批量转录',
+        });
 
         if (phase === 'batch-preparing') {
           set({
@@ -195,6 +226,7 @@ export function createTranscribeBatchSlice(set: StoreSet): TranscribeBatchSlice 
       });
 
       sseClient.on<BatchSSEComplete>('complete', (result) => {
+        get().endBackgroundTask(taskId);
         const items: BatchTranscriptionItem[] = (result.results ?? []).map((item) => ({
           fileName: item.fileName,
           relativePath: item.relativePath ?? item.fileName,
@@ -230,7 +262,7 @@ export function createTranscribeBatchSlice(set: StoreSet): TranscribeBatchSlice 
       });
 
       sseClient.on<SSEErrorEvent>('error', (event) => {
-        if (event.error === 'SSE 连接错误') return;
+        get().endBackgroundTask(taskId);
         set({
           isBatchTranscribing: false,
           batchTranscribeProgress: {
@@ -277,6 +309,12 @@ export function createTranscribeBatchSlice(set: StoreSet): TranscribeBatchSlice 
             const uploadPercent = event.total
               ? Math.round((event.loaded / event.total) * 100)
               : 50;
+            get().updateBackgroundTask(taskId, {
+              status: 'running',
+              phase: 'uploading',
+              percent: Math.min(uploadPercent, 100),
+              message: '正在上传文件',
+            });
             set({
               batchTranscribeProgress: {
                 phase: 'uploading',
@@ -295,6 +333,7 @@ export function createTranscribeBatchSlice(set: StoreSet): TranscribeBatchSlice 
         }
         return initialItems;
       } catch (error) {
+        get().endBackgroundTask(taskId);
         set({
           isBatchTranscribing: false,
           batchTranscribeProgress: {

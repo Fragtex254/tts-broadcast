@@ -284,8 +284,8 @@ export const ContentProjectMilestoneSchema = z.object({
   kind: z.enum(['source_saved', 'evidence_selected', 'outline_saved', 'cited_master_saved']),
   title: z.string(), description: z.string(),
 });
-export const ContentJobProgressEventSchema = z.object({ job: ContentGenerationJobSchema });
-export const ContentJobErrorEventSchema = z.object({ job: ContentGenerationJobSchema, error: z.string() });
+export const ContentJobProgressEventSchema = z.object({ job: ContentGenerationJobSchema }).catchall(z.unknown());
+export const ContentJobErrorEventSchema = z.object({ job: ContentGenerationJobSchema, error: z.string() }).catchall(z.unknown());
 export const ContentRevisionCitationSchema = z.object({
   id: z.number(), revision_id: z.number(), evidence_id: z.number().nullable(), marker: z.string(), excerpt: z.string(),
   source_id: z.number(), source_title: z.string(), source_content_sha256: z.string(),
@@ -331,7 +331,320 @@ export const ContentJobCompleteEventSchema = z.object({
   job: ContentGenerationJobSchema,
   workspace: ContentProjectWorkspaceSchema,
   milestone: ContentProjectMilestoneSchema.optional(),
-});
+}).catchall(z.unknown());
+
+// === SSE 协议 ===
+
+const SSEPercentSchema = z.number().finite().min(0).max(100);
+const SSECountSchema = z.number().int().nonnegative();
+const SSETimestampSchema = z.number().finite().nonnegative();
+const SSEUsageSchema = z.record(z.string(), z.unknown()).nullable();
+
+export const SSEConnectedEventSchema = z.object({
+  taskId: z.string().min(1),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const SSEBusinessErrorEventSchema = z.object({
+  error: z.string().min(1),
+}).catchall(z.unknown());
+
+export const SSETranscriptionChunkSchema = z.object({
+  index: SSECountSchema,
+  text: z.string(),
+}).catchall(z.unknown());
+
+export const SegmentSSEStartEventSchema = z.object({
+  total: SSECountSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const SegmentSSEProgressEventSchema = z.object({
+  segmentId: z.number().int().positive(),
+  status: z.enum(['pending', 'generating', 'generated', 'failed']),
+  current: SSECountSchema,
+  total: SSECountSchema,
+  discarded: z.boolean().optional(),
+  text: z.string().optional(),
+  audioPath: z.string().optional(),
+  error: z.string().optional(),
+  timestamp: SSETimestampSchema.optional(),
+}).catchall(z.unknown());
+
+export const SegmentSSEResultSchema = z.object({
+  id: z.number().int().positive(),
+  status: z.enum(['generated', 'failed', 'stale']),
+  error: z.string().optional(),
+}).catchall(z.unknown());
+
+export const SegmentSSECompleteEventSchema = z.object({
+  segments: z.array(SegmentSchema),
+  results: z.array(SegmentSSEResultSchema),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const TranscribeSSEStartEventSchema = z.object({
+  phase: z.literal('preparing'),
+  percent: SSEPercentSchema,
+  text: z.string(),
+  fileName: z.string(),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const TranscribeSSEProgressEventSchema = z.object({
+  phase: z.enum(['preparing', 'transcribing']),
+  percent: SSEPercentSchema,
+  current: SSECountSchema.optional(),
+  total: SSECountSchema.optional(),
+  text: z.string().optional(),
+  chunkText: z.string().optional(),
+  chunks: z.array(SSETranscriptionChunkSchema).optional(),
+  message: z.string().optional(),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const TranscribeSSECompleteEventSchema = z.object({
+  phase: z.literal('completed'),
+  percent: z.literal(100),
+  text: z.string(),
+  usage: SSEUsageSchema.optional(),
+  transcriptionResult: TranscriptionRecordSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const BatchTranscribeSSEPreparingEventSchema = z.object({
+  phase: z.literal('batch-preparing'),
+  total: SSECountSchema,
+  current: SSECountSchema,
+  percent: SSEPercentSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const BatchTranscribeSSEFileStartEventSchema = z.object({
+  phase: z.literal('file-start'),
+  index: SSECountSchema,
+  fileName: z.string(),
+  total: SSECountSchema,
+  percent: SSEPercentSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const BatchTranscribeSSEFileProgressEventSchema = z.object({
+  phase: z.literal('file-progress'),
+  index: SSECountSchema,
+  fileName: z.string(),
+  total: SSECountSchema,
+  filePercent: SSEPercentSchema,
+  percent: SSEPercentSchema,
+  current: SSECountSchema.optional(),
+  chunkText: z.string().optional(),
+  chunks: z.array(SSETranscriptionChunkSchema).optional(),
+  text: z.string().optional(),
+  message: z.string().optional(),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const BatchTranscribeSSEFileCompleteEventSchema = z.object({
+  phase: z.literal('file-complete'),
+  index: SSECountSchema,
+  fileName: z.string(),
+  total: SSECountSchema,
+  text: z.string(),
+  usage: SSEUsageSchema.optional(),
+  resultId: z.number().int().positive(),
+  transcriptionResult: TranscriptionRecordSchema,
+  percent: SSEPercentSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const BatchTranscribeSSEFileErrorEventSchema = z.object({
+  phase: z.literal('file-error'),
+  index: SSECountSchema,
+  fileName: z.string(),
+  total: SSECountSchema,
+  error: z.string().min(1),
+  percent: SSEPercentSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const BatchTranscribeSSEProgressEventSchema = z.discriminatedUnion('phase', [
+  BatchTranscribeSSEPreparingEventSchema,
+  BatchTranscribeSSEFileStartEventSchema,
+  BatchTranscribeSSEFileProgressEventSchema,
+  BatchTranscribeSSEFileCompleteEventSchema,
+  BatchTranscribeSSEFileErrorEventSchema,
+]);
+
+export const BatchTranscribeSSEResultSchema = z.object({
+  fileName: z.string(),
+  relativePath: z.string(),
+  text: z.string(),
+  usage: SSEUsageSchema.optional(),
+  resultId: z.number().int().positive().optional(),
+  transcriptionResult: TranscriptionRecordSchema.optional(),
+  error: z.string().optional(),
+}).catchall(z.unknown());
+
+export const BatchTranscribeSSECompleteEventSchema = z.object({
+  phase: z.literal('completed'),
+  percent: z.literal(100),
+  results: z.array(BatchTranscribeSSEResultSchema),
+  total: SSECountSchema,
+  succeeded: SSECountSchema,
+  failed: SSECountSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const SummarySSEStartEventSchema = z.object({
+  transcriptionId: z.number().int().positive(),
+  phase: z.literal('starting'),
+  percent: z.literal(0),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const SummarySSEProgressEventSchema = z.object({
+  transcriptionId: z.number().int().positive(),
+  phase: z.enum(['summarizing-batches', 'synthesizing', 'completed']),
+  current: SSECountSchema,
+  total: SSECountSchema,
+  percent: SSEPercentSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const SummarySSECompleteEventSchema = z.object({
+  transcriptionId: z.number().int().positive(),
+  phase: z.literal('summary-completed'),
+  percent: z.literal(100),
+  transcript: TranscriptDetailSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const ClaimsSSEStartEventSchema = z.object({
+  transcriptionId: z.number().int().positive(),
+  phase: z.literal('starting'),
+  percent: z.literal(0),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const ClaimsSSEProgressEventSchema = z.object({
+  transcriptionId: z.number().int().positive(),
+  phase: z.enum(['analyzing-claims', 'embedding-claims', 'completed']),
+  current: SSECountSchema,
+  total: SSECountSchema,
+  percent: SSEPercentSchema,
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+export const ClaimsSSECompleteEventSchema = z.object({
+  transcriptionId: z.number().int().positive(),
+  phase: z.literal('claims-completed'),
+  percent: z.literal(100),
+  claims: z.array(TranscriptClaimSchema),
+  timestamp: SSETimestampSchema,
+}).catchall(z.unknown());
+
+// 内容创作没有独立 wire start 事件；首个 progress(job) 即任务启动事实。
+export const ContentCreationSSEStartEventSchema = ContentJobProgressEventSchema;
+
+export const GenericSSEProgressEventSchema = z.union([
+  SegmentSSEProgressEventSchema,
+  TranscribeSSEProgressEventSchema,
+  BatchTranscribeSSEProgressEventSchema,
+  SummarySSEProgressEventSchema,
+  ClaimsSSEProgressEventSchema,
+  ContentJobProgressEventSchema,
+]);
+
+export const GenericSSECompleteEventSchema = z.union([
+  SegmentSSECompleteEventSchema,
+  TranscribeSSECompleteEventSchema,
+  BatchTranscribeSSECompleteEventSchema,
+  SummarySSECompleteEventSchema,
+  ClaimsSSECompleteEventSchema,
+  ContentJobCompleteEventSchema,
+]);
+
+export const GenericSSEErrorEventSchema = z.union([
+  ContentJobErrorEventSchema,
+  SSEBusinessErrorEventSchema,
+]);
+
+export type SSEEventSchemaMap = Readonly<Record<string, z.ZodType>>;
+export type SSEProtocol =
+  | 'generic'
+  | 'segment'
+  | 'transcribe'
+  | 'batch-transcribe'
+  | 'summary'
+  | 'claims'
+  | 'content-creation';
+
+export const SegmentSSEProtocolSchemas = {
+  connected: SSEConnectedEventSchema,
+  'batch-generate-start': SegmentSSEStartEventSchema,
+  progress: SegmentSSEProgressEventSchema,
+  complete: SegmentSSECompleteEventSchema,
+  error: SSEBusinessErrorEventSchema,
+} as const;
+
+export const TranscribeSSEProtocolSchemas = {
+  connected: SSEConnectedEventSchema,
+  'transcribe-start': TranscribeSSEStartEventSchema,
+  progress: TranscribeSSEProgressEventSchema,
+  complete: TranscribeSSECompleteEventSchema,
+  error: SSEBusinessErrorEventSchema,
+} as const;
+
+export const BatchTranscribeSSEProtocolSchemas = {
+  connected: SSEConnectedEventSchema,
+  progress: BatchTranscribeSSEProgressEventSchema,
+  complete: BatchTranscribeSSECompleteEventSchema,
+  error: SSEBusinessErrorEventSchema,
+} as const;
+
+export const SummarySSEProtocolSchemas = {
+  connected: SSEConnectedEventSchema,
+  'summary-start': SummarySSEStartEventSchema,
+  progress: SummarySSEProgressEventSchema,
+  complete: SummarySSECompleteEventSchema,
+  error: SSEBusinessErrorEventSchema,
+} as const;
+
+export const ClaimsSSEProtocolSchemas = {
+  connected: SSEConnectedEventSchema,
+  'claims-start': ClaimsSSEStartEventSchema,
+  progress: ClaimsSSEProgressEventSchema,
+  complete: ClaimsSSECompleteEventSchema,
+  error: SSEBusinessErrorEventSchema,
+} as const;
+
+export const ContentCreationSSEProtocolSchemas = {
+  connected: SSEConnectedEventSchema,
+  progress: ContentJobProgressEventSchema,
+  complete: ContentJobCompleteEventSchema,
+  error: ContentJobErrorEventSchema,
+} as const;
+
+export const GenericSSEProtocolSchemas = {
+  connected: SSEConnectedEventSchema,
+  'batch-generate-start': SegmentSSEStartEventSchema,
+  'transcribe-start': TranscribeSSEStartEventSchema,
+  'summary-start': SummarySSEStartEventSchema,
+  'claims-start': ClaimsSSEStartEventSchema,
+  progress: GenericSSEProgressEventSchema,
+  complete: GenericSSECompleteEventSchema,
+  error: GenericSSEErrorEventSchema,
+} as const;
+
+export const SSE_PROTOCOL_SCHEMAS: Record<SSEProtocol, SSEEventSchemaMap> = {
+  generic: GenericSSEProtocolSchemas,
+  segment: SegmentSSEProtocolSchemas,
+  transcribe: TranscribeSSEProtocolSchemas,
+  'batch-transcribe': BatchTranscribeSSEProtocolSchemas,
+  summary: SummarySSEProtocolSchemas,
+  claims: ClaimsSSEProtocolSchemas,
+  'content-creation': ContentCreationSSEProtocolSchemas,
+};
 
 // === API 响应包装 ===
 

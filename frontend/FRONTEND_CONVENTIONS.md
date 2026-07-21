@@ -55,14 +55,17 @@ frontend/src/
 │   ├── Library/                # 内容库子面板（播报、转录稿）
 │   ├── Dashboard/              # Dashboard 子组件（含统一音频播放条 AudioPlaybackBar）
 │   └── Transcribe/             # 转录与播客工作区子组件（Provider、历史、Speaker、Summary、Turn）
-├── hooks/                       # 可复用 hooks（useDebounce, useSSE）
+├── hooks/                       # 可复用 hooks（如 useDebounce）
 ├── services/
 │   ├── api.ts                  # Axios API 封装
 │   ├── apiError.ts             # API 错误提取 helper
-│   └── schemas.ts              # Zod 运行时校验 schema
+│   ├── schemas.ts              # API 与 SSE 的 Zod 运行时校验 schema
+│   ├── sseClient.ts            # 协议校验、有限重连与传输状态
+│   └── sseRegistry.ts          # EventSource / timer 的模块级连接注册表
 └── store/
     ├── index.ts                # Zustand 全局 store 组合入口
     ├── types.ts                # 全局共享类型
+    ├── backgroundTaskSlice.ts  # 可序列化的全局后台任务快照
     └── *Slice.ts               # 按领域拆分的 store slice
 ```
 
@@ -77,6 +80,7 @@ frontend/src/
 | `store/*Slice.ts` | 领域状态与异步 action | 样式、页面局部状态 |
 | `services/api.ts` | HTTP 请求封装 | 状态管理、页面数据组合 |
 | `services/schemas.ts` | API 响应运行时 schema | UI 展示逻辑 |
+| `services/sseClient.ts` / `sseRegistry.ts` | SSE 协议校验、有限重连和非序列化连接生命周期 | 页面状态、Zustand 持久数据 |
 
 > 组件文件内部组织顺序（导入 → 接口 → 子组件 → 常量 → 主组件 → 默认导出）见 skill：`frontend-component`。
 
@@ -86,6 +90,7 @@ frontend/src/
 - `components/Dashboard/AudioPlaybackBar.tsx` 是音频播放条唯一底层实现，集中处理 `<audio>` 生命周期、播放/暂停、时长、seek、波形、进度条、播放失败和倍速保音高。整篇/历史播放器通过 `AudioPlayer`，试听小播放器通过 `MiniAudioPlayer` 接入；业务组件不得重新实现播放控制。
 - 与播放条相关的纯函数放在 `components/Dashboard/audioPlaybackUtils.ts`，保持组件文件只导出 React 组件，符合 Vite Fast Refresh 规则。
 - 播客详情使用独立上下文路由 `/history/transcriptions/:id`；`TranscriptWorkspace` 只负责编排，Speaker、Summary、Turn 分为展示组件。普通来源的时间码仍只读；严格解析为 Bilibili BV/av 的 `source_url` 可通过 `BilibiliTranscriptPlayer` 使用 Turn `start_seconds` 定位官方外链播放器，必须保留双击、键盘和显式按钮三种入口。`2xl` 全屏阅读采用说话人、逐字稿、上下文三栏：上下文仅显示与视口当前 Turn 时间相交的 `speaker_viewpoint` 并在下方固定播放器；窄屏退回底部播放器，无交集时显示空态而非猜测最近观点。
+- `components/Layout/GlobalTaskProgressBar.tsx` 统一展示跨路由继续运行的后台任务。任务链接、阶段、百分比和断线恢复提示来自 `backgroundTaskSlice` 的纯 JSON 快照；断线动作通过 registry 按原 taskId 恢复，组件不得持有或关闭 `EventSource`。
 
 ---
 

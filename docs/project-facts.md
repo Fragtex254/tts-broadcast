@@ -260,7 +260,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 - 音色预设的试听音频可直接下载；设计预设新增 `use_trial_audio_as_clone` 开关，开启后在播报选择预设时将已保存的 `trial_audio_path` 作为 `voiceClone`，实际走 `voiceclone` 链路，而不是继续走 `voicedesign`。该开关只对 design 预设生效，且必须存在已保存试听音频
 - 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；删除已有音频使用 `utils/validation.js` 中的 `cleanAudioFile()`
 - ID 校验使用 `utils/validation.js` 中的 `validateId()`
-- 前端使用 Zustand store 模式管理全局状态；新增状态优先按领域放入 `store/*Slice.ts`，类型放入 `store/types.ts`
+- 前端使用 Zustand store 模式管理全局状态；新增状态优先按领域放入 `store/*Slice.ts`，类型放入 `store/types.ts`。SSE 由 `services/sseClient.ts` 按 `segment/transcribe/batch-transcribe/summary/claims/content-creation` 协议执行 Zod 校验，非法 JSON/事件只记录并丢弃；`services/sseRegistry.ts` 独占 EventSource、重试 timer 和 handler，断线按 1/2/4 秒最多重连 3 次。服务端 `sseManager` 为 `complete/error` 保留有界的 5 分钟 terminal 快照，首连或重连都可收回断线窗口结果；每轮 Segment 批量生成使用独立 taskId，生产端发送前清同 ID 旧快照，不再复用 Broadcast ID。Zustand 的 `backgroundTaskSlice` 只保存可序列化任务快照，`GlobalTaskProgressBar` 允许跨路由查看并返回任务上下文；普通页面卸载不关闭健康连接，App 根卸载统一释放 registry 与模块级轮询
 - 前端二级界面、确认弹窗和全屏编辑面板统一通过 `components/ModalShell.tsx` 渲染，业务组件只传标题、内容、footer 和关闭事件，不重复维护固定遮罩、dialog aria、Esc/backdrop 关闭逻辑
 - 前端所有音频播放条统一通过 `components/Dashboard/AudioPlaybackBar.tsx`，整篇/历史播放器用 `AudioPlayer` 薄外壳，试听小播放器用 `MiniAudioPlayer` 薄外壳；只有 `AudioPlaybackBar` 直接拥有 `<audio>`、播放状态、时长、seek、波形/进度和倍速保音高逻辑
 - 测试使用 supertest 进行 HTTP 端点测试
@@ -274,7 +274,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 
 1. **分层边界**：路由层只做 HTTP 翻译；服务层负责业务与外部 API；DAL（`*Store.js`）负责单表 SQL；前端 `api.ts` 只封装 HTTP，store 按领域拆 slice。（细则见 `backend-route` / `backend-service` / `backend-database` / `frontend-state-data`）
 2. **外部 API 隔离**：所有 MiMo / AI HOT 调用设 timeout 并把 401/429/超时/网络错误转中文；批量 TTS 必须经 `ttsQueue` 全局限速，LLM 高并发/批量任务必须经 `llmQueue` 全局限速，禁止绕过队列直接并发调用外部模型；**不允许全局关闭 TLS 校验**（禁 `NODE_TLS_REJECT_UNAUTHORIZED=0`，补 CA 只在特定 client 实例配）。（细则见 `backend-service`）
-3. **长任务一致性**：超过 2 秒的任务必须有前端 loading/error 状态；已接入 SSE 的任务后端发开始/进度/完成/失败事件，前端收到失败落可重试态；重复生成保证幂等，失败不留永久 `generating`。（细则见 `backend-service` / `frontend-state-data`）
+3. **长任务一致性**：超过 2 秒的任务必须有前端 loading/error 状态；已接入 SSE 的任务后端发开始/进度/完成/失败事件，前端按领域 Zod 协议验证并在传输断线后有限重连，失败或重试耗尽落可重试态；跨路由任务由全局可序列化快照持续展示，重复生成保证幂等，失败不留永久 `generating`。（细则见 `backend-service` / `frontend-state-data`）
 4. **DB 与文件一致性**：DB 写与文件写跨资源无法事务化，必须设计补偿清理避免孤儿音频；所有 `/audio/...` 删除经 `cleanAudioFile()`，禁拼接用户输入路径后直接 `unlinkSync`。（细则见 `backend-service` / `backend-database`）
 5. **前后端契约**：`Broadcast` / `Segment` / `VoiceConfig` / `Settings` / SSE payload 不得使用裸 `any`；后端新增字段必须端到端同步，前端默认值/枚举/参数名不得与后端不一致。（完整流程见 `add-persisted-field`）
 6. **测试与进程生命周期**：`app.js` 只导出不 listen；`NODE_ENV=test` 用 SQLite 内存库，禁写开发库；cron 测试 `afterEach` 调 `scheduler.shutdown()`；后端改动至少 `npm test -- --runInBand`，前端至少 `npm run build`；外部 API 测试必须 mock。（细则见 `backend-testing`）

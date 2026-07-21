@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 const apiMocks = vi.hoisted(() => ({
   deleteResult: vi.fn(),
   formatResult: vi.fn(),
+  summarize: vi.fn(),
+}));
+
+const sseMocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  handlers: new Map<string, (event: unknown) => void>(),
+  close: vi.fn(),
+  connect: vi.fn(),
 }));
 
 vi.mock('../services/api', async (importOriginal) => {
@@ -13,7 +21,16 @@ vi.mock('../services/api', async (importOriginal) => {
       ...actual.transcribeApi,
       deleteResult: apiMocks.deleteResult,
       formatResult: apiMocks.formatResult,
+      summarize: apiMocks.summarize,
     },
+  };
+});
+
+vi.mock('../services/sseClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/sseClient')>();
+  return {
+    ...actual,
+    createSSEClient: sseMocks.create,
   };
 });
 
@@ -23,11 +40,20 @@ import { TRANSCRIPTION_RECORD_FIXTURE } from './transcribeSlice.testFixtures';
 describe('transcribeResultsSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sseMocks.handlers.clear();
+    sseMocks.create.mockReturnValue({
+      on: (eventType: string, handler: (event: unknown) => void) => {
+        sseMocks.handlers.set(eventType, handler);
+      },
+      connect: sseMocks.connect,
+      close: sseMocks.close,
+    });
     useStore.setState({
       transcriptionText: TRANSCRIPTION_RECORD_FIXTURE.text,
       transcriptionRecord: TRANSCRIPTION_RECORD_FIXTURE,
       transcriptionHistory: [TRANSCRIPTION_RECORD_FIXTURE],
       isDeletingTranscriptionResult: false,
+      backgroundTasks: [],
       batchTranscriptionItems: [
         {
           fileName: TRANSCRIPTION_RECORD_FIXTURE.file_name,
@@ -85,5 +111,68 @@ describe('transcribeResultsSlice', () => {
         transcriptionResult: formattedRecord,
       })
     );
+  });
+
+  test('后台总结 A 完成时不覆盖用户已打开的逐字稿 B', async () => {
+    const detailA = {
+      record: TRANSCRIPTION_RECORD_FIXTURE,
+      speakers: [],
+      segments: [],
+      turns: [],
+      summary: null,
+      summaryItems: [],
+      claims: [],
+    };
+    const recordB = { ...TRANSCRIPTION_RECORD_FIXTURE, id: 43, file_name: 'episode-b.mp3' };
+    const detailB = { ...detailA, record: recordB };
+    const completedA = {
+      ...detailA,
+      record: { ...TRANSCRIPTION_RECORD_FIXTURE, summary_status: 'completed' as const },
+    };
+    apiMocks.summarize.mockResolvedValue({ status: 202, data: { accepted: true } });
+    useStore.setState({
+      transcriptDetail: detailA,
+      transcriptionHistory: [TRANSCRIPTION_RECORD_FIXTURE, recordB],
+      isSummarizingTranscript: false,
+    });
+
+    await useStore.getState().summarizeTranscript(TRANSCRIPTION_RECORD_FIXTURE.id);
+    useStore.setState({
+      transcriptDetail: detailB,
+      isSummarizingTranscript: false,
+      transcriptSummaryProgress: {
+        phase: 'idle', percent: 0, current: 0, total: 0, message: '等待总结',
+      },
+    });
+
+    sseMocks.handlers.get('complete')?.({
+      transcriptionId: TRANSCRIPTION_RECORD_FIXTURE.id,
+      phase: 'summary-completed',
+      percent: 100,
+      transcript: completedA,
+      timestamp: 1,
+    });
+
+    expect(useStore.getState().transcriptDetail).toEqual(detailB);
+    expect(useStore.getState().transcriptionHistory[0].summary_status).toBe('completed');
+    expect(useStore.getState().backgroundTasks).toEqual([]);
+  });
+
+  test('同一逐字稿已有后台总结时不重复提交新任务', async () => {
+    useStore.getState().startBackgroundTask({
+      taskId: 'summary-existing',
+      kind: 'transcript-summary',
+      entityId: TRANSCRIPTION_RECORD_FIXTURE.id,
+      title: '播客逐字稿总结',
+      href: `/history/transcriptions/${TRANSCRIPTION_RECORD_FIXTURE.id}`,
+      status: 'connection_lost',
+    });
+
+    await expect(
+      useStore.getState().summarizeTranscript(TRANSCRIPTION_RECORD_FIXTURE.id)
+    ).rejects.toThrow('总结任务仍在后台运行');
+
+    expect(apiMocks.summarize).not.toHaveBeenCalled();
+    expect(sseMocks.create).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,12 @@
 import { useEffect, Suspense, lazy } from 'react'
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom'
 import { Sidebar } from './components/Layout/Sidebar'
+import { GlobalTaskProgressBar } from './components/Layout/GlobalTaskProgressBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { SourceCollection } from './pages/SourceCollection'
+import { sseRegistry } from './services/sseRegistry'
 import useStore from './store'
+import { disposeProjectWorkspaceRuntime } from './store/projectWorkspaceSlice'
 
 // 代码分割：非首屏路由懒加载
 const ScriptEditor = lazy(() => import('./pages/ScriptEditor').then(m => ({ default: m.ScriptEditor })))
@@ -46,6 +49,11 @@ function AppLayout() {
     fetchSettings()
   }, [fetchSettings])
 
+  useEffect(() => () => {
+    disposeProjectWorkspaceRuntime()
+    sseRegistry.closeAll()
+  }, [])
+
   useEffect(() => {
     document.documentElement.dataset.uiFontPreset = uiFontPreset
     document.documentElement.dataset.uiFontScale = uiFontScale
@@ -57,11 +65,14 @@ function AppLayout() {
       <Sidebar />
 
       {/* 主内容区域 */}
-      <ErrorBoundary>
-        <Suspense fallback={<PageLoader />}>
-          <Outlet />
-        </Suspense>
-      </ErrorBoundary>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <GlobalTaskProgressBar />
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
     </div>
   )
 }

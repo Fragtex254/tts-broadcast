@@ -59,6 +59,7 @@ describe('transcribeTaskSlice', () => {
         total_processing_seconds: 0,
       },
       isTranscribing: false,
+      backgroundTasks: [],
       transcribeProgress: {
         phase: 'idle',
         percent: 0,
@@ -92,6 +93,7 @@ describe('transcribeTaskSlice', () => {
       transcriptionHistory: [TRANSCRIPTION_RECORD_FIXTURE],
       isTranscribing: false,
       transcribeProgress: { phase: 'completed', percent: 100 },
+      backgroundTasks: [],
     });
     const formData = apiMocks.transcribe.mock.calls[0]?.[0] as FormData;
     expect(formData.get('context')).toBe('访谈上下文');

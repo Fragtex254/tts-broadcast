@@ -15,6 +15,7 @@ const audio = require('../../src/services/audio');
 const audioAsset = require('../../src/services/audioAsset');
 const mimo = require('../../src/services/mimo');
 const segmentStore = require('../../src/services/segmentStore');
+const sseManager = require('../../src/services/sseManager');
 const ttsQueue = require('../../src/services/ttsQueue');
 const generationJobStore = require('../../src/services/generationJobStore');
 const { cleanAudioFile } = require('../../src/utils/validation');
@@ -705,6 +706,21 @@ describe('Segments API', () => {
       // 仍逐段调用 TTS（由队列统一限速）
       expect(tts.generateSpeech).toHaveBeenCalledTimes(3);
       expect(res.body.segments.every((s) => s.status === 'generated')).toBe(true);
+    }, 15000);
+
+    test('每轮批量生成使用请求提供的独立 SSE taskId', async () => {
+      const completeSpy = jest.spyOn(sseManager, 'sendComplete');
+      const taskId = `segment-${cloneBroadcastId}-test-run`;
+
+      const res = await request(app)
+        .post(`/api/broadcast/${cloneBroadcastId}/segments/batch-generate`)
+        .send({ taskId });
+
+      expect(res.status).toBe(200);
+      const [sentTaskId, payload] = completeSpy.mock.calls.at(-1);
+      expect(sentTaskId).toBe(taskId);
+      expect(Array.isArray(payload.segments)).toBe(true);
+      expect(Array.isArray(payload.results)).toBe(true);
     }, 15000);
 
     test('每次写入都使用 segment ID 和唯一 token，不按 index 覆盖旧路径', async () => {

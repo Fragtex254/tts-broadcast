@@ -51,4 +51,19 @@ describe('SSE 连接管理器', () => {
     expect(second.end).toHaveBeenCalledTimes(1);
     expect(sseManager.getConnectionCount()).toBe(0);
   });
+
+  test('断线期间保留 terminal 事件供重连回放，首次订阅可清除旧结果', () => {
+    const sseManager = require('../../src/services/sseManager');
+    const response = { write: jest.fn() };
+
+    sseManager.sendComplete('task-replay', { phase: 'completed', timestamp: 1 });
+
+    expect(sseManager.replayTerminal('task-replay', response)).toBe(true);
+    expect(response.write).toHaveBeenCalledWith(
+      expect.stringContaining('event: complete')
+    );
+
+    sseManager.clearReplay('task-replay');
+    expect(sseManager.replayTerminal('task-replay', response)).toBe(false);
+  });
 });

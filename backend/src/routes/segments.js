@@ -327,10 +327,20 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
   try {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
-    broadcastIdForEvents = String(idCheck.id);
+    const requestedTaskId = req.body?.taskId;
+    if (requestedTaskId !== undefined && (
+      typeof requestedTaskId !== 'string'
+      || !requestedTaskId.trim()
+      || requestedTaskId.length > 128
+      || !/^[A-Za-z0-9._:-]+$/.test(requestedTaskId)
+    )) {
+      return res.status(400).json({ error: '分段生成任务 ID 无效' });
+    }
+    broadcastIdForEvents = requestedTaskId?.trim() || String(idCheck.id);
 
     const broadcast = broadcastStore.getById(idCheck.id);
     if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+    sseManager.clearReplay(broadcastIdForEvents);
 
     const { voiceType, voiceConfig } = voiceConfigService.parseBroadcastVoiceConfig(broadcast);
     const pendingSegments = segmentStore.getPendingByBroadcastId(idCheck.id);
@@ -338,7 +348,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     // 如果没有待生成的 segments，直接返回完成
     if (pendingSegments.length === 0) {
       const segments = segmentStore.getByBroadcastId(idCheck.id);
-      sseManager.sendComplete(String(idCheck.id), {
+      sseManager.sendComplete(broadcastIdForEvents, {
         segments,
         results: [],
         timestamp: Date.now()
@@ -390,7 +400,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     }
 
     // 发送开始事件
-    sseManager.send(String(idCheck.id), 'batch-generate-start', {
+    sseManager.send(broadcastIdForEvents, 'batch-generate-start', {
       total: pendingSegments.length,
       timestamp: Date.now()
     });
@@ -404,7 +414,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
         ...(error ? { error: error.message || '语音生成失败' } : {}),
       };
       if (current) {
-        sseManager.sendProgress(String(idCheck.id), {
+        sseManager.sendProgress(broadcastIdForEvents, {
           segmentId: segment.id,
           status: current.status,
           discarded: true,
@@ -442,7 +452,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
       }
 
       results[index] = { id: segment.id, status: 'failed', error: errorMessage };
-      sseManager.sendProgress(String(idCheck.id), {
+      sseManager.sendProgress(broadcastIdForEvents, {
         segmentId: segment.id,
         status: 'failed',
         error: errorMessage,
@@ -467,7 +477,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
           if (!generationToken) {
             throw new SegmentSnapshotChangedError();
           }
-          sseManager.sendProgress(String(idCheck.id), {
+          sseManager.sendProgress(broadcastIdForEvents, {
             segmentId: segment.id,
             status: 'generating',
             current: index + 1,
@@ -502,7 +512,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
         results[index] = { id: segment.id, status: 'generated' };
 
         // 推送成功事件
-        sseManager.sendProgress(String(idCheck.id), {
+        sseManager.sendProgress(broadcastIdForEvents, {
           segmentId: segment.id,
           status: 'generated',
           audioPath: generatedAudioPath,
@@ -535,7 +545,7 @@ router.post('/:id/segments/batch-generate', async (req, res) => {
     const segments = segmentStore.getByBroadcastId(idCheck.id);
 
     // 推送完成事件
-    sseManager.sendComplete(String(idCheck.id), {
+    sseManager.sendComplete(broadcastIdForEvents, {
       segments,
       results,
       timestamp: Date.now()

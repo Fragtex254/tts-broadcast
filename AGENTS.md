@@ -35,7 +35,7 @@
 - ID 校验使用 `validateId()`，音频文件删除使用 `cleanAudioFile()`。
 - 外部 API 测试必须 mock，不依赖真实网络或真实业务密钥。
 - 高并发外部模型任务必须走全局限速队列：TTS 走 `backend/src/services/ttsQueue.js`，LLM 走 `backend/src/services/llmQueue.js`，禁止在路由或服务里直接 `Promise.all` 打 MiniMax/MiMo；MiMo TTS 单例必须保留持久化限速账本和自适应安全并发，RPM 只按真实 HTTP 请求计数，voiceclone payload 必须通过独立的在途字节上限保护，禁止把 MiB 伪装成 RPM 或并发槽成本；保存到 `/audio/` 的大 WAV 克隆参考音频统一由 `audio.resolveVoiceClone()` 压缩并缓存后再批量发送；批量分段生成必须通过 `generation_jobs` lease 防重复入队。
-- 长任务必须有 loading/error 状态；已接入 SSE 的任务要发送开始、进度、完成、失败事件。
+- 长任务必须有 loading/error 状态；已接入 SSE 的任务要发送开始、进度、完成、失败事件。前端所有 SSE payload 必须按任务协议经 Zod 校验；`EventSource`、重试 timer 与回调只允许保存在 `services/sseRegistry.ts` 等模块级注册表，Zustand 只保存可序列化任务快照。路由切换不得中断健康后台任务，应用根卸载统一关闭；传输断线按 1/2/4 秒最多重连 3 次，耗尽后落到可返回任务页重试的状态。服务端 `complete/error` 需做有界短期 terminal 回放以覆盖重连窗口；每轮任务使用独立 taskId，生产端发送前清同 ID 的旧快照。
 - 前后端契约不得使用裸 `any`；新增持久化字段必须端到端同步。
 - 前端设计系统当前为 Warm Workbench / Soft Editorial：语义色仍使用 `paper/ink/pink/lemon/blush/sage/lilac`，底层参考色板见 `frontend/src/index.css` 与 `.claude/skills/frontend-styling/SKILL.md`，组件层优先使用语义色。
 - 前端二级界面/弹窗/全屏编辑面板统一使用 `frontend/src/components/ModalShell.tsx`；禁止在业务组件里重复手写 `fixed inset-0`、`role="dialog"` 和关闭键盘逻辑。

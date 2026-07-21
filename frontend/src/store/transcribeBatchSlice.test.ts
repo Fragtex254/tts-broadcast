@@ -49,6 +49,7 @@ describe('transcribeBatchSlice', () => {
     useStore.setState({
       batchTranscriptionItems: [],
       isBatchTranscribing: false,
+      backgroundTasks: [],
       transcriptionHistory: [],
       transcriptionStats: {
         total_count: 0,
@@ -86,6 +87,25 @@ describe('transcribeBatchSlice', () => {
       }),
     ]);
     expect(useStore.getState().isBatchTranscribing).toBe(true);
+    expect(useStore.getState().backgroundTasks).toEqual([
+      expect.objectContaining({
+        kind: 'batch-transcribe',
+        href: '/transcribe',
+        status: 'connecting',
+      }),
+    ]);
+
+    sseMocks.handlers.get('progress')?.({
+      phase: 'file-start',
+      index: 0,
+      fileName: 'episode.mp3',
+      total: 1,
+      percent: 10,
+    });
+    expect(useStore.getState().backgroundTasks[0]).toMatchObject({
+      status: 'running',
+      percent: 10,
+    });
 
     sseMocks.handlers.get('complete')?.({
       phase: 'completed',
@@ -116,6 +136,7 @@ describe('transcribeBatchSlice', () => {
           transcriptionResult: TRANSCRIPTION_RECORD_FIXTURE,
         },
       ],
+      backgroundTasks: [],
     });
     await vi.waitFor(() => {
       expect(useStore.getState().transcriptionStats).toEqual(TRANSCRIPTION_STATS_FIXTURE);

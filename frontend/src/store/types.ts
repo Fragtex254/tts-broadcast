@@ -714,6 +714,50 @@ export interface BatchTranscriptionProgress {
   message: string;
 }
 
+export type BackgroundTaskStatus = 'connecting' | 'running' | 'reconnecting' | 'connection_lost';
+
+export interface BackgroundTaskSnapshot {
+  taskId: string;
+  kind: string;
+  entityId?: string | number;
+  title: string;
+  href: string;
+  status: BackgroundTaskStatus;
+  phase: string;
+  percent: number;
+  message: string;
+  retryAttempt: number;
+  startedAt: number;
+  updatedAt: number;
+}
+
+export interface StartBackgroundTaskInput {
+  taskId: string;
+  kind: string;
+  entityId?: string | number;
+  title: string;
+  href: string;
+  status?: BackgroundTaskStatus;
+  phase?: string;
+  percent?: number;
+  message?: string;
+  retryAttempt?: number;
+  startedAt?: number;
+  updatedAt?: number;
+}
+
+export interface BackgroundTaskUpdate {
+  kind?: string;
+  entityId?: string | number;
+  title?: string;
+  href?: string;
+  status?: BackgroundTaskStatus;
+  phase?: string;
+  percent?: number;
+  message?: string;
+  retryAttempt?: number;
+}
+
 /** 确认对话框 */
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -760,6 +804,12 @@ export interface AppState {
   batchTranscriptionItems: BatchTranscriptionItem[];
   isBatchTranscribing: boolean;
   batchTranscribeProgress: BatchTranscriptionProgress;
+
+  backgroundTasks: BackgroundTaskSnapshot[];
+  startBackgroundTask: (input: StartBackgroundTaskInput) => void;
+  updateBackgroundTask: (taskId: string, update: BackgroundTaskUpdate) => void;
+  markBackgroundTaskConnectionLost: (taskId: string, message: string) => void;
+  endBackgroundTask: (taskId: string) => void;
 
   voiceConfig: VoiceConfig;
   updateVoiceConfig: (config: Partial<VoiceConfig>) => void;

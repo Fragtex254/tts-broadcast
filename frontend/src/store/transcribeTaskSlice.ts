@@ -15,8 +15,9 @@ import type {
   TranscriptionProgress,
   TranscriptionResult,
 } from './types';
-import type { StoreSet } from './storeTypes';
+import type { StoreGet, StoreSet } from './storeTypes';
 import { mergeTranscriptionChunk, mergeTranscriptionText } from './transcriptionProgressModel';
+import { bindBackgroundTaskTransport } from './sseBackgroundTask';
 import {
   appendTranscribeOptions,
   createTranscriptionTaskId,
@@ -54,7 +55,7 @@ type TranscribeTaskSlice = Pick<
   | 'clearTranscription'
 >;
 
-export function createTranscribeTaskSlice(set: StoreSet): TranscribeTaskSlice {
+export function createTranscribeTaskSlice(set: StoreSet, get: StoreGet): TranscribeTaskSlice {
   return {
     transcriptionText: '',
     transcriptionChunks: [],
@@ -69,9 +70,38 @@ export function createTranscribeTaskSlice(set: StoreSet): TranscribeTaskSlice {
       options?: TranscribeOptions
     ) => {
       const taskId = createTranscriptionTaskId();
-      const sseClient = createSSEClient(taskId);
+      const sseClient = createSSEClient(taskId, 'transcribe');
+
+      get().startBackgroundTask({
+        taskId,
+        kind: 'transcribe',
+        title: `转录：${file.name}`,
+        href: '/transcribe',
+        phase: 'uploading',
+        percent: 0,
+        message: '正在上传音频',
+      });
+      bindBackgroundTaskTransport(sseClient, taskId, get, () => {
+        set({
+          isTranscribing: true,
+          transcribeProgress: {
+            phase: 'failed',
+            percent: 0,
+            current: 0,
+            total: 0,
+            message: '连接中断，请在顶部任务条重新连接',
+          },
+        });
+      });
 
       sseClient.on<SSEProgressEvent>('progress', (progress) => {
+        const message = progressMessage(progress);
+        get().updateBackgroundTask(taskId, {
+          status: 'running',
+          phase: progress.phase ?? 'transcribing',
+          percent: progress.percent ?? 0,
+          message,
+        });
         set((state) => ({
           transcriptionText: mergeTranscriptionText(state.transcriptionText, progress.text),
           transcriptionChunks: mergeTranscriptionChunk(state.transcriptionChunks, progress),
@@ -80,12 +110,13 @@ export function createTranscribeTaskSlice(set: StoreSet): TranscribeTaskSlice {
             percent: progress.percent ?? 0,
             current: progress.current ?? 0,
             total: progress.total ?? 0,
-            message: progressMessage(progress),
+            message,
           },
         }));
       });
 
       sseClient.on<SSECompleteEvent>('complete', (result) => {
+        get().endBackgroundTask(taskId);
         set((state) => ({
           transcriptionText: result.text ?? '',
           transcriptionChunks: [],
@@ -106,7 +137,7 @@ export function createTranscribeTaskSlice(set: StoreSet): TranscribeTaskSlice {
       });
 
       sseClient.on<SSEErrorEvent>('error', (event) => {
-        if (event.error === 'SSE 连接错误') return;
+        get().endBackgroundTask(taskId);
         set({
           isTranscribing: false,
           transcribeProgress: {
@@ -145,6 +176,12 @@ export function createTranscribeTaskSlice(set: StoreSet): TranscribeTaskSlice {
         const response = await transcribeApi.transcribe(formData, {
           onUploadProgress: (event) => {
             const uploadPercent = event.total ? Math.round((event.loaded / event.total) * 10) : 5;
+            get().updateBackgroundTask(taskId, {
+              status: 'running',
+              phase: 'uploading',
+              percent: Math.min(uploadPercent, 10),
+              message: '正在上传音频',
+            });
             set({
               transcribeProgress: {
                 phase: 'uploading',
@@ -157,6 +194,7 @@ export function createTranscribeTaskSlice(set: StoreSet): TranscribeTaskSlice {
           },
         });
         const result = safeParseStrict(TranscriptionResultSchema, response.data) as TranscriptionResult;
+        get().endBackgroundTask(taskId);
         set((state) => ({
           transcriptionText: result.text,
           transcriptionChunks: [],
@@ -176,6 +214,7 @@ export function createTranscribeTaskSlice(set: StoreSet): TranscribeTaskSlice {
         void refreshTranscriptionStats(set);
         return result;
       } catch (error) {
+        get().endBackgroundTask(taskId);
         set({
           isTranscribing: false,
           transcribeProgress: {

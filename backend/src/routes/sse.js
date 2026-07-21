@@ -23,6 +23,7 @@ router.get('/:taskId', (req, res) => {
 
   // 添加到连接管理器
   sseManager.addClient(taskId, res);
+  sseManager.replayTerminal(taskId, res);
 
   // 心跳保活（每 30 秒）
   const heartbeat = setInterval(() => {

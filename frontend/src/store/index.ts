@@ -5,6 +5,7 @@ import { createScheduleSlice } from './scheduleSlice';
 import { createSegmentSlice } from './segmentSlice';
 import { createSettingsSlice } from './settingsSlice';
 import { createVoiceConfigSlice } from './voiceConfigSlice';
+import { createBackgroundTaskSlice } from './backgroundTaskSlice';
 import { createTranscribeTaskSlice } from './transcribeTaskSlice';
 import { createTranscribeBatchSlice } from './transcribeBatchSlice';
 import { createTranscribeResultsSlice } from './transcribeResultsSlice';
@@ -25,6 +26,9 @@ export type {
   BatchTranscriptionItemStatus,
   BatchTranscriptionPhase,
   BatchTranscriptionProgress,
+  BackgroundTaskSnapshot,
+  BackgroundTaskStatus,
+  BackgroundTaskUpdate,
   Broadcast,
   ClaimRelationAnalysis,
   ClaimSearchResult,
@@ -52,6 +56,7 @@ export type {
   ContentRevisionProvenance,
   ContentSourceFragment,
   StartContentCreationJobInput,
+  StartBackgroundTaskInput,
   ConfirmDialogProps,
   ContentProjectSource,
   ContentProjectSourceInput,
@@ -92,10 +97,11 @@ export type {
 export const useStore = create<AppState>((set, get) => ({
   ...createBroadcastSlice(set),
   ...createVoiceConfigSlice(set),
+  ...createBackgroundTaskSlice(set),
   ...createSegmentSlice(set, get),
-  ...createTranscribeTaskSlice(set),
-  ...createTranscribeBatchSlice(set),
-  ...createTranscribeResultsSlice(set),
+  ...createTranscribeTaskSlice(set, get),
+  ...createTranscribeBatchSlice(set, get),
+  ...createTranscribeResultsSlice(set, get),
   ...createResearchSlice(set),
   ...createProjectWorkspaceSlice(set, get),
   ...createSettingsSlice(set),

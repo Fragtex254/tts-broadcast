@@ -27,8 +27,9 @@ import type {
   TranscriptionRecord,
   TranscriptionStats,
 } from './types';
-import type { StoreSet } from './storeTypes';
+import type { StoreGet, StoreSet } from './storeTypes';
 import { createTranscriptionTaskId } from './transcribeSliceShared';
+import { bindBackgroundTaskTransport } from './sseBackgroundTask';
 
 const logger = createScopedLogger('transcribe-slice');
 
@@ -91,7 +92,7 @@ type TranscribeResultsSlice = Pick<
   | 'deleteTranscriptClaim'
 >;
 
-export function createTranscribeResultsSlice(set: StoreSet): TranscribeResultsSlice {
+export function createTranscribeResultsSlice(set: StoreSet, get: StoreGet): TranscribeResultsSlice {
   return {
     transcriptionHistory: [],
     transcriptionStats: EMPTY_TRANSCRIPTION_STATS,
@@ -110,7 +111,18 @@ export function createTranscribeResultsSlice(set: StoreSet): TranscribeResultsSl
       try {
         const response = await transcribeApi.getDetail(id);
         const data = safeParseStrict(TranscriptDetailResponseSchema, response.data);
-        set({ transcriptDetail: data.transcript, isLoadingTranscriptDetail: false });
+        set((state) => ({
+          transcriptDetail: data.transcript,
+          isLoadingTranscriptDetail: false,
+          ...(state.transcriptDetail?.record.id === id
+            ? {}
+            : {
+                isSummarizingTranscript: false,
+                transcriptSummaryProgress: IDLE_SUMMARY_PROGRESS,
+                isAnalyzingClaims: false,
+                transcriptClaimProgress: IDLE_SUMMARY_PROGRESS,
+              }),
+        }));
         return data.transcript;
       } catch (error) {
         set({ isLoadingTranscriptDetail: false });
@@ -180,83 +192,133 @@ export function createTranscribeResultsSlice(set: StoreSet): TranscribeResultsSl
     },
 
     summarizeTranscript: async (transcriptionId) => {
+      if (get().backgroundTasks.some((task) => (
+        task.kind === 'transcript-summary' && task.entityId === transcriptionId
+      ))) {
+        throw new Error('该逐字稿的总结任务仍在后台运行，请先恢复当前连接');
+      }
       const taskId = createTranscriptionTaskId().replace('transcribe-', 'summary-');
-      const sseClient = createSSEClient(taskId);
+      const sseClient = createSSEClient(taskId, 'summary');
+      get().startBackgroundTask({
+        taskId,
+        kind: 'transcript-summary',
+        entityId: transcriptionId,
+        title: '播客逐字稿总结',
+        href: `/history/transcriptions/${transcriptionId}`,
+        phase: 'queued',
+        percent: 0,
+        message: '总结任务已进入队列',
+      });
+      bindBackgroundTaskTransport(sseClient, taskId, get, () => {
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              isSummarizingTranscript: true,
+              transcriptSummaryProgress: {
+                phase: 'failed',
+                percent: 0,
+                current: 0,
+                total: 0,
+                message: '连接中断，请在顶部任务条重新连接',
+              },
+            }
+          : {});
+      });
       sseClient.on<SSEProgressEvent>('progress', (progress) => {
+        if (progress.transcriptionId !== transcriptionId) return;
         const phase =
           progress.phase === 'synthesizing' ? 'synthesizing' : 'summarizing-batches';
-        set({
-          transcriptSummaryProgress: {
-            phase,
-            percent: progress.percent ?? 0,
-            current: progress.current ?? 0,
-            total: progress.total ?? 0,
-            message:
-              phase === 'synthesizing' ? '正在合并全局摘要' : '正在分批阅读逐字稿',
-          },
+        get().updateBackgroundTask(taskId, {
+          status: 'running',
+          phase,
+          percent: progress.percent ?? 0,
+          message: phase === 'synthesizing' ? '正在合并全局摘要' : '正在分批阅读逐字稿',
         });
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              transcriptSummaryProgress: {
+                phase,
+                percent: progress.percent ?? 0,
+                current: progress.current ?? 0,
+                total: progress.total ?? 0,
+                message:
+                  phase === 'synthesizing' ? '正在合并全局摘要' : '正在分批阅读逐字稿',
+              },
+            }
+          : {});
       });
       sseClient.on<SSECompleteEvent>('complete', (event) => {
-        if (!event.transcript) return;
+        if (!event.transcript || event.transcriptionId !== transcriptionId) return;
+        get().endBackgroundTask(taskId);
         const transcript: TranscriptDetail = safeParseStrict(
           TranscriptDetailSchema,
           event.transcript
         );
         set((state) => ({
-          transcriptDetail: transcript,
-          isSummarizingTranscript: false,
           transcriptionHistory: state.transcriptionHistory.map((record) =>
             record.id === transcript.record.id ? transcript.record : record
           ),
-          transcriptSummaryProgress: {
-            phase: 'completed',
-            percent: 100,
-            current: 0,
-            total: 0,
-            message: '总结完成',
-          },
+          ...(state.transcriptDetail?.record.id === transcriptionId
+            ? {
+                transcriptDetail: transcript,
+                isSummarizingTranscript: false,
+                transcriptSummaryProgress: {
+                  phase: 'completed' as const,
+                  percent: 100,
+                  current: 0,
+                  total: 0,
+                  message: '总结完成',
+                },
+              }
+            : {}),
         }));
         sseClient.close();
       });
       sseClient.on<SSEErrorEvent>('error', (event) => {
-        if (event.error === 'SSE 连接错误') return;
-        set({
-          isSummarizingTranscript: false,
-          transcriptSummaryProgress: {
-            phase: 'failed',
-            percent: 0,
-            current: 0,
-            total: 0,
-            message: event.error || '总结失败',
-          },
-        });
+        get().endBackgroundTask(taskId);
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              isSummarizingTranscript: false,
+              transcriptSummaryProgress: {
+                phase: 'failed',
+                percent: 0,
+                current: 0,
+                total: 0,
+                message: event.error || '总结失败',
+              },
+            }
+          : {});
         sseClient.close();
       });
-      set({
-        isSummarizingTranscript: true,
-        transcriptSummaryProgress: {
-          phase: 'queued',
-          percent: 0,
-          current: 0,
-          total: 0,
-          message: '总结任务已进入队列',
-        },
-      });
+      set((state) => state.transcriptDetail?.record.id === transcriptionId
+        ? {
+            isSummarizingTranscript: true,
+            transcriptSummaryProgress: {
+              phase: 'queued',
+              percent: 0,
+              current: 0,
+              total: 0,
+              message: '总结任务已进入队列',
+            },
+          }
+        : {});
       sseClient.connect();
       try {
         await transcribeApi.summarize(transcriptionId, taskId);
       } catch (error) {
+        get().endBackgroundTask(taskId);
         sseClient.close();
-        set({
-          isSummarizingTranscript: false,
-          transcriptSummaryProgress: {
-            phase: 'failed',
-            percent: 0,
-            current: 0,
-            total: 0,
-            message: getApiErrorMessage(error, '无法开始总结'),
-          },
-        });
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              isSummarizingTranscript: false,
+              transcriptSummaryProgress: {
+                phase: 'failed',
+                percent: 0,
+                current: 0,
+                total: 0,
+                message: getApiErrorMessage(error, '无法开始总结'),
+              },
+            }
+          : {});
         throw new Error(getApiErrorMessage(error, '无法开始总结'), { cause: error });
       }
     },
@@ -285,38 +347,81 @@ export function createTranscribeResultsSlice(set: StoreSet): TranscribeResultsSl
     },
 
     analyzeTranscriptClaims: async (transcriptionId) => {
+      if (get().backgroundTasks.some((task) => (
+        task.kind === 'transcript-claims' && task.entityId === transcriptionId
+      ))) {
+        throw new Error('该逐字稿的观点分析仍在后台运行，请先恢复当前连接');
+      }
       const taskId = createTranscriptionTaskId().replace('transcribe-', 'claims-');
-      const sseClient = createSSEClient(taskId);
+      const sseClient = createSSEClient(taskId, 'claims');
+      get().startBackgroundTask({
+        taskId,
+        kind: 'transcript-claims',
+        entityId: transcriptionId,
+        title: '播客观点分析',
+        href: `/history/transcriptions/${transcriptionId}`,
+        phase: 'queued',
+        percent: 0,
+        message: '观点分析任务已进入队列',
+      });
+      bindBackgroundTaskTransport(sseClient, taskId, get, () => {
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              isAnalyzingClaims: true,
+              transcriptClaimProgress: {
+                phase: 'failed',
+                percent: 0,
+                current: 0,
+                total: 0,
+                message: '连接中断，请在顶部任务条重新连接',
+              },
+            }
+          : {});
+      });
       sseClient.on<SSEProgressEvent>('progress', (progress) => {
+        if (progress.transcriptionId !== transcriptionId) return;
         const phase =
           progress.phase === 'embedding-claims' ? 'synthesizing' : 'summarizing-batches';
-        set({
-          transcriptClaimProgress: {
-            phase,
-            percent: progress.percent ?? 0,
-            current: progress.current ?? 0,
-            total: progress.total ?? 0,
-            message:
-              progress.phase === 'embedding-claims'
-                ? '正在建立观点搜索索引'
-                : '正在分批提取观点',
-          },
+        get().updateBackgroundTask(taskId, {
+          status: 'running',
+          phase: progress.phase ?? 'analyzing-claims',
+          percent: progress.percent ?? 0,
+          message:
+            progress.phase === 'embedding-claims'
+              ? '正在建立观点搜索索引'
+              : '正在分批提取观点',
         });
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              transcriptClaimProgress: {
+                phase,
+                percent: progress.percent ?? 0,
+                current: progress.current ?? 0,
+                total: progress.total ?? 0,
+                message:
+                  progress.phase === 'embedding-claims'
+                    ? '正在建立观点搜索索引'
+                    : '正在分批提取观点',
+              },
+            }
+          : {});
       });
       sseClient.on<SSECompleteEvent>('complete', (event) => {
+        if (event.transcriptionId !== transcriptionId) return;
+        get().endBackgroundTask(taskId);
         const claims: TranscriptClaim[] = event.claims ?? [];
         set((state) => ({
-          isAnalyzingClaims: false,
-          transcriptClaimProgress: {
-            phase: 'completed',
-            percent: 100,
-            current: claims.length,
-            total: claims.length,
-            message: '观点分析完成',
-          },
-          transcriptDetail:
-            state.transcriptDetail?.record.id === transcriptionId
-              ? {
+          ...(state.transcriptDetail?.record.id === transcriptionId
+            ? {
+                isAnalyzingClaims: false,
+                transcriptClaimProgress: {
+                  phase: 'completed' as const,
+                  percent: 100,
+                  current: claims.length,
+                  total: claims.length,
+                  message: '观点分析完成',
+                },
+                transcriptDetail: {
                   ...state.transcriptDetail,
                   record: {
                     ...state.transcriptDetail.record,
@@ -324,50 +429,58 @@ export function createTranscribeResultsSlice(set: StoreSet): TranscribeResultsSl
                     claims_error: '',
                   },
                   claims,
-                }
-              : state.transcriptDetail,
+                },
+              }
+            : {}),
         }));
         sseClient.close();
       });
       sseClient.on<SSEErrorEvent>('error', (event) => {
-        if (event.error === 'SSE 连接错误') return;
-        set({
-          isAnalyzingClaims: false,
-          transcriptClaimProgress: {
-            phase: 'failed',
-            percent: 0,
-            current: 0,
-            total: 0,
-            message: event.error || '观点分析失败',
-          },
-        });
+        get().endBackgroundTask(taskId);
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              isAnalyzingClaims: false,
+              transcriptClaimProgress: {
+                phase: 'failed',
+                percent: 0,
+                current: 0,
+                total: 0,
+                message: event.error || '观点分析失败',
+              },
+            }
+          : {});
         sseClient.close();
       });
-      set({
-        isAnalyzingClaims: true,
-        transcriptClaimProgress: {
-          phase: 'queued',
-          percent: 0,
-          current: 0,
-          total: 0,
-          message: '观点分析任务已进入队列',
-        },
-      });
+      set((state) => state.transcriptDetail?.record.id === transcriptionId
+        ? {
+            isAnalyzingClaims: true,
+            transcriptClaimProgress: {
+              phase: 'queued',
+              percent: 0,
+              current: 0,
+              total: 0,
+              message: '观点分析任务已进入队列',
+            },
+          }
+        : {});
       sseClient.connect();
       try {
         await transcribeApi.analyzeClaims(transcriptionId, taskId);
       } catch (error) {
+        get().endBackgroundTask(taskId);
         sseClient.close();
-        set({
-          isAnalyzingClaims: false,
-          transcriptClaimProgress: {
-            phase: 'failed',
-            percent: 0,
-            current: 0,
-            total: 0,
-            message: getApiErrorMessage(error, '无法开始观点分析'),
-          },
-        });
+        set((state) => state.transcriptDetail?.record.id === transcriptionId
+          ? {
+              isAnalyzingClaims: false,
+              transcriptClaimProgress: {
+                phase: 'failed',
+                percent: 0,
+                current: 0,
+                total: 0,
+                message: getApiErrorMessage(error, '无法开始观点分析'),
+              },
+            }
+          : {});
         throw new Error(getApiErrorMessage(error, '无法开始观点分析'), { cause: error });
       }
     },
