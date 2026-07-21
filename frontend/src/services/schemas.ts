@@ -20,10 +20,14 @@ export const AsrProviderSchema = z.enum(['mimo', 'qwen_mlx', 'wsl_asr']);
 export const AsrEngineSchema = z.enum(['qwen', 'moss']);
 export const UiFontPresetSchema = z.enum(['modern', 'system', 'editorial']);
 export const UiFontScaleSchema = z.enum(['compact', 'comfortable', 'large', 'extra_large']);
+export const MaskedSecretSchema = z.object({
+  masked: z.string(),
+  is_set: z.boolean(),
+});
 
 export const SettingsSchema = z.object({
-  mimo_api_key: z.string(),
-  mimo_tts_api_key: z.string(),
+  mimo_api_key: MaskedSecretSchema,
+  mimo_tts_api_key: MaskedSecretSchema,
   llm_api_format: LlmApiFormatSchema,
   llm_base_url: z.string(),
   llm_model: z.string(),
@@ -33,16 +37,16 @@ export const SettingsSchema = z.object({
   llm_split_thinking_enabled: z.boolean(),
   embedding_enabled: z.boolean(),
   embedding_base_url: z.string(),
-  embedding_api_key: z.string(),
+  embedding_api_key: MaskedSecretSchema,
   embedding_model: z.string(),
   asr_provider: AsrProviderSchema,
   qwen_asr_base_url: z.string(),
   qwen_asr_model: z.string(),
-  qwen_asr_api_key: z.string(),
+  qwen_asr_api_key: MaskedSecretSchema,
   wsl_asr_base_url: z.string(),
   wsl_asr_engine: AsrEngineSchema,
   wsl_asr_model: z.string(),
-  wsl_asr_api_key: z.string(),
+  wsl_asr_api_key: MaskedSecretSchema,
   default_voice: z.string(),
   ui_font_preset: UiFontPresetSchema,
   ui_font_scale: UiFontScaleSchema,

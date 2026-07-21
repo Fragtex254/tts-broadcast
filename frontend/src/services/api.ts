@@ -12,6 +12,7 @@ import type {
   CreateContentProjectInput,
   NewsItem,
   Settings,
+  SettingsUpdate,
   VoiceConfig,
 } from '../store/types';
 import { createScopedLogger, toLogError } from './logger';
@@ -153,7 +154,7 @@ export const broadcastApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
 
-  update: (data: Partial<Settings>) =>
+  update: (data: SettingsUpdate) =>
     api.put('/settings', data),
 
   testKey: (

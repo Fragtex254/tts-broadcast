@@ -2,8 +2,21 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Header } from '../components/Layout/Header';
 import { PasswordField } from '../components/PasswordField';
 import { createScopedLogger, toLogError } from '../services/logger';
-import useStore, { type LlmModelOption, type Settings as AppSettings } from '../store';
-import { buildAutoSaveUpdate, changeBaseUrl } from './settingsDraft';
+import useStore, {
+  type LlmModelOption,
+  type MaskedSecret,
+  type Settings as AppSettings,
+  type SettingsFormData,
+} from '../store';
+import {
+  buildAutoSaveUpdate,
+  changeBaseUrl,
+  clearSecretInput,
+  clearSecretInputs,
+  createSettingsFormData,
+  getSecretPlaceholder,
+  isSecretSettingKey,
+} from './settingsDraft';
 
 const logger = createScopedLogger('settings-page');
 
@@ -34,6 +47,16 @@ const fontScaleOptions: { value: AppSettings['ui_font_scale']; label: string; de
   { value: 'extra_large', label: '大字', description: '远看更舒服' },
 ];
 
+interface SecretStatusProps {
+  secret: MaskedSecret;
+}
+
+const SecretStatus: React.FC<SecretStatusProps> = ({ secret }) => (
+  <span className="font-body text-[11px] text-ink-soft/70">
+    {secret.is_set ? `已配置 · ${secret.masked}` : '未配置'}
+  </span>
+);
+
 export const Settings: React.FC = () => {
   const settings = useStore((s) => s.settings);
   const isLoadingSettings = useStore((s) => s.isLoadingSettings);
@@ -42,12 +65,12 @@ export const Settings: React.FC = () => {
   const testApiKey = useStore((s) => s.testApiKey);
   const fetchLlmModels = useStore((s) => s.fetchLlmModels);
 
-  const [formData, setFormData] = useState(settings);
+  const [formData, setFormData] = useState<SettingsFormData>(() => createSettingsFormData(settings));
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { valid: boolean; error?: string }>>({});
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [dirtyFields, setDirtyFields] = useState<Set<keyof AppSettings>>(new Set());
+  const [dirtyFields, setDirtyFields] = useState<Set<keyof SettingsFormData>>(new Set());
   const [modelOptions, setModelOptions] = useState<LlmModelOption[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [modelFetchResult, setModelFetchResult] = useState<{ error?: string; resolvedUrl?: string } | null>(null);
@@ -60,7 +83,7 @@ export const Settings: React.FC = () => {
   const dirtyFieldsRef = useRef(dirtyFields);
   const hasSyncedAsrTab = useRef(false);
 
-  const setDirtyFieldsState = useCallback((next: Set<keyof AppSettings>) => {
+  const setDirtyFieldsState = useCallback((next: Set<keyof SettingsFormData>) => {
     dirtyFieldsRef.current = next;
     setDirtyFields(next);
   }, []);
@@ -68,8 +91,9 @@ export const Settings: React.FC = () => {
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
   useEffect(() => {
     if (dirtyFieldsRef.current.size > 0) return;
-    formDataRef.current = settings;
-    setFormData(settings);
+    const nextFormData = createSettingsFormData(settings);
+    formDataRef.current = nextFormData;
+    setFormData(nextFormData);
   }, [settings]);
   useEffect(() => {
     if (isLoadingSettings || hasSyncedAsrTab.current) return;
@@ -77,7 +101,7 @@ export const Settings: React.FC = () => {
     hasSyncedAsrTab.current = true;
   }, [isLoadingSettings, settings.asr_provider]);
 
-  const handleChange = <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
+  const handleChange = <K extends keyof SettingsFormData>(field: K, value: SettingsFormData[K]) => {
     const nextFormData = { ...formDataRef.current, [field]: value };
     const nextDirtyFields = new Set(dirtyFieldsRef.current).add(field);
     formDataRef.current = nextFormData;
@@ -87,11 +111,16 @@ export const Settings: React.FC = () => {
   };
 
   /** 自动保存单个字段（onBlur 或 debounce 调用） */
-  const handleAutoSave = useCallback(async (field: keyof AppSettings) => {
+  const handleAutoSave = useCallback(async (field: keyof SettingsFormData) => {
     const update = buildAutoSaveUpdate(formDataRef.current, dirtyFieldsRef.current, field);
     if (!update) return;
     try {
       await updateSettings(update);
+      if (isSecretSettingKey(field)) {
+        const nextFormData = clearSecretInput(formDataRef.current, field);
+        formDataRef.current = nextFormData;
+        setFormData(nextFormData);
+      }
       const nextDirtyFields = new Set(dirtyFieldsRef.current);
       nextDirtyFields.delete(field);
       setDirtyFieldsState(nextDirtyFields);
@@ -99,7 +128,7 @@ export const Settings: React.FC = () => {
   }, [setDirtyFieldsState, updateSettings]);
 
   /** debounce 自动保存，用于文本输入 */
-  const debouncedAutoSave = useCallback((field: keyof AppSettings, delay = 800) => {
+  const debouncedAutoSave = useCallback((field: keyof SettingsFormData, delay = 800) => {
     const key = String(field);
     if (autoSaveTimers.current[key]) clearTimeout(autoSaveTimers.current[key]);
     autoSaveTimers.current[key] = setTimeout(() => {
@@ -124,18 +153,18 @@ export const Settings: React.FC = () => {
     setSaveSuccess(false);
   };
 
-  const handleApiFormatChange = (value: AppSettings['llm_api_format']) => {
+  const handleApiFormatChange = (value: SettingsFormData['llm_api_format']) => {
     setApiFormatTouched(true);
     handleChange('llm_api_format', value);
   };
 
-  const handleImmediateSettingChange = async <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
+  const handleImmediateSettingChange = async <K extends keyof SettingsFormData>(field: K, value: SettingsFormData[K]) => {
     const nextFormData = { ...formDataRef.current, [field]: value };
     formDataRef.current = nextFormData;
     setFormData(nextFormData);
     setSaveSuccess(false);
     try {
-      await updateSettings({ [field]: value } as Pick<AppSettings, K>);
+      await updateSettings({ [field]: value } as Pick<SettingsFormData, K>);
       const nextDirtyFields = new Set(dirtyFieldsRef.current);
       nextDirtyFields.delete(field);
       setDirtyFieldsState(nextDirtyFields);
@@ -153,6 +182,9 @@ export const Settings: React.FC = () => {
     setSaveSuccess(false);
     try {
       await updateSettings(formDataRef.current);
+      const nextFormData = clearSecretInputs(formDataRef.current);
+      formDataRef.current = nextFormData;
+      setFormData(nextFormData);
       setDirtyFieldsState(new Set());
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -169,11 +201,12 @@ export const Settings: React.FC = () => {
     }
     setIsTestingKey(type);
     try {
-      const apiKey = type === 'tts' ? formData.mimo_tts_api_key : formData.mimo_api_key;
+      const currentFormData = formDataRef.current;
+      const apiKey = type === 'tts' ? currentFormData.mimo_tts_api_key : currentFormData.mimo_api_key;
       const llmConfig = type === 'llm' ? {
-        apiFormat: formData.llm_api_format,
-        baseUrl: formData.llm_base_url,
-        model: formData.llm_model,
+        apiFormat: currentFormData.llm_api_format,
+        baseUrl: currentFormData.llm_base_url,
+        model: currentFormData.llm_model,
       } : undefined;
       const result = await testApiKey(type, apiKey, llmConfig);
       setTestResults((prev) => ({ ...prev, [type]: result }));
@@ -190,7 +223,7 @@ export const Settings: React.FC = () => {
     try {
       const result = await fetchLlmModels({
         baseUrl: formData.llm_base_url,
-        apiKey: formData.mimo_api_key,
+        apiKey: formData.mimo_api_key || undefined,
         apiFormat: formData.llm_api_format,
       });
       setModelOptions(result.models);
@@ -348,12 +381,15 @@ export const Settings: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">LLM API Key</label>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">LLM API Key</label>
+                        <SecretStatus secret={settings.mimo_api_key} />
+                      </div>
                       <PasswordField
                         value={formData.mimo_api_key}
                         onChange={(v) => handleChange('mimo_api_key', v)}
                         onBlur={() => handleAutoSave('mimo_api_key')}
-                        placeholder="输入 LLM API Key"
+                        placeholder={getSecretPlaceholder(settings.mimo_api_key, '输入 LLM API Key')}
                       />
                     </div>
                     <div>
@@ -394,7 +430,7 @@ export const Settings: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleFetchModels}
-                        disabled={isFetchingModels || !formData.llm_base_url || !formData.mimo_api_key}
+                        disabled={isFetchingModels || !formData.llm_base_url || (!formData.mimo_api_key && !settings.mimo_api_key.is_set)}
                         className="px-4 py-2.5 bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn ui-transition duration-fast flex items-center justify-center gap-2 whitespace-nowrap"
                       >
                         {isFetchingModels ? (
@@ -464,7 +500,7 @@ export const Settings: React.FC = () => {
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button
                       onClick={() => handleTestKey('llm')}
-                      disabled={isTestingKey === 'llm' || !formData.mimo_api_key}
+                      disabled={isTestingKey === 'llm' || (!formData.mimo_api_key && !settings.mimo_api_key.is_set)}
                       className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn ui-transition duration-fast flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'llm' ? (
@@ -493,7 +529,13 @@ export const Settings: React.FC = () => {
                     <label className="font-body text-[11px] text-ink-soft">OpenAI-compatible Base URL<input value={formData.embedding_base_url} onChange={(event) => handleChange('embedding_base_url', event.target.value)} onBlur={() => handleAutoSave('embedding_base_url')} placeholder="https://api.openai.com/v1" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
                     <label className="font-body text-[11px] text-ink-soft">Embedding 模型<input value={formData.embedding_model} onChange={(event) => handleChange('embedding_model', event.target.value)} onBlur={() => handleAutoSave('embedding_model')} placeholder="text-embedding-3-small" className="mt-1 w-full rounded-xl border border-card-border bg-white/70 px-4 py-2.5 font-body text-[12px] text-ink outline-none focus:border-ink/20" /></label>
                   </div>
-                  <div><label className="mb-1 block font-body text-[11px] text-ink-soft">Embedding API Key</label><PasswordField value={formData.embedding_api_key} onChange={(value) => handleChange('embedding_api_key', value)} onBlur={() => handleAutoSave('embedding_api_key')} placeholder="输入 Embedding API Key" /></div>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <label className="font-body text-[11px] text-ink-soft">Embedding API Key</label>
+                      <SecretStatus secret={settings.embedding_api_key} />
+                    </div>
+                    <PasswordField value={formData.embedding_api_key} onChange={(value) => handleChange('embedding_api_key', value)} onBlur={() => handleAutoSave('embedding_api_key')} placeholder={getSecretPlaceholder(settings.embedding_api_key, '输入 Embedding API Key')} />
+                  </div>
                 </div>
 
                 <div className="border-t border-dashed border-card-border" />
@@ -508,12 +550,12 @@ export const Settings: React.FC = () => {
                       value={formData.mimo_tts_api_key}
                       onChange={(v) => handleChange('mimo_tts_api_key', v)}
                       onBlur={() => handleAutoSave('mimo_tts_api_key')}
-                      placeholder="输入 TTS API Key"
+                      placeholder={getSecretPlaceholder(settings.mimo_tts_api_key, '输入 TTS API Key')}
                       className="flex-1"
                     />
                     <button
                       onClick={() => handleTestKey('tts')}
-                      disabled={isTestingKey === 'tts' || !formData.mimo_tts_api_key}
+                      disabled={isTestingKey === 'tts' || (!formData.mimo_tts_api_key && !settings.mimo_tts_api_key.is_set)}
                       className="px-4 py-2.5 bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl font-body text-[12px] shadow-btn ui-transition duration-fast flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                       {isTestingKey === 'tts' ? (
@@ -524,6 +566,7 @@ export const Settings: React.FC = () => {
                       <span className="font-body text-[11px] text-ink-soft/70 flex items-center">未保存</span>
                     )}
                   </div>
+                  <div className="mt-1"><SecretStatus secret={settings.mimo_tts_api_key} /></div>
                   {testResults.tts && (
                     <div className={`mt-2 p-2.5 rounded-xl font-body text-[12px] animate-fade-in ${testResults.tts.valid ? 'bg-sage/15 text-ink' : 'bg-pink/10 text-ink'}`}>
                       {testResults.tts.valid ? '✓ TTS API Key 验证成功！' : `✕ 验证失败${testResults.tts.error ? `: ${testResults.tts.error}` : '，请检查 API Key 是否正确'}`}
@@ -584,12 +627,15 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">Qwen ASR API Key（可选）</label>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">Qwen ASR API Key（可选）</label>
+                          <SecretStatus secret={settings.qwen_asr_api_key} />
+                        </div>
                         <PasswordField
                           value={formData.qwen_asr_api_key}
                           onChange={(v) => handleChange('qwen_asr_api_key', v)}
                           onBlur={() => handleAutoSave('qwen_asr_api_key')}
-                          placeholder="如果 serve 设置了 --api-key，在这里填写"
+                          placeholder={getSecretPlaceholder(settings.qwen_asr_api_key, '如果 serve 设置了 --api-key，在这里填写')}
                         />
                       </div>
                       <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">
@@ -635,12 +681,15 @@ export const Settings: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 mb-1 block">WSL ASR API Key（可选）</label>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <label className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">WSL ASR API Key（可选）</label>
+                          <SecretStatus secret={settings.wsl_asr_api_key} />
+                        </div>
                         <PasswordField
                           value={formData.wsl_asr_api_key}
                           onChange={(v) => handleChange('wsl_asr_api_key', v)}
                           onBlur={() => handleAutoSave('wsl_asr_api_key')}
-                          placeholder="如果 WSL 网关启用了 Bearer Token，在这里填写"
+                          placeholder={getSecretPlaceholder(settings.wsl_asr_api_key, '如果 WSL 网关启用了 Bearer Token，在这里填写')}
                         />
                       </div>
                       <p className="md:col-span-2 font-body text-[11px] text-ink-soft/70">

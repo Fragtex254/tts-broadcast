@@ -133,7 +133,6 @@ export const Transcribe: React.FC = () => {
         provider: 'wsl_asr',
         engine: 'moss',
         baseUrl: settings.wsl_asr_base_url,
-        apiKey: settings.wsl_asr_api_key,
       });
       setMossModelOptions(result.models);
       setMossModelFetchResult({ resolvedUrl: result.resolvedUrl });
@@ -149,7 +148,7 @@ export const Transcribe: React.FC = () => {
     } finally {
       setIsFetchingMossModels(false);
     }
-  }, [fetchAsrModels, settings.wsl_asr_api_key, settings.wsl_asr_base_url]);
+  }, [fetchAsrModels, settings.wsl_asr_base_url]);
 
   useEffect(() => {
     if (asrProvider === 'wsl_asr' && wslEngine === 'moss') {

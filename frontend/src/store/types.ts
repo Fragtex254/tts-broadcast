@@ -87,9 +87,21 @@ export interface AsrModelOption extends ModelOption {
   capabilities?: AsrModelCapabilities;
 }
 
+export interface MaskedSecret {
+  masked: string;
+  is_set: boolean;
+}
+
+export type SecretSettingKey =
+  | 'mimo_api_key'
+  | 'mimo_tts_api_key'
+  | 'embedding_api_key'
+  | 'qwen_asr_api_key'
+  | 'wsl_asr_api_key';
+
 export interface Settings {
-  mimo_api_key: string;
-  mimo_tts_api_key: string;
+  mimo_api_key: MaskedSecret;
+  mimo_tts_api_key: MaskedSecret;
   llm_api_format: LlmApiFormat;
   llm_base_url: string;
   llm_model: string;
@@ -99,16 +111,16 @@ export interface Settings {
   llm_split_thinking_enabled: boolean;
   embedding_enabled: boolean;
   embedding_base_url: string;
-  embedding_api_key: string;
+  embedding_api_key: MaskedSecret;
   embedding_model: string;
   asr_provider: AsrProvider;
   qwen_asr_base_url: string;
   qwen_asr_model: string;
-  qwen_asr_api_key: string;
+  qwen_asr_api_key: MaskedSecret;
   wsl_asr_base_url: string;
   wsl_asr_engine: AsrEngine;
   wsl_asr_model: string;
-  wsl_asr_api_key: string;
+  wsl_asr_api_key: MaskedSecret;
   default_voice: string;
   ui_font_preset: UiFontPreset;
   ui_font_scale: UiFontScale;
@@ -116,6 +128,9 @@ export interface Settings {
   closing_script: string;
   content_categories: string;
 }
+
+export type SettingsFormData = Omit<Settings, SecretSettingKey> & Record<SecretSettingKey, string>;
+export type SettingsUpdate = Partial<SettingsFormData>;
 
 /** 定时任务 */
 export interface Schedule {
@@ -892,7 +907,7 @@ export interface AppState {
   clearProjectEditorContext: () => void;
 
   fetchSettings: () => Promise<void>;
-  updateSettings: (data: Partial<Settings>) => Promise<void>;
+  updateSettings: (data: SettingsUpdate) => Promise<void>;
   testApiKey: (
     type?: 'llm' | 'tts',
     apiKey?: string,
