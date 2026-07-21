@@ -134,6 +134,22 @@ describe('MiMo 服务', () => {
     }));
   });
 
+  test('Anthropic 客户端显式使用 120 秒请求超时', async () => {
+    mockMessagesCreate.mockResolvedValue({ content: [{ type: 'text', text: '成功' }] });
+
+    await mimo.createLlmMessage({
+      prompt: '测试请求超时',
+      systemPrompt: '测试 system',
+      maxTokens: 20,
+      thinkingEnabled: false,
+    });
+
+    expect(Anthropic).toHaveBeenCalledWith(expect.objectContaining({
+      timeout: 120000,
+    }));
+    expect(mockMessagesCreate).toHaveBeenCalledTimes(1);
+  });
+
   test('OpenAI 格式使用 chat completions 请求并解析内容', async () => {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_api_format', '"openai"');
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('llm_base_url', '"https://openai.example/v1"');

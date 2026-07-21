@@ -180,6 +180,9 @@ export function createResearchSlice(set: StoreSet): Pick<
       set((state) => ({
         currentContentProject: state.currentContentProject?.id === id ? project : state.currentContentProject,
         contentProjects: state.contentProjects.map((item) => item.id === id ? project : item),
+        projectWorkspace: state.projectWorkspace?.project.id === id
+          ? { ...state.projectWorkspace, project }
+          : state.projectWorkspace,
       }));
       return project;
     }),

@@ -1,9 +1,10 @@
 // 分段记录数据访问层
-const path = require('path');
-const fs = require('fs');
 const db = require('../db');
 
-const audioDir = path.join(__dirname, '../../audio');
+const SEGMENT_COLUMNS = `
+  id, broadcast_id, "index", text, audio_path, status, style_tag,
+  playback_rate, error_message, created_at, updated_at
+`;
 
 /**
  * 批量插入 segments
@@ -35,10 +36,15 @@ function replaceAll(broadcastId, items) {
     'INSERT INTO segments (broadcast_id, "index", text, status, style_tag, playback_rate, error_message) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
   const updateChangedStmt = db.prepare(
-    'UPDATE segments SET "index" = ?, text = ?, style_tag = ?, status = ?, audio_path = NULL, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
+    'UPDATE segments SET "index" = ?, text = ?, style_tag = ?, status = ?, audio_path = NULL, error_message = ?, generation_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
   );
   const updateIndexStmt = db.prepare(
-    'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
+    `UPDATE segments
+     SET status = CASE WHEN status = 'generating' AND "index" <> ? THEN 'pending' ELSE status END,
+         generation_token = CASE WHEN status = 'generating' AND "index" <> ? THEN NULL ELSE generation_token END,
+         "index" = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND broadcast_id = ?`
   );
   const deleteStmt = db.prepare('DELETE FROM segments WHERE id = ? AND broadcast_id = ?');
 
@@ -56,7 +62,7 @@ function replaceAll(broadcastId, items) {
       if (hasChanged) {
         updateChangedStmt.run(index, item.text, styleTag, 'pending', '', item.id, broadcastId);
       } else if (existingSegment.index !== index) {
-        updateIndexStmt.run(index, item.id, broadcastId);
+        updateIndexStmt.run(index, index, index, item.id, broadcastId);
       }
     });
 
@@ -76,7 +82,7 @@ function replaceAll(broadcastId, items) {
  * @returns {Array} segments 列表
  */
 function getByBroadcastId(broadcastId) {
-  return db.prepare('SELECT * FROM segments WHERE broadcast_id = ? ORDER BY "index"').all(broadcastId);
+  return db.prepare(`SELECT ${SEGMENT_COLUMNS} FROM segments WHERE broadcast_id = ? ORDER BY "index"`).all(broadcastId);
 }
 
 /**
@@ -86,7 +92,7 @@ function getByBroadcastId(broadcastId) {
  * @returns {Object|undefined} segment 记录
  */
 function getByIdAndBroadcastId(segId, broadcastId) {
-  return db.prepare('SELECT * FROM segments WHERE id = ? AND broadcast_id = ?').get(segId, broadcastId);
+  return db.prepare(`SELECT ${SEGMENT_COLUMNS} FROM segments WHERE id = ? AND broadcast_id = ?`).get(segId, broadcastId);
 }
 
 /**
@@ -97,7 +103,10 @@ function getByIdAndBroadcastId(segId, broadcastId) {
  */
 function getPendingByBroadcastId(broadcastId) {
   return db.prepare(
-    'SELECT * FROM segments WHERE broadcast_id = ? AND status IN (\'pending\', \'failed\', \'generating\') ORDER BY "index"'
+    `SELECT ${SEGMENT_COLUMNS}
+     FROM segments
+     WHERE broadcast_id = ? AND status IN ('pending', 'failed', 'generating')
+     ORDER BY "index"`
   ).all(broadcastId);
 }
 
@@ -111,12 +120,138 @@ function getPendingByBroadcastId(broadcastId) {
 function updateStatus(segId, status, audioPath, errorMessage = '') {
   const normalizedError = status === 'failed' ? String(errorMessage || '').slice(0, 500) : '';
   if (audioPath) {
-    db.prepare('UPDATE segments SET status = ?, audio_path = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    db.prepare('UPDATE segments SET status = ?, audio_path = ?, error_message = ?, generation_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(status, audioPath, normalizedError, segId);
   } else {
-    db.prepare('UPDATE segments SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    db.prepare('UPDATE segments SET status = ?, error_message = ?, generation_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(status, normalizedError, segId);
   }
+}
+
+/**
+ * 以启动时的 segment 快照原子标记生成开始。
+ * @param {Object} snapshot - 含 id、broadcast_id、text、style_tag、index、status 的启动快照
+ * @param {string} generationToken - 本次生成唯一令牌
+ * @returns {boolean} 快照仍匹配且成功写入令牌时为 true
+ */
+function tryStartGeneration(snapshot, generationToken) {
+  if (typeof generationToken !== 'string' || generationToken.length === 0 || generationToken.length > 128) {
+    return false;
+  }
+  const result = db.prepare(`
+    UPDATE segments
+    SET status = 'generating', generation_token = ?, error_message = '', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND broadcast_id = ?
+      AND text = ?
+      AND COALESCE(style_tag, '') = ?
+      AND "index" = ?
+      AND status = ?
+  `).run(
+    generationToken,
+    snapshot.id,
+    snapshot.broadcast_id,
+    snapshot.text,
+    snapshot.style_tag || '',
+    snapshot.index,
+    snapshot.status
+  );
+  return result.changes === 1;
+}
+
+/**
+ * 以启动时的 segment 快照原子收口生成结果，只允许当前 generating 任务写回。
+ * @param {Object} params
+ * @param {Object} params.snapshot - 含 id、broadcast_id、text、style_tag、index 的启动快照
+ * @param {string} params.generationToken - tryStartGeneration 写入的唯一令牌
+ * @param {'generated'|'failed'} params.status - 最终状态
+ * @param {string|null} [params.audioPath] - 本次生成的唯一音频路径
+ * @param {string} [params.errorMessage] - 失败原因
+ * @returns {{applied:boolean,replacedAudioPath:string|null}} CAS 结果及被替换的旧音频路径
+ */
+function tryFinishGeneration({ snapshot, generationToken, status, audioPath = null, errorMessage = '' }) {
+  if (
+    typeof generationToken !== 'string'
+    || generationToken.length === 0
+    || generationToken.length > 128
+    || !['generated', 'failed'].includes(status)
+  ) {
+    return { applied: false, replacedAudioPath: null };
+  }
+  const normalizedError = status === 'failed' ? String(errorMessage || '').slice(0, 500) : '';
+  const finish = db.transaction(() => {
+    const current = db.prepare(`
+      SELECT audio_path
+      FROM segments
+      WHERE id = ?
+        AND broadcast_id = ?
+        AND text = ?
+        AND COALESCE(style_tag, '') = ?
+        AND "index" = ?
+        AND status = 'generating'
+        AND generation_token = ?
+    `).get(
+      snapshot.id,
+      snapshot.broadcast_id,
+      snapshot.text,
+      snapshot.style_tag || '',
+      snapshot.index,
+      generationToken
+    );
+    if (!current) {
+      return { applied: false, replacedAudioPath: null };
+    }
+
+    const result = audioPath
+      ? db.prepare(`
+        UPDATE segments
+        SET status = ?, audio_path = ?, error_message = ?, generation_token = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND broadcast_id = ?
+          AND text = ?
+          AND COALESCE(style_tag, '') = ?
+          AND "index" = ?
+          AND status = 'generating'
+          AND generation_token = ?
+      `).run(
+        status,
+        audioPath,
+        normalizedError,
+        snapshot.id,
+        snapshot.broadcast_id,
+        snapshot.text,
+        snapshot.style_tag || '',
+        snapshot.index,
+        generationToken
+      )
+      : db.prepare(`
+        UPDATE segments
+        SET status = ?, error_message = ?, generation_token = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND broadcast_id = ?
+          AND text = ?
+          AND COALESCE(style_tag, '') = ?
+          AND "index" = ?
+          AND status = 'generating'
+          AND generation_token = ?
+      `).run(
+        status,
+        normalizedError,
+        snapshot.id,
+        snapshot.broadcast_id,
+        snapshot.text,
+        snapshot.style_tag || '',
+        snapshot.index,
+        generationToken
+      );
+
+    if (result.changes !== 1) {
+      return { applied: false, replacedAudioPath: null };
+    }
+    return { applied: true, replacedAudioPath: current.audio_path || null };
+  });
+
+  return finish();
 }
 
 /**
@@ -126,7 +261,7 @@ function updateStatus(segId, status, audioPath, errorMessage = '') {
  */
 function updateText(segId, text) {
   db.prepare(
-    "UPDATE segments SET text = ?, status = 'pending', audio_path = NULL, error_message = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    "UPDATE segments SET text = ?, status = 'pending', audio_path = NULL, error_message = '', generation_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
   ).run(text, segId);
 }
 
@@ -137,7 +272,7 @@ function updateText(segId, text) {
  */
 function updateStyleTag(segId, styleTag) {
   db.prepare(
-    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, error_message = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, error_message = '', generation_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
   ).run(styleTag, segId);
 }
 
@@ -149,7 +284,7 @@ function updateStyleTag(segId, styleTag) {
 function bulkUpdateStyleTags(broadcastId, items) {
   const getStmt = db.prepare('SELECT style_tag FROM segments WHERE id = ? AND broadcast_id = ?');
   const updateStmt = db.prepare(
-    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, error_message = '', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?"
+    "UPDATE segments SET style_tag = ?, status = 'pending', audio_path = NULL, error_message = '', generation_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?"
   );
   const run = db.transaction((list) => {
     for (const { id, styleTag } of list) {
@@ -191,11 +326,16 @@ function bulkUpdatePlaybackRate(broadcastId, playbackRate) {
  */
 function reorder(broadcastId, segmentIds) {
   const updateStmt = db.prepare(
-    'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND broadcast_id = ?'
+    `UPDATE segments
+     SET status = CASE WHEN status = 'generating' AND "index" <> ? THEN 'pending' ELSE status END,
+         generation_token = CASE WHEN status = 'generating' AND "index" <> ? THEN NULL ELSE generation_token END,
+         "index" = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND broadcast_id = ?`
   );
   const doReorder = db.transaction((ids) => {
     for (let i = 0; i < ids.length; i++) {
-      updateStmt.run(i, ids[i], broadcastId);
+      updateStmt.run(i, i, i, ids[i], broadcastId);
     }
   });
   doReorder(segmentIds);
@@ -218,7 +358,8 @@ function deleteByBroadcastId(broadcastId) {
 }
 
 /**
- * 删除 segment 并重索引后续 segments（含音频文件重命名）
+ * 删除 segment 并重索引后续 segments。
+ * 音频路径以 segment ID + 生成 token 稳定命名，不再随序号重命名。
  * @param {number} broadcastId - 播报 ID
  * @param {number} segId - 要删除的 segment ID
  */
@@ -235,24 +376,16 @@ function deleteAndReindex(broadcastId, segId) {
       'SELECT * FROM segments WHERE broadcast_id = ? AND "index" > ? ORDER BY "index"'
     ).all(broadcastId, deletedIndex);
 
+    const reindexStmt = db.prepare(`
+      UPDATE segments
+      SET "index" = ?,
+          status = CASE WHEN status = 'generating' THEN 'pending' ELSE status END,
+          generation_token = CASE WHEN status = 'generating' THEN NULL ELSE generation_token END,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND broadcast_id = ?
+    `);
     for (const seg of laterSegments) {
-      const newIndex = seg.index - 1;
-
-      if (seg.audio_path) {
-        const oldPath = path.join(__dirname, '../..', seg.audio_path);
-        const newFilename = `segment_${broadcastId}_${newIndex}.wav`;
-        const newPath = path.join(audioDir, newFilename);
-        if (fs.existsSync(oldPath)) {
-          fs.renameSync(oldPath, newPath);
-        }
-        db.prepare(
-          'UPDATE segments SET "index" = ?, audio_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-        ).run(newIndex, `/audio/${newFilename}`, seg.id);
-      } else {
-        db.prepare(
-          'UPDATE segments SET "index" = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-        ).run(newIndex, seg.id);
-      }
+      reindexStmt.run(seg.index - 1, seg.id, broadcastId);
     }
   });
 
@@ -278,6 +411,8 @@ module.exports = {
   getByIdAndBroadcastId,
   getPendingByBroadcastId,
   updateStatus,
+  tryStartGeneration,
+  tryFinishGeneration,
   updateText,
   updateStyleTag,
   bulkUpdateStyleTags,

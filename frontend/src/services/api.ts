@@ -1,5 +1,19 @@
 import axios, { type AxiosProgressEvent, type AxiosError } from 'axios';
-import type { AsrEngine, AsrProvider, ContentTargetPlatform, NewsItem, Settings, VoiceConfig } from '../store/types';
+import type {
+  AsrEngine,
+  AsrProvider,
+  ContentArtifactInput,
+  ContentArtifactRevisionInput,
+  ContentCreationJobInput,
+  ContentEvidenceInput,
+  ContentEvidenceUpdateInput,
+  ContentProjectSourceInput,
+  ContentProjectUpdateInput,
+  CreateContentProjectInput,
+  NewsItem,
+  Settings,
+  VoiceConfig,
+} from '../store/types';
 import { createScopedLogger, toLogError } from './logger';
 
 const logger = createScopedLogger('api-client');
@@ -59,6 +73,7 @@ export const broadcastApi = {
 
   generate: (data: {
     text: string;
+    artifactRevisionId?: number;
     voice?: string;
     voiceType?: VoiceConfig['voiceType'];
     voiceDesign?: string;
@@ -257,13 +272,35 @@ export const researchApi = {
 export const contentProjectApi = {
   getAll: () => api.get('/content-projects'),
   getById: (id: number) => api.get(`/content-projects/${id}`),
-  create: (data: { title: string; topic?: string; targetPlatform?: ContentTargetPlatform; thesis?: string }) => api.post('/content-projects', data),
-  update: (id: number, data: Partial<{ title: string; topic: string; targetPlatform: ContentTargetPlatform; thesis: string; personalPractice: string; personalJudgment: string; discussionQuestion: string; status: string }>) => api.patch(`/content-projects/${id}`, data),
+  create: (data: CreateContentProjectInput) => api.post('/content-projects', data),
+  update: (id: number, data: ContentProjectUpdateInput) => api.patch(`/content-projects/${id}`, data),
   delete: (id: number) => api.delete(`/content-projects/${id}`),
   addClaim: (id: number, claimId: number, usageNote = '') => api.post(`/content-projects/${id}/claims`, { claimId, usageNote }),
   reorderClaims: (id: number, claimIds: number[]) => api.patch(`/content-projects/${id}/claims/reorder`, { claimIds }),
   removeClaim: (id: number, claimId: number) => api.delete(`/content-projects/${id}/claims/${claimId}`),
   export: (id: number, platform: 'xiaohongshu' | 'wechat') => api.post(`/content-projects/${id}/export`, { platform }),
+};
+
+export const projectWorkspaceApi = {
+  getWorkspace: (projectId: number) => api.get(`/content-projects/${projectId}/workspace`),
+  addSource: (projectId: number, data: ContentProjectSourceInput) =>
+    api.post(`/content-projects/${projectId}/sources`, data),
+  getSourceFragments: (projectId: number, sourceId: number) =>
+    api.get(`/content-projects/${projectId}/sources/${sourceId}/fragments`),
+  unlinkSource: (projectId: number, sourceId: number) =>
+    api.delete(`/content-projects/${projectId}/sources/${sourceId}`),
+  createEvidence: (projectId: number, data: ContentEvidenceInput) =>
+    api.post(`/content-projects/${projectId}/evidence`, data),
+  updateEvidence: (projectId: number, evidenceId: number, data: ContentEvidenceUpdateInput) =>
+    api.patch(`/content-projects/${projectId}/evidence/${evidenceId}`, data),
+  createJob: (projectId: number, data: ContentCreationJobInput) =>
+    api.post(`/content-projects/${projectId}/creation-jobs`, data),
+  createArtifact: (projectId: number, data: ContentArtifactInput) =>
+    api.post(`/content-projects/${projectId}/artifacts`, data),
+  createRevision: (projectId: number, artifactId: number, data: ContentArtifactRevisionInput) =>
+    api.post(`/content-projects/${projectId}/artifacts/${artifactId}/revisions`, data),
+  getRevisions: (projectId: number, artifactId: number) =>
+    api.get(`/content-projects/${projectId}/artifacts/${artifactId}/revisions`),
 };
 
 export type { NewsItem, Settings };

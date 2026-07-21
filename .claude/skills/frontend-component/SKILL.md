@@ -1,6 +1,6 @@
 ---
 name: frontend-component
-description: 新增或修改 React 组件、页面时使用。涵盖组件文件组织顺序、单一职责拆分（超300行）、props 下传 events 上抛、不在组件内直接调 API、具名+默认双导出、interface {Name}Props、加载骨架屏（不用 spinner）、错误与空状态、路由懒加载、TypeScript 严格规则、命名规范、错误边界、无障碍、lint/build/test。触发场景：加组件、加页面、改组件、新 tsx、卡片、按钮交互、骨架屏、错误状态、加路由、ErrorBoundary。
+description: 新增或修改 React 组件、页面时使用。涵盖组件文件组织顺序、单一职责拆分（超300行）、props 下传 events 上抛、不在组件内直接调 API、内容项目的来源/证据/引用层级、低频创作里程碑反馈、共享 Modal 与播放器、加载/错误/空状态、路由懒加载、TypeScript 严格规则、无障碍、lint/build/test。触发场景：加组件、加页面、内容项目、证据卡、引用面板、创作里程碑、改组件、新 tsx、卡片、按钮交互、骨架屏、错误状态、加路由、ErrorBoundary。
 ---
 
 # 前端组件与页面开发
@@ -23,7 +23,10 @@ description: 新增或修改 React 组件、页面时使用。涵盖组件文件
 8. MiMo 方括号标签编辑统一用 `components/Dashboard/AudioTagTextEditor.tsx`；设计/克隆试听和口播分段编辑都走这个复杂标签面板，不再新增只覆盖少量标签的局部插入器。
 9. 非首屏页面用 `React.lazy()` + `Suspense`；新增页面三步：建组件 → `App.tsx` 加 `<Route>` → `Sidebar` 加导航项，并确认 `NotFound` 兜底仍在。
 10. 新增/改完跑 `npm run lint && npm run build && npm run test`。
-11. 转录过程与普通结果使用 `components/Transcribe/LiveTranscriptionPreview.tsx` 和 `TranscriptionPreviewModal.tsx` 的只读视图；播客完成结果进入 `TranscriptConversationModal`。业务页面不得再用可编辑 `<textarea>` 冒充实时结果或文稿阅读器。
+11. 内容项目必须把 Source 原文、AI 候选说明、用户备注 / 判断和最终稿分层展示；Evidence 卡以可核验 excerpt 为主，AI 说明必须带“待核对”语义，不能把整张模型观点卡称为来源事实。Evidence 的采用/驳回决策与 active/stale/superseded 生命周期分别呈现；历史 Citation 的快照完整性和当前是否可复用也不得混成一个“失效”。长 Source 通过 `ModalShell` 阅读，窄屏改为单列且主要动作始终可见。
+12. 创作里程碑反馈遵循 `DESIGN.md`：只消费服务端成功事件，不按列表数量或 mount 推导；普通保存不用粒子，稀有里程碑也不得遮挡、抢焦点或替代任务状态。组件必须提供关闭动作、`aria-live` 文案和 reduced-motion 静态反馈。
+13. AI Outline/Master Revision 统一标为待审阅，不得用里程碑或输出文案暗示已确认；AI Master 必须经显式人工另存后才开放复制、下载和口播。选择 exact Outline Revision 时先展示其正文/provenance；当前与历史 Master 都能核验自己的 Citation。复制/下载把内部 `[证据#ID]` 转换成人类可读编号与依据列表，不改写 Revision，不把内部 marker 宣称为可直接发布文本。
+14. 转录过程与普通结果使用 `components/Transcribe/LiveTranscriptionPreview.tsx` 和 `TranscriptionPreviewModal.tsx` 的只读视图；播客完成结果进入 `TranscriptConversationModal`。业务页面不得再用可编辑 `<textarea>` 冒充实时结果或文稿阅读器。
 
 ## 模式与模板
 
@@ -140,11 +143,12 @@ export default MyComponent;
 | 路径 | 组件 | 说明 |
 |------|------|------|
 | `/` | `SourceCollection` | 内容工作台（默认页） |
-| `/editor` | `ScriptEditor` | 口播稿编辑 |
+| `/editor` | `ScriptEditor` | 口播稿编辑；可通过完整 query 绑定内容项目的确切 `audio_script` Revision |
 | `/transcribe` | `Transcribe` | 音视频上传转录 |
 | `/history` | `ContentLibrary` | 内容库（播报 / 转录稿） |
 | `/history/transcriptions/:id` | `TranscriptWorkspace` | 播客阅读、校对与一键总结上下文页 |
-| `/automation` | `Automation` | 自动化任务 |
+| `/projects/:id` | `ProjectWorkspace` | 内容项目 Brief、来源与版本化稿件工作区 |
+| `/automation` | `Automation` | 自动化规划与旧定时配置（真实执行器接入前不可启用） |
 | `/voice-presets` | `VoicePresets` | 音色库 |
 | `/settings` | `Settings` | 系统设置 |
 | `*` | `NotFound` | 404 兜底 |
@@ -267,6 +271,8 @@ npm run test
 - [ ] 卡片层级遵循根目录 `DESIGN.md`，主要区块、次级内容和列表行有清楚差异
 - [ ] 页面与区块标题使用对应 `ui-page-title` / `ui-section-title` 语义角色；色点只在表达内容类型时使用
 - [ ] 高频组件没有无必要的入场动画，动效遵循 `DESIGN.md`
+- [ ] 里程碑只由唯一服务端事件触发；重复 SSE / 刷新不重播，reduced-motion 有静态替代
+- [ ] Source 原文、AI 说明、创作者判断和 Citation 在视觉与文案上没有混成同一事实层
 - [ ] 加载状态使用骨架屏，错误状态使用 `animate-shake`
 - [ ] 按钮使用语义色（lemon/sage/lilac/pink）
 - [ ] 二级界面使用 `ModalShell`，未手写固定遮罩/对话框基础逻辑

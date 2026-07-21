@@ -150,4 +150,24 @@ describe('Transcript 内容详情 API', () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('隐藏状态无效');
   });
+
+  test('删除已被内容项目引用的观点时返回 409 并保留观点和关联', async () => {
+    const claim = researchStore.replaceClaims(record.id, { model: 'test-model', claims: [{
+      speakerKey: 'speaker-0001', question: '测试问题', claim: '不可删除的观点', reasoning: 'AI 整理的理由', evidenceExcerpt: '测试内容',
+      evidenceStartIndex: 0, evidenceEndIndex: 0, startSeconds: 0, endSeconds: 2,
+      topicTags: [], contentValue: 80, confidence: 0.9,
+    }] })[0];
+    const project = db.prepare('INSERT INTO content_projects (title) VALUES (?)').run('引用观点的项目');
+    db.prepare('INSERT INTO content_project_claims (project_id, claim_id) VALUES (?, ?)')
+      .run(project.lastInsertRowid, claim.id);
+
+    const response = await request(app).delete(`/api/transcribe/claims/${claim.id}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: '该观点已被内容项目引用，请先从内容项目移除观点后再删除',
+    });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM transcription_claims WHERE id = ?').get(claim.id).count).toBe(1);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM content_project_claims WHERE claim_id = ?').get(claim.id).count).toBe(1);
+  });
 });

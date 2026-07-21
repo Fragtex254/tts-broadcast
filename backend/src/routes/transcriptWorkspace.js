@@ -213,6 +213,9 @@ router.delete('/claims/:claimId', (req, res) => {
     if (!researchStore.removeClaim(check.id)) return res.status(404).json({ error: '观点不存在' });
     res.json({ message: '观点已删除' });
   } catch (error) {
+    if (error.code === 'TRANSCRIPTION_CLAIM_IN_USE') {
+      return res.status(409).json({ error: error.message });
+    }
     logger.error({ err: error }, '删除观点卡失败');
     res.status(500).json({ error: error.message || '删除观点卡失败' });
   }

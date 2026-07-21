@@ -23,11 +23,23 @@ function getById(id) {
   };
 }
 
-function create({ title, topic = '', targetPlatform = 'general', thesis = '' }) {
+function create({
+  title,
+  topic = '',
+  targetPlatform = 'general',
+  thesis = '',
+  audience = '',
+  goal = '',
+  angle = '',
+  tone = '',
+  contentFormat = '',
+}) {
   if (!TARGET_PLATFORMS.has(targetPlatform)) throw new Error('目标平台无效');
   const result = db.prepare(`
-    INSERT INTO content_projects (title, topic, target_platform, thesis) VALUES (?, ?, ?, ?)
-  `).run(title, topic, targetPlatform, thesis);
+    INSERT INTO content_projects (
+      title, topic, target_platform, thesis, audience, goal, angle, tone, content_format
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(title, topic, targetPlatform, thesis, audience, goal, angle, tone, contentFormat);
   return getById(result.lastInsertRowid);
 }
 
@@ -38,19 +50,38 @@ function update(id, values) {
   if (!TARGET_PLATFORMS.has(targetPlatform)) throw new Error('目标平台无效');
   db.prepare(`
     UPDATE content_projects SET title = ?, topic = ?, target_platform = ?, thesis = ?,
+      audience = ?, goal = ?, angle = ?, tone = ?, content_format = ?,
       personal_practice = ?, personal_judgment = ?, discussion_question = ?, status = ?,
       updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(
     values.title ?? current.title, values.topic ?? current.topic, targetPlatform,
-    values.thesis ?? current.thesis, values.personalPractice ?? current.personal_practice,
+    values.thesis ?? current.thesis, values.audience ?? current.audience,
+    values.goal ?? current.goal, values.angle ?? current.angle, values.tone ?? current.tone,
+    values.contentFormat ?? current.content_format, values.personalPractice ?? current.personal_practice,
     values.personalJudgment ?? current.personal_judgment,
     values.discussionQuestion ?? current.discussion_question, values.status ?? current.status, id
   );
   return getById(id);
 }
 
-function remove(id) {
+const removeTransaction = db.transaction((id) => {
+  const project = db.prepare('SELECT id FROM content_projects WHERE id = ?').get(id);
+  if (!project) return false;
+  // Citation 对 Evidence 使用 RESTRICT 保护；显式删除聚合根时先按依赖顺序清理派生引用。
+  db.prepare(`
+    DELETE FROM content_revision_citations
+    WHERE revision_id IN (
+      SELECT r.id
+      FROM content_artifact_revisions r
+      INNER JOIN content_artifacts a ON a.id = r.artifact_id
+      WHERE a.project_id = ?
+    )
+  `).run(id);
   return db.prepare('DELETE FROM content_projects WHERE id = ?').run(id).changes > 0;
+});
+
+function remove(id) {
+  return removeTransaction(id);
 }
 
 function addClaim(projectId, { claimId, usageNote = '' }) {

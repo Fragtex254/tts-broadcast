@@ -1,5 +1,5 @@
 import { useEffect, Suspense, lazy } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom'
 import { Sidebar } from './components/Layout/Sidebar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { SourceCollection } from './pages/SourceCollection'
@@ -11,6 +11,7 @@ const VoicePresets = lazy(() => import('./pages/VoicePresets').then(m => ({ defa
 const Transcribe = lazy(() => import('./pages/Transcribe').then(m => ({ default: m.Transcribe })))
 const ContentLibrary = lazy(() => import('./pages/ContentLibrary').then(m => ({ default: m.ContentLibrary })))
 const TranscriptWorkspace = lazy(() => import('./pages/TranscriptWorkspace').then(m => ({ default: m.TranscriptWorkspace })))
+const ProjectWorkspace = lazy(() => import('./pages/ProjectWorkspace').then(m => ({ default: m.ProjectWorkspace })))
 const Automation = lazy(() => import('./pages/Automation').then(m => ({ default: m.Automation })))
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })))
@@ -36,7 +37,7 @@ const PageLoader: React.FC = () => (
   </div>
 )
 
-function App() {
+function AppLayout() {
   const fetchSettings = useStore((s) => s.fetchSettings)
   const uiFontPreset = useStore((s) => s.settings.ui_font_preset)
   const uiFontScale = useStore((s) => s.settings.ui_font_scale)
@@ -51,30 +52,40 @@ function App() {
   }, [uiFontPreset, uiFontScale])
 
   return (
-    <Router>
-      <div className="flex h-screen min-w-0 overflow-hidden bg-paper text-ink">
-        {/* 侧边栏 */}
-        <Sidebar />
+    <div className="flex h-screen min-w-0 overflow-hidden bg-paper text-ink">
+      {/* 侧边栏 */}
+      <Sidebar />
 
-        {/* 主内容区域 */}
-        <ErrorBoundary>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<SourceCollection />} />
-              <Route path="/editor" element={<ScriptEditor />} />
-              <Route path="/voice-presets" element={<VoicePresets />} />
-              <Route path="/transcribe" element={<Transcribe />} />
-              <Route path="/history" element={<ContentLibrary />} />
-              <Route path="/history/transcriptions/:id" element={<TranscriptWorkspace />} />
-              <Route path="/automation" element={<Automation />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </ErrorBoundary>
-      </div>
-    </Router>
+      {/* 主内容区域 */}
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
   )
+}
+
+const router = createBrowserRouter([
+  {
+    element: <AppLayout />,
+    children: [
+      { index: true, element: <SourceCollection /> },
+      { path: 'editor', element: <ScriptEditor /> },
+      { path: 'voice-presets', element: <VoicePresets /> },
+      { path: 'transcribe', element: <Transcribe /> },
+      { path: 'history', element: <ContentLibrary /> },
+      { path: 'history/transcriptions/:id', element: <TranscriptWorkspace /> },
+      { path: 'projects/:id', element: <ProjectWorkspace /> },
+      { path: 'automation', element: <Automation /> },
+      { path: 'settings', element: <Settings /> },
+      { path: '*', element: <NotFound /> },
+    ],
+  },
+])
+
+function App() {
+  return <RouterProvider router={router} />
 }
 
 export default App

@@ -33,13 +33,14 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     isMerging: false,
     isSuggestingTags: false,
 
-    splitScriptAction: async (text) => {
+    splitScriptAction: async (text, artifactRevisionId) => {
       set({ isSplitting: true });
       try {
         const genResponse = await broadcastApi.generate({
           text,
           ...buildVoicePayload(get().voiceConfig),
           mode: 'segmented',
+          ...(artifactRevisionId === undefined ? {} : { artifactRevisionId }),
         });
         const { broadcast } = genResponse.data;
         set((state) => ({

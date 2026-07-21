@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: 写后端 Jest/supertest 测试时使用。涵盖测试目录镜像 src/、中文 describe 命名、路由 supertest 测试模板、服务 jest.mock 模板、beforeEach 清表、真实内存库不 mock、NODE_ENV=test 隔离、app.js 只导出不 listen、cron 测试 scheduler.shutdown、open handles 排查。触发场景：写测试、单测、补测试、mock 外部 API、supertest、测试隔离、open handles、test runInBand。
+description: 写后端 Jest/supertest 测试时使用。涵盖测试目录镜像、路由 / Store / 服务测试、外部 API mock、真实内存库、内容证据与引用的对抗用例、Creation Job 幂等/lease fencing/上下文竞态、测试隔离、open handles。触发场景：写测试、证据引用测试、生成任务竞态、提示注入、跨项目越权、单测、补测试、mock 外部 API、supertest、测试隔离、open handles、test runInBand。
 ---
 
 # 后端测试开发
@@ -14,10 +14,12 @@ description: 写后端 Jest/supertest 测试时使用。涵盖测试目录镜像
 
 1. 测试目录与 `src/` **严格镜像**；外部 API 调用（aihot、mimo）**必须 `jest.mock()`**，数据库用真实 SQLite 内存库不 mock。
 2. 每个测试**独立运行**、不依赖顺序；每个 describe 用 `beforeEach` 清相关表。
-3. 测试经 `NODE_ENV=test` 自动隔离数据库，**禁止把测试数据写入开发库**。
+3. 测试经 `NODE_ENV=test` 自动隔离数据库和生成资产，**禁止把测试数据写入开发库、`backend/audio/` 或 `backend/assets/`**；音频与图片分别使用 `.test-audio/`、`.test-assets/`。
 4. `app.js` 只导出 Express app，只有直接运行入口才 `listen()` + 初始化调度器；supertest 引入 app 不应留端口/cron 句柄。
 5. 创建 cron 任务的测试必须在 `afterEach` 调 `scheduler.shutdown()` 并清表。
 6. Jest 提示 open handles 时用 `--detectOpenHandles` 定位并修复，不靠强制退出掩盖。
+7. 内容创作的模型输出按攻击输入测试：至少覆盖来源内提示注入、伪造 / 跨项目 Evidence ID、越界或非连续 fragment、假 excerpt / offset、无证据主稿、第一人称经验编造、严格 JSON 失败；断言后端派生原文与引用，不只断言模型被调用。
+8. 持久化生成任务至少覆盖同 key 同输入复用、同 key 不同输入 409、重复 SSE complete 不重发 milestone、过期 worker token、lease 恢复、运行中 Brief / Evidence / Source 关联变化、LLM 失败不留半成品。竞态测试必须断言 Revision / Citation / Evidence 的最终数据库数量。
 
 ## 模式与模板
 
@@ -118,6 +120,7 @@ afterEach(() => {
 
 - `backend/src/app.js` 只导出 Express app；只有直接运行入口时才 `listen()` 和初始化调度器，避免 supertest 引入 app 时留下端口和 cron 句柄。
 - `backend/src/db/index.js` 在 `NODE_ENV=test` 时必须使用 SQLite 内存库；Jest 不得读写 `backend/data/broadcast.db`。
+- 测试生成的音频和图片必须通过 `validation.audioDir` / `assetDir` 写入隔离目录，不得在测试里重新硬编码正式 `audio/` 或 `assets/` 路径。
 - 创建 cron 任务的测试必须在 `afterEach` 中调用 `scheduler.shutdown()` 并清理表数据。
 - 后端改动至少运行 `npm test -- --runInBand`。
 - 如果 Jest 提示 open handles，必须用 `--detectOpenHandles` 定位并修复，不能仅靠强制退出掩盖。
@@ -138,6 +141,7 @@ npm test -- --runInBand  # 串行运行（后端改动的最低要求）
 - [ ] **测试文件**：在 `tests/` 对应目录创建测试
 - [ ] **独立运行**：`beforeEach` 清理相关表
 - [ ] **外部 mock**：外部 API 调用使用 `jest.mock()`
+- [ ] **资产隔离**：生成文件只进入 `.test-audio/` / `.test-assets/`
 - [ ] **覆盖场景**：成功路径 + 参数缺失 + 资源不存在
 - [ ] **cron 清理**：cron 测试 `afterEach` 调 `scheduler.shutdown()`
 - [ ] **无 open handles**：`--detectOpenHandles` 确认无残留句柄

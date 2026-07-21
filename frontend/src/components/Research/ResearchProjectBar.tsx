@@ -20,6 +20,12 @@ const PLATFORM_LABELS: Record<ContentTargetPlatform, string> = {
   twitter: 'Twitter',
 };
 
+const CREATE_PLATFORM_OPTIONS: { value: ContentTargetPlatform; label: string }[] = [
+  { value: 'general', label: PLATFORM_LABELS.general },
+  { value: 'xiaohongshu', label: PLATFORM_LABELS.xiaohongshu },
+  { value: 'wechat', label: PLATFORM_LABELS.wechat },
+];
+
 export const ResearchProjectBar: React.FC<ResearchProjectBarProps> = ({
   projects,
   currentProject,
@@ -145,11 +151,11 @@ export const ResearchProjectBar: React.FC<ResearchProjectBarProps> = ({
             value={targetPlatform}
             onChange={(event) => {
               const value = event.target.value;
-              setTargetPlatform(value === 'xiaohongshu' || value === 'wechat' || value === 'twitter' ? value : 'general');
+              setTargetPlatform(value === 'xiaohongshu' || value === 'wechat' ? value : 'general');
             }}
             className="mt-1 w-full rounded-full border border-card-border bg-white/70 px-3.5 py-3 font-body text-[12px] text-ink outline-none"
           >
-            {Object.entries(PLATFORM_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {CREATE_PLATFORM_OPTIONS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
         <button

@@ -732,10 +732,14 @@ export const Transcribe: React.FC = () => {
                         disabled={completedCount === 0 || isBatchTranscribing}
                         className="px-3 py-1.5 font-body text-[11px] bg-sage hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn ui-transition duration-fast"
                       >
-                        合并全部导入（{completedCount}）
+                        合并为临时稿（{completedCount}）
                       </button>
                     </div>
                   </div>
+
+                  <p className="mb-4 rounded-xl border border-lemon/35 bg-lemon/10 p-3 font-body text-[11px] leading-relaxed text-ink-soft/75">
+                    “导入临时稿”会进入旧编辑流程，不会自动关联内容项目、来源或版本。需要沉淀研究成果时，请从内容项目继续。
+                  </p>
 
                   <div className="space-y-3">
                     {batchTranscriptionItems.map((item, index) => (
@@ -796,7 +800,7 @@ export const Transcribe: React.FC = () => {
                                 onClick={() => handleImportItem(item.text)}
                                 className={ACTION_BUTTON_IMPORT}
                               >
-                                导入稿件
+                                导入临时稿
                               </button>
                             </div>
                           </div>

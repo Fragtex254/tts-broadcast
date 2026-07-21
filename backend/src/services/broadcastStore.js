@@ -1,6 +1,15 @@
 // 广播记录数据访问层
 const db = require('../db');
 
+function toBroadcastDto(row) {
+  if (!row) return undefined;
+  return {
+    ...row,
+    // artifact_revision_id 是兼容数据库字段；该别名明确表达“创建 Render 时的来源版本”。
+    source_artifact_revision_id: row.artifact_revision_id ?? null,
+  };
+}
+
 /**
  * 创建播报记录
  * @param {Object} params
@@ -12,12 +21,14 @@ const db = require('../db');
  * @param {string|Array|null} [params.sourceItems] - 来源资讯列表
  * @param {string} [params.status='pending'] - 播报状态
  * @param {string} [params.mode='whole'] - 播报模式（whole/segmented）
+ * @param {number|null} [params.artifactRevisionId] - 创建 Render 时的来源口播稿 Revision ID
  * @returns {Object} 创建的播报记录
  */
-function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems, status, mode }) {
+function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems, status, mode, artifactRevisionId }) {
   const result = db.prepare(`
-    INSERT INTO broadcasts (title, content, audio_path, voice_type, voice_config, source_items, status, mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO broadcasts (
+      title, content, audio_path, voice_type, voice_config, source_items, status, mode, artifact_revision_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     title,
     content,
@@ -26,9 +37,10 @@ function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems
     typeof voiceConfig === 'string' ? voiceConfig : JSON.stringify(voiceConfig || {}),
     sourceItems ? (typeof sourceItems === 'string' ? sourceItems : JSON.stringify(sourceItems)) : null,
     status || 'pending',
-    mode || 'whole'
+    mode || 'whole',
+    artifactRevisionId ?? null
   );
-  return db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(result.lastInsertRowid);
+  return getById(Number(result.lastInsertRowid));
 }
 
 /**
@@ -37,7 +49,7 @@ function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems
  * @returns {Object|undefined} 播报记录，不存在时返回 undefined
  */
 function getById(id) {
-  return db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
+  return toBroadcastDto(db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id));
 }
 
 /**
@@ -48,7 +60,9 @@ function getById(id) {
  * @returns {Array} 播报记录列表
  */
 function getHistory({ limit, offset }) {
-  return db.prepare('SELECT * FROM broadcasts WHERE saved = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
+  return db.prepare('SELECT * FROM broadcasts WHERE saved = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?')
+    .all(limit, offset)
+    .map(toBroadcastDto);
 }
 
 /**
@@ -68,6 +82,16 @@ function countUnsaved() {
 }
 
 /**
+ * 统计可由缓存 FIFO 淘汰的未保存 Render。
+ * pending 任务仍可能在等待 TTS，不能作为淘汰候选。
+ * @returns {number} 已生成且未保存的 Render 数量
+ */
+function countEvictableUnsaved() {
+  return db.prepare("SELECT COUNT(*) as count FROM broadcasts WHERE saved = 0 AND status = 'generated'")
+    .get().count;
+}
+
+/**
  * 获取已保存播报数量
  * @returns {number} 已保存数量
  */
@@ -84,6 +108,21 @@ function getOldestUnsaved(n) {
   return db.prepare(
     'SELECT id, title, audio_path FROM broadcasts WHERE saved = 0 ORDER BY created_at ASC, id ASC LIMIT ?'
   ).all(n);
+}
+
+/**
+ * 获取最旧的可淘汰未保存 Render，不包含 pending 任务。
+ * @param {number} n - 数量
+ * @returns {Array} 已生成且未保存的 Render 列表
+ */
+function getOldestEvictableUnsaved(n) {
+  return db.prepare(`
+    SELECT id, title, audio_path
+    FROM broadcasts
+    WHERE saved = 0 AND status = 'generated'
+    ORDER BY created_at ASC, id ASC
+    LIMIT ?
+  `).all(n);
 }
 
 /**
@@ -108,6 +147,35 @@ function updateAudioPath(id, audioPath) {
 }
 
 /**
+ * 将 pending 整篇 Render 原子收口为已生成状态。
+ * @param {Object} params
+ * @param {number} params.id - Broadcast ID
+ * @param {string} params.audioPath - 已写入的音频路径
+ * @returns {Object|undefined} 更新后的 Render；记录已不存在时返回 undefined
+ */
+function completeWholeGeneration({ id, audioPath }) {
+  const result = db.prepare(`
+    UPDATE broadcasts
+    SET audio_path = ?, status = 'generated', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND mode = 'whole' AND status = 'pending' AND audio_path IS NULL
+  `).run(audioPath, id);
+  return result.changes > 0 ? getById(id) : undefined;
+}
+
+/**
+ * 回滚尚未收口的整篇 Render，避免误删已完成或已被其他流程接管的记录。
+ * @param {number} id - Broadcast ID
+ * @returns {boolean} 是否删除了 pending Render
+ */
+function deletePendingWholeGeneration(id) {
+  const result = db.prepare(`
+    DELETE FROM broadcasts
+    WHERE id = ? AND mode = 'whole' AND status = 'pending' AND audio_path IS NULL
+  `).run(id);
+  return result.changes > 0;
+}
+
+/**
  * 更新音色配置
  * @param {number} id - 播报 ID
  * @param {Object} params
@@ -129,7 +197,7 @@ function toggleSaved(id) {
   if (!broadcast) return null;
   const newSaved = broadcast.saved ? 0 : 1;
   db.prepare('UPDATE broadcasts SET saved = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newSaved, id);
-  const updated = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
+  const updated = getById(id);
   return { newSaved, broadcast: updated };
 }
 
@@ -142,7 +210,7 @@ function deleteById(id) {
   const record = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id);
   if (!record) return undefined;
   db.prepare('DELETE FROM broadcasts WHERE id = ?').run(id);
-  return record;
+  return toBroadcastDto(record);
 }
 
 /**
@@ -209,10 +277,14 @@ module.exports = {
   getHistory,
   countAll,
   countUnsaved,
+  countEvictableUnsaved,
   countSaved,
   getOldestUnsaved,
+  getOldestEvictableUnsaved,
   getOldestSaved,
   updateAudioPath,
+  completeWholeGeneration,
+  deletePendingWholeGeneration,
   updateVoiceConfig,
   toggleSaved,
   deleteById,

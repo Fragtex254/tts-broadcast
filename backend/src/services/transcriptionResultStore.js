@@ -48,6 +48,16 @@ function normalizeStats(row) {
   };
 }
 
+const REFERENCED_RESULT_DELETE_MESSAGE = '该转录中的观点已被内容项目引用，请先从内容项目移除观点后再删除转录结果';
+
+class TranscriptionResultInUseError extends Error {
+  constructor() {
+    super(REFERENCED_RESULT_DELETE_MESSAGE);
+    this.name = 'TranscriptionResultInUseError';
+    this.code = 'TRANSCRIPTION_RESULT_IN_USE';
+  }
+}
+
 /**
  * 创建转录结果记录
  * @param {Object} params
@@ -210,17 +220,33 @@ function updateTextAndFormatted(id, { text, formattedText }) {
   return getById(id);
 }
 
-/**
- * 删除转录结果
- * @param {number} id - 转录结果 ID
- * @returns {boolean} 是否删除成功
- */
-function remove(id) {
+const removeTransaction = db.transaction((id) => {
+  const referencedClaim = db.prepare(`
+    SELECT c.id
+    FROM transcription_claims c
+    INNER JOIN content_project_claims pc ON pc.claim_id = c.id
+    WHERE c.transcription_id = ?
+    LIMIT 1
+  `).get(id);
+  if (referencedClaim) throw new TranscriptionResultInUseError();
+
   const result = db.prepare('DELETE FROM transcription_results WHERE id = ?').run(id);
   return result.changes > 0;
+});
+
+/**
+ * 删除转录结果。检查项目引用与删除在同一事务内完成，避免级联误删研究成果。
+ * @param {number} id - 转录结果 ID
+ * @returns {boolean} 是否删除成功
+ * @throws {TranscriptionResultInUseError} 观点已被内容项目引用时阻止删除
+ */
+function remove(id) {
+  return removeTransaction(id);
 }
 
 module.exports = {
+  REFERENCED_RESULT_DELETE_MESSAGE,
+  TranscriptionResultInUseError,
   create,
   getById,
   getRecent,

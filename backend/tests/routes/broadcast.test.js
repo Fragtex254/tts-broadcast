@@ -2,11 +2,19 @@ jest.mock('../../src/services/aihot', () => ({
   getSelectedItems: jest.fn()
 }));
 
+const fs = require('fs');
+const path = require('path');
 const request = require('supertest');
 const app = require('../../src/app');
 const db = require('../../src/db');
 const aihot = require('../../src/services/aihot');
 const audio = require('../../src/services/audio');
+const audioAsset = require('../../src/services/audioAsset');
+const broadcastStore = require('../../src/services/broadcastStore');
+const ttsQueue = require('../../src/services/ttsQueue');
+const { audioDir } = require('../../src/utils/validation');
+
+const originalWriteBroadcastAudio = audioAsset.writeBroadcastAudio;
 
 describe('播报 API', () => {
   beforeEach(() => {
@@ -203,6 +211,294 @@ describe('播报 API', () => {
       expect(res.body).toHaveProperty('broadcast');
       expect(res.body.broadcast.mode).toBe('segmented');
       expect(res.body.broadcast.status).toBe('pending');
+      expect(res.body.broadcast.artifact_revision_id).toBeNull();
+    });
+  });
+
+  describe('POST /api/broadcast/generate - 稿件版本来源关联', () => {
+    beforeEach(() => {
+      db.prepare('DELETE FROM broadcasts').run();
+      db.prepare('DELETE FROM content_projects').run();
+    });
+
+    test('audio_script 精确内容可生成 segmented 播报并持久化 Revision ID', async () => {
+      const project = await request(app).post('/api/content-projects').send({ title: '口播输出项目' });
+      const revisionContent = '\n这是保留首尾换行的口播稿。\n';
+      const artifact = await request(app)
+        .post(`/api/content-projects/${project.body.project.id}/artifacts`)
+        .send({ kind: 'audio_script', title: '口播稿', platform: 'general', content: revisionContent });
+      const revisionId = artifact.body.artifact.current_revision.id;
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: revisionContent,
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'segmented',
+          artifactRevisionId: revisionId,
+        });
+
+      expect(generated.status).toBe(200);
+      expect(generated.body.broadcast).toMatchObject({
+        mode: 'segmented',
+        content: revisionContent,
+        artifact_revision_id: revisionId,
+      });
+      expect(db.prepare('SELECT artifact_revision_id FROM broadcasts WHERE id = ?').get(generated.body.broadcast.id))
+        .toEqual({ artifact_revision_id: revisionId });
+    });
+
+    test('whole 模式也保留 audio_script Revision 来源', async () => {
+      const project = await request(app).post('/api/content-projects').send({ title: '整篇音频项目' });
+      const artifact = await request(app)
+        .post(`/api/content-projects/${project.body.project.id}/artifacts`)
+        .send({ kind: 'audio_script', title: '整篇口播稿', platform: 'general', content: '整篇模式的口播内容' });
+      const revisionId = artifact.body.artifact.current_revision.id;
+      jest.spyOn(ttsQueue, 'enqueueTts').mockResolvedValue(Buffer.from('fake-wav'));
+      jest.spyOn(audioAsset, 'writeBroadcastAudio').mockReturnValue('/audio/render-test.wav');
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '整篇模式的口播内容',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'whole',
+          artifactRevisionId: revisionId,
+        });
+
+      expect(generated.status).toBe(200);
+      expect(generated.body.broadcast.artifact_revision_id).toBe(revisionId);
+      expect(ttsQueue.enqueueTts).toHaveBeenCalledTimes(1);
+    });
+
+    test('whole 模式在 TTS 期间删除来源项目仍完成已创建 Render，不产生 FK 500', async () => {
+      const project = await request(app).post('/api/content-projects').send({ title: '并发删除项目' });
+      const projectId = project.body.project.id;
+      const artifact = await request(app)
+        .post(`/api/content-projects/${projectId}/artifacts`)
+        .send({ kind: 'audio_script', title: '竞态口播稿', content: '生成期间删除来源' });
+      const revisionId = artifact.body.artifact.current_revision.id;
+      jest.spyOn(ttsQueue, 'enqueueTts').mockImplementation(async () => {
+        const pending = db.prepare('SELECT * FROM broadcasts WHERE artifact_revision_id = ?').get(revisionId);
+        expect(pending).toMatchObject({ status: 'pending', mode: 'whole' });
+        db.prepare('DELETE FROM content_projects WHERE id = ?').run(projectId);
+        return Buffer.from('race-wav');
+      });
+      jest.spyOn(audioAsset, 'writeBroadcastAudio').mockReturnValue('/audio/render-race.wav');
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '生成期间删除来源',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'whole',
+          artifactRevisionId: revisionId,
+        });
+
+      expect(generated.status).toBe(200);
+      expect(generated.body.broadcast).toMatchObject({
+        status: 'generated',
+        artifact_revision_id: null,
+        source_artifact_revision_id: null,
+        audio_path: '/audio/render-race.wav',
+      });
+      expect(audioAsset.writeBroadcastAudio).toHaveBeenCalledWith(Buffer.from('race-wav'), expect.any(Number));
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(1);
+    });
+
+    test('whole 模式写盘后最终落库失败会清理音频并回滚 pending Render', async () => {
+      jest.spyOn(ttsQueue, 'enqueueTts').mockResolvedValue(Buffer.from('cleanup-wav'));
+      let writtenAudioPath;
+      jest.spyOn(audioAsset, 'writeBroadcastAudio').mockImplementation((buffer, broadcastId) => {
+        writtenAudioPath = originalWriteBroadcastAudio(buffer, `rollback_${broadcastId}`);
+        return writtenAudioPath;
+      });
+      jest.spyOn(broadcastStore, 'completeWholeGeneration').mockImplementation(() => {
+        throw new Error('模拟数据库收口失败');
+      });
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '需要补偿清理的整篇口播稿',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'whole',
+        });
+
+      expect(generated.status).toBe(500);
+      expect(generated.body).toEqual({ error: '音频生成结果保存失败，请重试' });
+      expect(writtenAudioPath).toBeDefined();
+      expect(fs.existsSync(path.join(audioDir, writtenAudioPath.slice('/audio/'.length)))).toBe(false);
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(0);
+    });
+
+    test('whole 模式 TTS provider 失败时保留中文错误并回滚 pending Render', async () => {
+      jest.spyOn(ttsQueue, 'enqueueTts').mockRejectedValue(new Error('MiMo TTS 暂时不可用，请稍后重试'));
+      const writeSpy = jest.spyOn(audioAsset, 'writeBroadcastAudio');
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: 'TTS 失败时不应留下临时 Render',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'whole',
+        });
+
+      expect(generated.status).toBe(500);
+      expect(generated.body).toEqual({ error: 'MiMo TTS 暂时不可用，请稍后重试' });
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(0);
+    });
+
+    test('whole 模式写盘中断时清理部分文件并回滚 pending Render', async () => {
+      jest.spyOn(ttsQueue, 'enqueueTts').mockResolvedValue(Buffer.from('partial-wav'));
+      let partialAudioPath;
+      jest.spyOn(audioAsset, 'writeBroadcastAudio').mockImplementation((buffer, broadcastId) => {
+        partialAudioPath = originalWriteBroadcastAudio(buffer, broadcastId);
+        throw new Error('模拟磁盘写入中断');
+      });
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '写盘中断时需要补偿清理',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'whole',
+        });
+
+      expect(generated.status).toBe(500);
+      expect(generated.body).toEqual({ error: '音频文件保存失败，请重试' });
+      expect(partialAudioPath).toBeDefined();
+      expect(fs.existsSync(path.join(audioDir, partialAudioPath.slice('/audio/'.length)))).toBe(false);
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(0);
+    });
+
+    test('音频补偿删除失败不覆盖落库错误，且仍回滚 pending Render', async () => {
+      jest.spyOn(ttsQueue, 'enqueueTts').mockResolvedValue(Buffer.from('cleanup-failure-wav'));
+      let writtenAudioPath;
+      jest.spyOn(audioAsset, 'writeBroadcastAudio').mockImplementation((buffer, broadcastId) => {
+        writtenAudioPath = originalWriteBroadcastAudio(buffer, `cleanup_failure_${broadcastId}`);
+        return writtenAudioPath;
+      });
+      jest.spyOn(broadcastStore, 'completeWholeGeneration').mockImplementation(() => {
+        throw new Error('模拟数据库收口失败');
+      });
+      jest.spyOn(fs, 'unlinkSync').mockImplementationOnce(() => {
+        throw new Error('模拟音频补偿删除失败');
+      });
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '清理异常不能覆盖原始错误',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'whole',
+        });
+
+      expect(generated.status).toBe(500);
+      expect(generated.body).toEqual({ error: '音频生成结果保存失败，请重试' });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(0);
+
+      const absoluteAudioPath = path.join(audioDir, writtenAudioPath.slice('/audio/'.length));
+      if (fs.existsSync(absoluteAudioPath)) fs.unlinkSync(absoluteAudioPath);
+    });
+
+    test('请求文本与 Revision 不一致时返回 409 且不创建播报', async () => {
+      const project = await request(app).post('/api/content-projects').send({ title: '内容校验项目' });
+      const artifact = await request(app)
+        .post(`/api/content-projects/${project.body.project.id}/artifacts`)
+        .send({ kind: 'audio_script', title: '待校验口播稿', content: '\n已保存口播稿\n' });
+      const revisionId = artifact.body.artifact.current_revision.id;
+      const beforeCount = db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count;
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '已保存口播稿',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'segmented',
+          artifactRevisionId: revisionId,
+        });
+
+      expect(generated.status).toBe(409);
+      expect(generated.body).toEqual({ error: '口播稿已修改，请先保存为新版本再生成音频' });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(beforeCount);
+    });
+
+    test('不存在的 Revision 返回 404 且不创建播报', async () => {
+      const beforeCount = db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count;
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '找不到来源版本的口播稿',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'segmented',
+          artifactRevisionId: 999999,
+        });
+
+      expect(generated.status).toBe(404);
+      expect(generated.body).toEqual({ error: '稿件版本不存在' });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(beforeCount);
+    });
+
+    test('master Artifact 不允许直接关联 TTS Render', async () => {
+      const project = await request(app).post('/api/content-projects').send({ title: '主稿项目' });
+      const artifact = await request(app)
+        .post(`/api/content-projects/${project.body.project.id}/artifacts`)
+        .send({ kind: 'master', title: '主稿', content: '这是文章主稿' });
+      const revisionId = artifact.body.artifact.current_revision.id;
+
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '这是文章主稿',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'segmented',
+          artifactRevisionId: revisionId,
+        });
+
+      expect(generated.status).toBe(400);
+      expect(generated.body).toEqual({ error: '只能从口播稿版本生成音频' });
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(0);
+    });
+
+    test('删除项目后保留播报且 Revision 关联置空', async () => {
+      expect(db.prepare(`
+        SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_broadcasts_artifact_revision_id'
+      `).get()).toEqual({ name: 'idx_broadcasts_artifact_revision_id' });
+      const project = await request(app).post('/api/content-projects').send({ title: '可删除的项目' });
+      const projectId = project.body.project.id;
+      const artifact = await request(app)
+        .post(`/api/content-projects/${projectId}/artifacts`)
+        .send({ kind: 'audio_script', title: '口播稿', content: '播报仍需保留' });
+      const revisionId = artifact.body.artifact.current_revision.id;
+      const generated = await request(app)
+        .post('/api/broadcast/generate')
+        .send({
+          text: '播报仍需保留',
+          voiceType: 'preset',
+          voice: '冰糖',
+          mode: 'segmented',
+          artifactRevisionId: revisionId,
+        });
+
+      const removed = await request(app).delete(`/api/content-projects/${projectId}`);
+      const broadcastAfterDelete = db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(generated.body.broadcast.id);
+
+      expect(removed.status).toBe(200);
+      expect(broadcastAfterDelete).toBeDefined();
+      expect(broadcastAfterDelete.artifact_revision_id).toBeNull();
     });
   });
 

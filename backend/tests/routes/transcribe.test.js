@@ -384,6 +384,33 @@ describe('转录 API', () => {
     expect(db.prepare('SELECT COUNT(*) as count FROM transcription_results WHERE id = ?').get(record.lastInsertRowid).count).toBe(0);
   });
 
+  test('DELETE /api/transcribe/results/:id 在观点已被内容项目引用时返回 409 且保留研究数据', async () => {
+    const record = db.prepare(`
+      INSERT INTO transcription_results (file_name, relative_path, text, language, provider, model)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run('referenced.wav', 'referenced.wav', '被引用的转录文本', 'zh', 'mimo', 'mimo-v2.5-asr');
+    const claim = db.prepare(`
+      INSERT INTO transcription_claims (
+        transcription_id, speaker_key, question, claim, evidence_excerpt,
+        evidence_start_index, evidence_end_index, start_seconds, end_seconds
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(record.lastInsertRowid, 'SPEAKER_00', '为什么？', '这是被项目采用的观点', '证据原文', 0, 0, 0, 1);
+    const project = db.prepare('INSERT INTO content_projects (title) VALUES (?)').run('保留研究成果');
+    db.prepare(`
+      INSERT INTO content_project_claims (project_id, claim_id, usage_note)
+      VALUES (?, ?, ?)
+    `).run(project.lastInsertRowid, claim.lastInsertRowid, '作为主论点');
+
+    const res = await request(app)
+      .delete(`/api/transcribe/results/${record.lastInsertRowid}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('该转录中的观点已被内容项目引用，请先从内容项目移除观点后再删除转录结果');
+    expect(db.prepare('SELECT COUNT(*) AS count FROM transcription_results WHERE id = ?').get(record.lastInsertRowid).count).toBe(1);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM transcription_claims WHERE id = ?').get(claim.lastInsertRowid).count).toBe(1);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM content_project_claims WHERE claim_id = ?').get(claim.lastInsertRowid).count).toBe(1);
+  });
+
   test('DELETE /api/transcribe/results/:id 不存在时返回 404', async () => {
     const res = await request(app)
       .delete('/api/transcribe/results/9999');

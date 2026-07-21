@@ -64,8 +64,8 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
       await rewriteScript({ items: todayItems });
       onRewriteComplete?.();
     } catch (err) {
-      setError('改写口播稿失败，请稍后重试');
-      logger.error({ err: toLogError(err), itemCount: todayItems.length }, '改写口播稿失败');
+      setError('生成临时内容草稿失败，请稍后重试');
+      logger.error({ err: toLogError(err), itemCount: todayItems.length }, '生成临时内容草稿失败');
     }
   };
 
@@ -76,6 +76,10 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
         <span className="w-2 h-2 rounded-full bg-lemon" />
         <h3 className="font-display italic text-[14px] font-medium text-ink-soft">AI 资讯采集</h3>
       </div>
+
+      <p className="mb-4 rounded-xl border border-lemon/35 bg-lemon/10 p-3 font-body text-[11px] leading-relaxed text-ink-soft/75">
+        这是快速试写入口：生成结果会进入临时编辑流程，不会自动加入内容项目、来源或版本记录。需要长期创作时，请先新建内容项目。
+      </p>
 
       {/* 配置区 */}
       <div className="flex flex-col gap-2 mb-4 sm:flex-row">
@@ -118,7 +122,7 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
               disabled={isRewriting}
               className="bg-lilac hover:brightness-105 disabled:opacity-50 text-ink font-body font-medium text-[12px] rounded-full px-5 py-2 shadow-btn ui-transition duration-fast active:translate-y-0 active:shadow-none uppercase tracking-wider"
             >
-              {isRewriting ? '改写中...' : '✦ 一键改写口播稿'}
+              {isRewriting ? '生成中...' : '✦ 生成临时内容草稿'}
             </button>
           </div>
 

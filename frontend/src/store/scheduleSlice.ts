@@ -1,5 +1,11 @@
 import { scheduleApi } from '../services/api';
 import { createScopedLogger, toLogError } from '../services/logger';
+import {
+  AutomationExecutionStateSchema,
+  safeParseArray,
+  safeParseStrict,
+  ScheduleSchema,
+} from '../services/schemas';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
 
@@ -7,15 +13,22 @@ const logger = createScopedLogger('schedule-slice');
 
 export function createScheduleSlice(set: StoreSet): Pick<
   AppState,
-  'schedules' | 'fetchSchedules' | 'createSchedule' | 'updateSchedule' | 'deleteSchedule' | 'toggleSchedule'
+  'schedules' | 'automationExecution' | 'fetchSchedules' | 'createSchedule' | 'updateSchedule' | 'deleteSchedule' | 'toggleSchedule'
 > {
   return {
     schedules: [],
+    automationExecution: {
+      available: false,
+      state: 'unavailable',
+      reason: '自动化执行器尚未配置',
+    },
 
     fetchSchedules: async () => {
       try {
         const response = await scheduleApi.getAll();
-        set({ schedules: response.data.schedules });
+        const schedules = safeParseArray(ScheduleSchema, response.data.schedules);
+        const execution = safeParseStrict(AutomationExecutionStateSchema, response.data.execution);
+        set({ schedules, automationExecution: execution });
       } catch (error) {
         logger.error({ err: toLogError(error) }, '获取定时任务失败');
         throw error;
@@ -25,9 +38,11 @@ export function createScheduleSlice(set: StoreSet): Pick<
     createSchedule: async (data) => {
       try {
         const response = await scheduleApi.create(data);
-        const schedule = response.data.schedule;
+        const schedule = safeParseStrict(ScheduleSchema, response.data.schedule);
+        const execution = safeParseStrict(AutomationExecutionStateSchema, response.data.execution);
         set((state) => ({
           schedules: [schedule, ...state.schedules],
+          automationExecution: execution,
         }));
         return schedule;
       } catch (error) {
@@ -39,9 +54,11 @@ export function createScheduleSlice(set: StoreSet): Pick<
     updateSchedule: async (id, data) => {
       try {
         const response = await scheduleApi.update(id, data);
-        const updated = response.data.schedule;
+        const updated = safeParseStrict(ScheduleSchema, response.data.schedule);
+        const execution = safeParseStrict(AutomationExecutionStateSchema, response.data.execution);
         set((state) => ({
           schedules: state.schedules.map((s) => (s.id === id ? updated : s)),
+          automationExecution: execution,
         }));
         return updated;
       } catch (error) {
@@ -65,9 +82,11 @@ export function createScheduleSlice(set: StoreSet): Pick<
     toggleSchedule: async (id) => {
       try {
         const response = await scheduleApi.toggle(id);
-        const updated = response.data.schedule;
+        const updated = safeParseStrict(ScheduleSchema, response.data.schedule);
+        const execution = safeParseStrict(AutomationExecutionStateSchema, response.data.execution);
         set((state) => ({
           schedules: state.schedules.map((s) => (s.id === id ? updated : s)),
+          automationExecution: execution,
         }));
         return updated;
       } catch (error) {

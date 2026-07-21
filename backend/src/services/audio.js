@@ -4,6 +4,7 @@ const path = require('path');
 const childProcess = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const { createScopedLogger } = require('./logger');
+const { audioDir, resolveAudioFilePath } = require('../utils/validation');
 
 const WAV_HEADER_SIZE = 44;
 const MIN_PLAYBACK_RATE = 0.5;
@@ -12,7 +13,7 @@ const RIFF_HEADER_SIZE = 12;
 const VOICE_CLONE_WAV_TRANSCODE_THRESHOLD_BYTES = 512 * 1024;
 const VOICE_CLONE_TRANSCODE_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const VOICE_CLONE_CACHE_MAX_ENTRIES = 32;
-const VOICE_CLONE_AUDIO_ROOT = path.resolve(__dirname, '../../audio');
+const VOICE_CLONE_AUDIO_ROOT = path.resolve(audioDir);
 const voiceCloneDataUriCache = new Map();
 const logger = createScopedLogger('audio-service');
 
@@ -295,13 +296,6 @@ async function createVoiceCloneDataUri({ filePath, extension, stats }) {
     dataUri: toAudioDataUri(getVoiceCloneMime(extension), fs.readFileSync(filePath)),
     cacheable: true,
   };
-}
-
-function resolveAudioFilePath(audioPath) {
-  if (typeof audioPath !== 'string' || !audioPath.startsWith('/audio/')) {
-    throw new Error('音频路径无效');
-  }
-  return path.join(__dirname, '../..', audioPath);
 }
 
 /**

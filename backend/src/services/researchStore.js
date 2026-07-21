@@ -1,5 +1,15 @@
 const db = require('../db');
 
+const REFERENCED_CLAIM_DELETE_MESSAGE = '该观点已被内容项目引用，请先从内容项目移除观点后再删除';
+
+class TranscriptionClaimInUseError extends Error {
+  constructor() {
+    super(REFERENCED_CLAIM_DELETE_MESSAGE);
+    this.name = 'TranscriptionClaimInUseError';
+    this.code = 'TRANSCRIPTION_CLAIM_IN_USE';
+  }
+}
+
 function parseJson(raw, fallback) {
   if (!raw) return fallback;
   try { return JSON.parse(raw); } catch { return fallback; }
@@ -60,8 +70,20 @@ function updateClaim(id, { userNote, isStarred, isHidden, status } = {}) {
   return result.changes ? getClaim(id) : undefined;
 }
 
-function removeClaim(id) {
+const removeClaimTransaction = db.transaction((id) => {
+  const reference = db.prepare('SELECT 1 FROM content_project_claims WHERE claim_id = ? LIMIT 1').get(id);
+  if (reference) throw new TranscriptionClaimInUseError();
   return db.prepare('DELETE FROM transcription_claims WHERE id = ?').run(id).changes > 0;
+});
+
+/**
+ * 删除观点。检查项目引用与删除在同一事务内完成。
+ * @param {number} id - 观点 ID
+ * @returns {boolean} 是否删除成功
+ * @throws {TranscriptionClaimInUseError} 观点已被内容项目引用时阻止删除
+ */
+function removeClaim(id) {
+  return removeClaimTransaction(id);
 }
 
 function updateClaimsStatus(transcriptionId, { status, error = '', model = '' }) {
@@ -137,6 +159,7 @@ function upsertRelation({ claimAId, claimBId, relationType, explanation, confide
 }
 
 module.exports = {
+  REFERENCED_CLAIM_DELETE_MESSAGE, TranscriptionClaimInUseError,
   getClaim, getRelation, listClaims, markClaimsStale, removeClaim, replaceClaims,
   setClaimEmbedding, updateClaim, updateClaimsStatus, upsertRelation,
 };

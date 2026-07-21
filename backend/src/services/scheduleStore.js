@@ -32,12 +32,13 @@ function getById(id) {
  * @param {string} schedule.name - 任务名称
  * @param {string} schedule.cron_expression - cron 表达式
  * @param {string} schedule.content_types - 内容分类 JSON 数组
+ * @param {number} schedule.isActive - 0/1 持久化启用意图
  * @returns {Object} 新建任务
  */
-function create({ name, cron_expression, content_types }) {
+function create({ name, cron_expression, content_types, isActive = 1 }) {
   const result = db.prepare(`
-    INSERT INTO schedules (name, cron_expression, content_types) VALUES (?, ?, ?)
-  `).run(name, cron_expression, content_types);
+    INSERT INTO schedules (name, cron_expression, content_types, is_active) VALUES (?, ?, ?, ?)
+  `).run(name, cron_expression, content_types, isActive);
 
   return getById(result.lastInsertRowid);
 }
