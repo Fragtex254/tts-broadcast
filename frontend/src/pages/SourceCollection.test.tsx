@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import useStore, { type ContentArtifactRevision, type ContentProject, type ProjectEditorContext } from '../store';
+import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { SourceCollection } from './SourceCollection';
 
 const LocationProbe = () => {
@@ -10,6 +11,7 @@ const LocationProbe = () => {
 };
 
 const audioScriptRevision: ContentArtifactRevision = {
+  ...CONTENT_REVISION_DEFAULTS,
   id: 31,
   artifact_id: 17,
   revision_number: 4,

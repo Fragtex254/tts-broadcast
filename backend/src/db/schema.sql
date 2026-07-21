@@ -315,6 +315,7 @@ CREATE TABLE IF NOT EXISTS content_sources (
   source_type TEXT NOT NULL DEFAULT 'manual',
   title TEXT NOT NULL DEFAULT '',
   content TEXT NOT NULL DEFAULT '',
+  content_sha256 TEXT NOT NULL DEFAULT '',
   url TEXT NOT NULL DEFAULT '',
   external_ref TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
@@ -331,6 +332,8 @@ CREATE TABLE IF NOT EXISTS content_project_sources (
   source_id INTEGER NOT NULL,
   usage_note TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0,
+  request_key TEXT NOT NULL DEFAULT '',
+  input_sha256 TEXT NOT NULL DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
@@ -340,6 +343,25 @@ CREATE TABLE IF NOT EXISTS content_project_sources (
 
 CREATE INDEX IF NOT EXISTS idx_content_project_sources_order
   ON content_project_sources(project_id, sort_order, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_content_project_sources_request_key
+  ON content_project_sources(project_id, request_key)
+  WHERE request_key <> '';
+
+-- 来源写入的不可变幂等账本：一条项目-来源关联可以经历多次请求，不得覆盖旧 key。
+CREATE TABLE IF NOT EXISTS content_source_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  request_key TEXT NOT NULL,
+  input_sha256 TEXT NOT NULL,
+  source_id INTEGER NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE RESTRICT,
+  UNIQUE (project_id, request_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_source_requests_source
+  ON content_source_requests(source_id, project_id);
 
 CREATE TABLE IF NOT EXISTS content_artifacts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -362,13 +384,133 @@ CREATE TABLE IF NOT EXISTS content_artifact_revisions (
   revision_number INTEGER NOT NULL,
   content TEXT NOT NULL DEFAULT '',
   change_reason TEXT NOT NULL DEFAULT 'manual',
+  parent_revision_id INTEGER DEFAULT NULL,
+  generation_job_id INTEGER DEFAULT NULL,
+  request_key TEXT NOT NULL DEFAULT '',
+  provenance_json TEXT NOT NULL DEFAULT '{}',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (artifact_id) REFERENCES content_artifacts(id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_revision_id) REFERENCES content_artifact_revisions(id) ON DELETE SET NULL,
   UNIQUE (artifact_id, revision_number)
 );
 
 CREATE INDEX IF NOT EXISTS idx_content_artifact_revisions_artifact_number
   ON content_artifact_revisions(artifact_id, revision_number DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_content_artifact_revisions_request_key
+  ON content_artifact_revisions(artifact_id, request_key)
+  WHERE request_key <> '';
+
+CREATE TABLE IF NOT EXISTS content_evidence_cards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  source_id INTEGER NOT NULL,
+  source_content_sha256 TEXT NOT NULL,
+  start_fragment_index INTEGER NOT NULL,
+  end_fragment_index INTEGER NOT NULL,
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  excerpt TEXT NOT NULL,
+  origin TEXT NOT NULL DEFAULT 'user' CHECK (origin IN ('ai', 'user')),
+  state TEXT NOT NULL DEFAULT 'candidate'
+    CHECK (state IN ('candidate', 'selected', 'rejected', 'superseded', 'stale')),
+  decision_state TEXT NOT NULL DEFAULT 'candidate'
+    CHECK (decision_state IN ('candidate', 'selected', 'rejected')),
+  lifecycle_status TEXT NOT NULL DEFAULT 'active'
+    CHECK (lifecycle_status IN ('active', 'superseded', 'stale')),
+  ai_note TEXT NOT NULL DEFAULT '',
+  user_note TEXT NOT NULL DEFAULT '',
+  supersedes_id INTEGER DEFAULT NULL,
+  generation_job_id INTEGER DEFAULT NULL,
+  request_key TEXT NOT NULL DEFAULT '',
+  input_sha256 TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+  FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE RESTRICT,
+  FOREIGN KEY (supersedes_id) REFERENCES content_evidence_cards(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_evidence_project_state
+  ON content_evidence_cards(project_id, state, sort_order, id);
+CREATE INDEX IF NOT EXISTS idx_content_evidence_project_lifecycle_decision
+  ON content_evidence_cards(project_id, lifecycle_status, decision_state, sort_order, id);
+CREATE INDEX IF NOT EXISTS idx_content_evidence_source
+  ON content_evidence_cards(source_id, source_content_sha256);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_content_evidence_request_key
+  ON content_evidence_cards(project_id, request_key)
+  WHERE request_key <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_content_evidence_generation_range
+  ON content_evidence_cards(generation_job_id, source_id, start_fragment_index, end_fragment_index)
+  WHERE generation_job_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS content_revision_citations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  revision_id INTEGER NOT NULL,
+  evidence_id INTEGER NOT NULL,
+  citation_order INTEGER NOT NULL,
+  marker_start_offset INTEGER NOT NULL,
+  marker_end_offset INTEGER NOT NULL,
+  excerpt_snapshot TEXT NOT NULL,
+  source_id_snapshot INTEGER NOT NULL,
+  source_title_snapshot TEXT NOT NULL DEFAULT '',
+  source_url_snapshot TEXT NOT NULL DEFAULT '',
+  source_content_sha256 TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (revision_id) REFERENCES content_artifact_revisions(id) ON DELETE CASCADE,
+  FOREIGN KEY (evidence_id) REFERENCES content_evidence_cards(id) ON DELETE RESTRICT,
+  UNIQUE (revision_id, citation_order)
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_revision_citations_evidence
+  ON content_revision_citations(evidence_id, revision_id);
+
+CREATE TABLE IF NOT EXISTS content_project_milestones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  result_id INTEGER DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+  UNIQUE (project_id, kind)
+);
+
+CREATE TABLE IF NOT EXISTS content_generation_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('extract_evidence', 'generate_outline', 'generate_master')),
+  request_key TEXT NOT NULL,
+  input_sha256 TEXT NOT NULL,
+  input_snapshot_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'running', 'completed', 'failed', 'superseded')),
+  phase TEXT NOT NULL DEFAULT 'queued',
+  progress INTEGER DEFAULT NULL,
+  error TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  provider TEXT NOT NULL DEFAULT '',
+  prompt_version TEXT NOT NULL DEFAULT '',
+  run_token TEXT NOT NULL DEFAULT '',
+  lease_expires_at_ms INTEGER DEFAULT NULL,
+  attempt INTEGER NOT NULL DEFAULT 0,
+  result_artifact_id INTEGER DEFAULT NULL,
+  result_revision_id INTEGER DEFAULT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+  FOREIGN KEY (result_artifact_id) REFERENCES content_artifacts(id) ON DELETE SET NULL,
+  FOREIGN KEY (result_revision_id) REFERENCES content_artifact_revisions(id) ON DELETE SET NULL,
+  UNIQUE (project_id, operation, request_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_generation_jobs_project_recent
+  ON content_generation_jobs(project_id, updated_at DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_content_generation_jobs_active_input
+  ON content_generation_jobs(project_id, operation, input_sha256)
+  WHERE status IN ('queued', 'running', 'completed');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_content_artifact_revisions_generation_job
+  ON content_artifact_revisions(generation_job_id)
+  WHERE generation_job_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS api_rate_limit_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

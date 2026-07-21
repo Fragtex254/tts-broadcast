@@ -1,4 +1,6 @@
 const contentArtifactStore = require('./contentArtifactStore');
+const contentEvidenceStore = require('./contentEvidenceStore');
+const contentGenerationJobStore = require('./contentGenerationJobStore');
 const contentProjectStore = require('./contentProjectStore');
 const contentSourceStore = require('./contentSourceStore');
 
@@ -11,9 +13,12 @@ const contentSourceStore = require('./contentSourceStore');
 function getWorkspace({ projectId }) {
   const project = contentProjectStore.getById(projectId);
   if (!project) return undefined;
+  contentGenerationJobStore.reconcileExpired({ projectId });
   return {
     project,
     sources: contentSourceStore.listForProject({ projectId }),
+    evidence: contentEvidenceStore.listForProject({ projectId }),
+    generation_jobs: contentGenerationJobStore.listForProject({ projectId }),
     artifacts: contentArtifactStore.listForProject({ projectId }),
   };
 }

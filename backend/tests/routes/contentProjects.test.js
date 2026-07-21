@@ -159,7 +159,7 @@ describe('内容项目 API', () => {
     db.prepare('UPDATE content_projects SET updated_at = ? WHERE id = ?').run(staleTimestamp, projectId);
     const source = await request(app)
       .post(`/api/content-projects/${projectId}/sources`)
-      .send({ sourceType: 'manual', title: '新来源' });
+      .send({ sourceType: 'manual', title: '新来源', content: '可核验的新来源原文。' });
     expect(source.status).toBe(201);
     expect(db.prepare('SELECT updated_at FROM content_projects WHERE id = ?').get(projectId).updated_at).not.toBe(staleTimestamp);
 
@@ -183,7 +183,7 @@ describe('内容项目 API', () => {
     const sourceProject = await request(app).post('/api/content-projects').send({ title: '来源项目' });
     const source = await request(app)
       .post(`/api/content-projects/${sourceProject.body.project.id}/sources`)
-      .send({ sourceType: 'manual', title: '可复用来源' });
+      .send({ sourceType: 'manual', title: '可复用来源', content: '可复用的原始内容。' });
     db.prepare(`UPDATE content_projects SET updated_at = STRFTIME('%Y-%m-%d %H:%M:%S', 'now') WHERE id IN (?, ?)`)
       .run(targetProject.body.project.id, sourceProject.body.project.id);
 
@@ -231,6 +231,8 @@ describe('内容项目 API', () => {
     expect(exported.status).toBe(200);
     expect(exported.body.markdown).toContain('研究播客｜AI 单集｜嘉宾甲｜1:05–1:10｜https://example.com/ai');
     expect(exported.body.markdown).toContain('主要分歧、成立条件与阶段性判断');
+    expect(exported.body.markdown).toContain('AI 整理理由（待核对）：理由');
+    expect(exported.body.markdown).not.toContain('   - 理由：');
 
     researchStore.replaceClaims(record.id, { model: 'new-model', claims: [{ speakerKey: 'speaker-0001', question: '新问题', claim: '新观点', reasoning: '新理由', evidenceExcerpt: '真实证据', evidenceStartIndex: 0, evidenceEndIndex: 0, startSeconds: 65, endSeconds: 70, topicTags: ['AI'], contentValue: 91, confidence: 0.95 }] });
     const projectAfterReanalysis = await request(app).get(`/api/content-projects/${created.body.project.id}`);

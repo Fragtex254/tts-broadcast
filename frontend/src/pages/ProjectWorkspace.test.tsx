@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import useStore, { type ContentArtifact, type ContentProjectWorkspace } from '../store';
+import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { ProjectWorkspace } from './ProjectWorkspace';
 
 const workspace: ContentProjectWorkspace = {
@@ -25,6 +26,8 @@ const workspace: ContentProjectWorkspace = {
     updated_at: '2026-07-18T00:00:00.000Z',
   },
   sources: [],
+  evidence: [],
+  generation_jobs: [],
   artifacts: [],
 };
 
@@ -36,6 +39,7 @@ const masterArtifact: ContentArtifact = {
   platform: 'general',
   status: 'draft',
   current_revision: {
+    ...CONTENT_REVISION_DEFAULTS,
     id: 11,
     artifact_id: 4,
     revision_number: 3,
@@ -53,6 +57,7 @@ const audioArtifact: ContentArtifact = {
   kind: 'audio_script',
   title: '口播稿',
   current_revision: {
+    ...CONTENT_REVISION_DEFAULTS,
     id: 21,
     artifact_id: 8,
     revision_number: 1,
@@ -107,6 +112,16 @@ describe('ProjectWorkspace', () => {
       clearProjectWorkspace: vi.fn(),
       isSavingProjectWorkspace: false,
       projectWorkspaceSaveError: null,
+      projectSourceFragments: {},
+      isLoadingProjectSourceFragments: false,
+      projectSourceFragmentsError: null,
+      activeProjectTaskId: null,
+      activeProjectJobOperation: null,
+      projectWorkspaceJobError: null,
+      projectMilestoneFeedback: null,
+      projectOutlineRevisions: [],
+      isLoadingProjectOutlineRevisions: false,
+      projectOutlineRevisionsError: null,
     });
   });
 
@@ -144,7 +159,7 @@ describe('ProjectWorkspace', () => {
       .map((heading) => heading.textContent)
       .filter((heading) => heading === '创作 Brief' || heading === '来源与证据' || heading === '主稿与版本' || heading === '输出准备');
     expect(orderedSteps).toEqual(['创作 Brief', '来源与证据', '主稿与版本', '输出准备']);
-    expect(screen.getByText('还没有手写来源')).not.toBeNull();
+    expect(screen.getByText('还没有粘贴原文')).not.toBeNull();
     expect(screen.getByText('还没有主稿')).not.toBeNull();
     expect(screen.getByRole('button', { name: '准备口播版本' }).hasAttribute('disabled')).toBe(true);
   });
@@ -208,5 +223,77 @@ describe('ProjectWorkspace', () => {
     expect(await screen.findByRole('dialog', { name: '还有修改没有保存' })).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '放弃修改并离开' }));
     await waitFor(() => expect(screen.getByText('前一个页面')).not.toBeNull());
+  });
+
+  test('来源表单草稿接入页面 blocker，并阻止用旧主稿准备输出', async () => {
+    useStore.setState({ projectWorkspace: { ...workspace, artifacts: [masterArtifact] } });
+    const { router } = renderPageWithBackEntry();
+    fireEvent.change(screen.getByRole('textbox', { name: '原文标题' }), { target: { value: '待保存访谈' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '粘贴的原文内容' }), { target: { value: '不能丢失的原文' } });
+
+    await waitFor(() => expect(screen.getByText('项目里有尚未保存的修改')).not.toBeNull());
+    expect(screen.getByRole('button', { name: '准备口播版本' }).matches(':disabled')).toBe(true);
+    void router.navigate(-1);
+    expect(await screen.findByRole('dialog', { name: '还有修改没有保存' })).not.toBeNull();
+  });
+
+  test('证据创作者判断草稿也接入页面 blocker', async () => {
+    const source = {
+      id: 3, project_id: 12, project_source_id: 7, source_type: 'manual', title: '访谈', content: '原文', content_sha256: 'sha',
+      url: '', external_ref: '', metadata: {}, usage_note: '', sort_order: 0, linked_at: '', link_updated_at: '', created_at: '', updated_at: '',
+    };
+    const evidence = {
+      id: 5, project_id: 12, source_id: 3, source_title: '访谈', origin: 'ai' as const, state: 'candidate' as const,
+      decision_state: 'candidate' as const, lifecycle_status: 'active' as const, source_linked: true, source_snapshot_intact: true,
+      reuse_eligible: false, unavailable_reason: 'not_selected' as const, start_fragment_index: 0, end_fragment_index: 0,
+      start_offset: 0, end_offset: 2, excerpt: '原文', source_content_sha256: 'sha', ai_note: '候选说明', user_note: '',
+      supersedes_id: null, generation_job_id: null, sort_order: 0, created_at: '', updated_at: '',
+    };
+    useStore.setState({ projectWorkspace: { ...workspace, sources: [source], evidence: [evidence] } });
+    const { router } = renderPageWithBackEntry();
+    fireEvent.change(screen.getByRole('textbox', { name: '创作者判断（由你填写）' }), { target: { value: '我的核对意见' } });
+
+    await waitFor(() => expect(screen.getByText('项目里有尚未保存的修改')).not.toBeNull());
+    void router.navigate(-1);
+    expect(await screen.findByRole('dialog', { name: '还有修改没有保存' })).not.toBeNull();
+  });
+
+  test('AI 主稿在人工显式保存前不能进入复制、下载或口播输出', () => {
+    const aiMaster: ContentArtifact = {
+      ...masterArtifact,
+      current_revision: masterArtifact.current_revision
+        ? {
+            ...masterArtifact.current_revision,
+            generation_job_id: 88,
+            change_reason: 'ai_generated',
+            provenance: { ...masterArtifact.current_revision.provenance, origin: 'ai', operation: 'generate_master' },
+          }
+        : null,
+    };
+    useStore.setState({ projectWorkspace: { ...workspace, artifacts: [aiMaster] } });
+
+    renderPage();
+
+    expect(screen.getByText(/AI 草案尚未由你确认/)).not.toBeNull();
+    expect(screen.getByRole('button', { name: '复制主稿' }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: '准备口播版本' }).matches(':disabled')).toBe(true);
+  });
+
+  test('人工保存主稿把编辑开始时的父 Revision 明确提交', async () => {
+    const saveRevision = vi.fn().mockResolvedValue({ ...masterArtifact.current_revision!, id: 12, revision_number: 4 });
+    useStore.setState({
+      projectWorkspace: { ...workspace, artifacts: [masterArtifact] },
+      saveProjectArtifactRevision: saveRevision,
+    });
+    renderPage();
+
+    fireEvent.change(screen.getByRole('textbox', { name: '主稿正文' }), { target: { value: '人工确认后的主稿' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存为新版本' }));
+
+    await waitFor(() => expect(saveRevision).toHaveBeenCalledWith(12, 4, {
+      content: '人工确认后的主稿',
+      changeReason: '',
+      parentRevisionId: 11,
+    }));
   });
 });

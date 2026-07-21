@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import type { ContentTargetPlatform } from '../../store';
+import React, { useMemo, useState } from 'react';
+import type { ContentRevisionCitation, ContentTargetPlatform } from '../../store';
 import { ActionButton } from '../ui/ActionButton';
 import { WorkbenchCard } from '../ui/WorkbenchCard';
+import { createProjectPresentationExport } from './projectPresentationExport';
 
 interface ProjectOutputGuideProps {
   hasMasterRevision: boolean;
+  isMasterConfirmed: boolean;
   masterRevisionNumber?: number;
   masterContent?: string;
+  masterCitations?: ContentRevisionCitation[];
   fileName?: string;
   targetPlatform: ContentTargetPlatform;
   contentFormat: string;
@@ -21,8 +24,10 @@ interface ProjectOutputGuideProps {
 
 export const ProjectOutputGuide: React.FC<ProjectOutputGuideProps> = ({
   hasMasterRevision,
+  isMasterConfirmed,
   masterRevisionNumber,
   masterContent = '',
+  masterCitations = [],
   fileName = '内容主稿',
   targetPlatform,
   contentFormat,
@@ -37,7 +42,11 @@ export const ProjectOutputGuide: React.FC<ProjectOutputGuideProps> = ({
   const primaryLabel = hasAudioScriptRevision ? '继续口播稿' : '准备口播版本';
   const [textActionStatus, setTextActionStatus] = useState<string | null>(null);
   const [textActionError, setTextActionError] = useState<string | null>(null);
-  const outputDisabled = !hasMasterRevision || hasUnsavedChanges;
+  const presentationExport = useMemo(
+    () => createProjectPresentationExport(masterContent, masterCitations),
+    [masterCitations, masterContent]
+  );
+  const outputDisabled = !hasMasterRevision || !isMasterConfirmed || hasUnsavedChanges || !presentationExport.isReady;
   const platformLabel: Record<ContentTargetPlatform, string> = {
     general: '通用内容',
     xiaohongshu: '小红书',
@@ -50,7 +59,7 @@ export const ProjectOutputGuide: React.FC<ProjectOutputGuideProps> = ({
     setTextActionError(null);
     try {
       if (!navigator.clipboard?.writeText) throw new Error('当前浏览器不支持自动复制');
-      await navigator.clipboard.writeText(masterContent);
+      await navigator.clipboard.writeText(presentationExport.content);
       setTextActionStatus('主稿已复制，可直接粘贴到发布平台。');
     } catch (copyError) {
       setTextActionError(copyError instanceof Error ? copyError.message : '复制主稿失败');
@@ -61,7 +70,7 @@ export const ProjectOutputGuide: React.FC<ProjectOutputGuideProps> = ({
     setTextActionStatus(null);
     setTextActionError(null);
     try {
-      const blob = new Blob([masterContent], { type: 'text/markdown;charset=utf-8' });
+      const blob = new Blob([presentationExport.content], { type: 'text/markdown;charset=utf-8' });
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       const safeName = fileName.trim().replace(/[\\/:*?"<>|]/g, '-') || '内容主稿';
@@ -96,7 +105,7 @@ export const ProjectOutputGuide: React.FC<ProjectOutputGuideProps> = ({
       </div>
 
       <p className="ui-body mt-4 text-ink-soft/80">
-        主稿本身就是可发布的文字资产；音频只是按需生成的派生版本，不是每个内容项目的必经终点。
+        经你确认的主稿就是可发布的文字资产；音频只是按需生成的派生版本，不是每个内容项目的必经终点。
       </p>
 
       <div className="mt-4 rounded-2xl border border-card-border bg-white/55 p-4">
@@ -106,6 +115,19 @@ export const ProjectOutputGuide: React.FC<ProjectOutputGuideProps> = ({
             ? `已保存 · 主稿第 ${masterRevisionNumber} 版 · ${platformLabel[targetPlatform]} · ${contentFormat.trim() || '未指定内容形态'}`
             : '保存首版主稿后，可复制原文或下载 Markdown。'}
         </p>
+        {hasMasterRevision && !isMasterConfirmed && (
+          <p role="alert" className="mt-3 rounded-xl border border-lemon/45 bg-lemon/15 p-3 ui-body text-ink">
+            AI 草案尚未由你确认。请在“主稿与版本”中显式保存为人工版本，再复制、下载或准备口播。
+          </p>
+        )}
+        {hasMasterRevision && isMasterConfirmed && !presentationExport.isReady && (
+          <p role="alert" className="mt-3 rounded-xl border border-pink/30 bg-pink/10 p-3 ui-body text-ink">
+            {presentationExport.error}
+          </p>
+        )}
+        {hasMasterRevision && presentationExport.isReady && (
+          <p className="ui-metadata mt-2 text-ink-soft/65">复制和下载会把内部证据 ID 转成读者可见的引用编号，并附参考依据；不会修改已保存 Revision。</p>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           <ActionButton tone="secondary" disabled={outputDisabled} onClick={() => void handleCopy()}>
             复制主稿
@@ -154,7 +176,7 @@ export const ProjectOutputGuide: React.FC<ProjectOutputGuideProps> = ({
             {error ? `重试${primaryLabel}` : primaryLabel}
           </ActionButton>
           {hasMasterRevision && hasAudioScriptRevision && isAudioScriptDifferentFromMaster && (
-            <ActionButton tone="secondary" disabled={isPreparing || hasUnsavedChanges} onClick={onSyncMaster}>
+            <ActionButton tone="secondary" disabled={outputDisabled || isPreparing} onClick={onSyncMaster}>
               用当前主稿建立口播新版本
             </ActionButton>
           )}

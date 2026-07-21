@@ -107,7 +107,8 @@ function createClient(apiKeyOverride, configOverride) {
   return new Anthropic({
     apiKey,
     baseURL: config.baseUrl,
-    defaultHeaders: { 'api-key': apiKey }
+    defaultHeaders: { 'api-key': apiKey },
+    timeout: LLM_REQUEST_TIMEOUT_MS
   });
 }
 

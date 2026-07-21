@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { ProjectEditorContext } from '../store';
+import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { getProjectEditorUrl, parseProjectEditorContext } from './projectEditorContext';
 
 describe('parseProjectEditorContext', () => {
@@ -26,6 +27,7 @@ describe('parseProjectEditorContext', () => {
       projectId: 2,
       artifactId: 8,
       revision: {
+        ...CONTENT_REVISION_DEFAULTS,
         id: 21,
         artifact_id: 8,
         revision_number: 2,

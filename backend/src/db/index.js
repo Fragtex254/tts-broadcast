@@ -2,6 +2,7 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const { hashSourceContent } = require('../utils/contentSourceFragments');
 
 const DB_PATH = process.env.NODE_ENV === 'test'
   ? ':memory:'
@@ -39,8 +40,69 @@ function ensureBroadcastArtifactRevisionColumn() {
   }
 }
 
+function ensureContentRevisionProvenanceColumns() {
+  const revisionsTable = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'content_artifact_revisions'
+  `).get();
+  if (!revisionsTable) return;
+  const columns = [
+    ['parent_revision_id', 'INTEGER DEFAULT NULL'],
+    ['generation_job_id', 'INTEGER DEFAULT NULL'],
+    ['request_key', "TEXT NOT NULL DEFAULT ''"],
+    ['provenance_json', "TEXT NOT NULL DEFAULT '{}'"],
+  ];
+  for (const [column, definition] of columns) {
+    try {
+      db.prepare(`SELECT ${column} FROM content_artifact_revisions LIMIT 1`).get();
+    } catch {
+      db.exec(`ALTER TABLE content_artifact_revisions ADD COLUMN ${column} ${definition}`);
+    }
+  }
+}
+
+function ensureContentProjectSourceIdempotencyColumns() {
+  const table = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'content_project_sources'
+  `).get();
+  if (!table) return;
+  const columns = [
+    ['request_key', "TEXT NOT NULL DEFAULT ''"],
+    ['input_sha256', "TEXT NOT NULL DEFAULT ''"],
+  ];
+  for (const [column, definition] of columns) {
+    try {
+      db.prepare(`SELECT ${column} FROM content_project_sources LIMIT 1`).get();
+    } catch {
+      db.exec(`ALTER TABLE content_project_sources ADD COLUMN ${column} ${definition}`);
+    }
+  }
+}
+
+function ensureContentEvidenceLifecycleColumns() {
+  const table = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'content_evidence_cards'
+  `).get();
+  if (!table) return;
+  const columns = [
+    ['decision_state', "TEXT NOT NULL DEFAULT 'candidate'"],
+    ['lifecycle_status', "TEXT NOT NULL DEFAULT 'active'"],
+    ['request_key', "TEXT NOT NULL DEFAULT ''"],
+    ['input_sha256', "TEXT NOT NULL DEFAULT ''"],
+  ];
+  for (const [column, definition] of columns) {
+    try {
+      db.prepare(`SELECT ${column} FROM content_evidence_cards LIMIT 1`).get();
+    } catch {
+      db.exec(`ALTER TABLE content_evidence_cards ADD COLUMN ${column} ${definition}`);
+    }
+  }
+}
+
 // 旧库必须先补列，否则完整 Schema 中的 Revision 索引会因列不存在而中断初始化。
 ensureBroadcastArtifactRevisionColumn();
+ensureContentRevisionProvenanceColumns();
+ensureContentProjectSourceIdempotencyColumns();
+ensureContentEvidenceLifecycleColumns();
 
 // 初始化数据库表
 const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
@@ -279,6 +341,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS content_project_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, source_id INTEGER NOT NULL,
     usage_note TEXT NOT NULL DEFAULT '', sort_order INTEGER NOT NULL DEFAULT 0,
+    request_key TEXT NOT NULL DEFAULT '', input_sha256 TEXT NOT NULL DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
     FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE CASCADE,
@@ -286,6 +349,21 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_content_project_sources_order
     ON content_project_sources(project_id, sort_order, id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_content_project_sources_request_key
+    ON content_project_sources(project_id, request_key) WHERE request_key <> '';
+  CREATE TABLE IF NOT EXISTS content_source_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    request_key TEXT NOT NULL,
+    input_sha256 TEXT NOT NULL,
+    source_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE RESTRICT,
+    UNIQUE (project_id, request_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_source_requests_source
+    ON content_source_requests(source_id, project_id);
   CREATE TABLE IF NOT EXISTS content_artifacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER NOT NULL, kind TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '', platform TEXT NOT NULL DEFAULT 'general', status TEXT NOT NULL DEFAULT 'draft',
@@ -297,12 +375,28 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS content_artifact_revisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT, artifact_id INTEGER NOT NULL, revision_number INTEGER NOT NULL,
     content TEXT NOT NULL DEFAULT '', change_reason TEXT NOT NULL DEFAULT 'manual',
+    parent_revision_id INTEGER DEFAULT NULL, generation_job_id INTEGER DEFAULT NULL,
+    request_key TEXT NOT NULL DEFAULT '', provenance_json TEXT NOT NULL DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (artifact_id) REFERENCES content_artifacts(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_revision_id) REFERENCES content_artifact_revisions(id) ON DELETE SET NULL,
     UNIQUE (artifact_id, revision_number)
   );
   CREATE INDEX IF NOT EXISTS idx_content_artifact_revisions_artifact_number
     ON content_artifact_revisions(artifact_id, revision_number DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_content_artifact_revisions_request_key
+    ON content_artifact_revisions(artifact_id, request_key) WHERE request_key <> '';
+`);
+
+// 迁移：把旧关联行上最后一个可用 request key 回填到独立账本。
+// 旧结构无法恢复曾被覆盖的 key，但新请求从此只向账本追加。
+db.exec(`
+  INSERT OR IGNORE INTO content_source_requests (
+    project_id, request_key, input_sha256, source_id
+  )
+  SELECT project_id, request_key, input_sha256, source_id
+  FROM content_project_sources
+  WHERE request_key <> ''
 `);
 
 const contentProjectBriefColumns = [
@@ -325,6 +419,202 @@ try {
   db.prepare('SELECT change_reason FROM content_artifact_revisions LIMIT 1').get();
 } catch {
   db.exec("ALTER TABLE content_artifact_revisions ADD COLUMN change_reason TEXT NOT NULL DEFAULT 'manual'");
+}
+
+const contentRevisionColumns = [
+  ['parent_revision_id', 'INTEGER DEFAULT NULL'],
+  ['generation_job_id', 'INTEGER DEFAULT NULL'],
+  ['request_key', "TEXT NOT NULL DEFAULT ''"],
+  ['provenance_json', "TEXT NOT NULL DEFAULT '{}'"],
+];
+for (const [column, definition] of contentRevisionColumns) {
+  try {
+    db.prepare(`SELECT ${column} FROM content_artifact_revisions LIMIT 1`).get();
+  } catch {
+    db.exec(`ALTER TABLE content_artifact_revisions ADD COLUMN ${column} ${definition}`);
+  }
+}
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_content_artifact_revisions_request_key
+    ON content_artifact_revisions(artifact_id, request_key) WHERE request_key <> ''
+`);
+
+try {
+  db.prepare('SELECT content_sha256 FROM content_sources LIMIT 1').get();
+} catch {
+  db.exec("ALTER TABLE content_sources ADD COLUMN content_sha256 TEXT NOT NULL DEFAULT ''");
+}
+const sourcesMissingContentHash = db.prepare(`
+  SELECT id, content FROM content_sources WHERE content_sha256 = ''
+`).all();
+const updateSourceContentHash = db.prepare('UPDATE content_sources SET content_sha256 = ? WHERE id = ? AND content_sha256 = ?');
+for (const source of sourcesMissingContentHash) {
+  updateSourceContentHash.run(hashSourceContent(source.content), source.id, '');
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS content_evidence_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    source_id INTEGER NOT NULL,
+    source_content_sha256 TEXT NOT NULL,
+    start_fragment_index INTEGER NOT NULL,
+    end_fragment_index INTEGER NOT NULL,
+    start_offset INTEGER NOT NULL,
+    end_offset INTEGER NOT NULL,
+    excerpt TEXT NOT NULL,
+    origin TEXT NOT NULL DEFAULT 'user' CHECK (origin IN ('ai', 'user')),
+    state TEXT NOT NULL DEFAULT 'candidate'
+      CHECK (state IN ('candidate', 'selected', 'rejected', 'superseded', 'stale')),
+    decision_state TEXT NOT NULL DEFAULT 'candidate'
+      CHECK (decision_state IN ('candidate', 'selected', 'rejected')),
+    lifecycle_status TEXT NOT NULL DEFAULT 'active'
+      CHECK (lifecycle_status IN ('active', 'superseded', 'stale')),
+    ai_note TEXT NOT NULL DEFAULT '',
+    user_note TEXT NOT NULL DEFAULT '',
+    supersedes_id INTEGER DEFAULT NULL,
+    generation_job_id INTEGER DEFAULT NULL,
+    request_key TEXT NOT NULL DEFAULT '', input_sha256 TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_id) REFERENCES content_sources(id) ON DELETE RESTRICT,
+    FOREIGN KEY (supersedes_id) REFERENCES content_evidence_cards(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_evidence_project_state
+    ON content_evidence_cards(project_id, state, sort_order, id);
+  CREATE INDEX IF NOT EXISTS idx_content_evidence_source
+    ON content_evidence_cards(source_id, source_content_sha256);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_content_evidence_request_key
+    ON content_evidence_cards(project_id, request_key) WHERE request_key <> '';
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_content_evidence_generation_range
+    ON content_evidence_cards(generation_job_id, source_id, start_fragment_index, end_fragment_index)
+    WHERE generation_job_id IS NOT NULL;
+  CREATE TABLE IF NOT EXISTS content_project_milestones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    result_id INTEGER DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+    UNIQUE (project_id, kind)
+  );
+  CREATE TABLE IF NOT EXISTS content_revision_citations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    revision_id INTEGER NOT NULL,
+    evidence_id INTEGER NOT NULL,
+    citation_order INTEGER NOT NULL,
+    marker_start_offset INTEGER NOT NULL,
+    marker_end_offset INTEGER NOT NULL,
+    excerpt_snapshot TEXT NOT NULL,
+    source_id_snapshot INTEGER NOT NULL,
+    source_title_snapshot TEXT NOT NULL DEFAULT '',
+    source_url_snapshot TEXT NOT NULL DEFAULT '',
+    source_content_sha256 TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (revision_id) REFERENCES content_artifact_revisions(id) ON DELETE CASCADE,
+    FOREIGN KEY (evidence_id) REFERENCES content_evidence_cards(id) ON DELETE RESTRICT,
+    UNIQUE (revision_id, citation_order)
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_revision_citations_evidence
+    ON content_revision_citations(evidence_id, revision_id);
+  CREATE TABLE IF NOT EXISTS content_generation_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    operation TEXT NOT NULL CHECK (operation IN ('extract_evidence', 'generate_outline', 'generate_master')),
+    request_key TEXT NOT NULL,
+    input_sha256 TEXT NOT NULL,
+    input_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'queued'
+      CHECK (status IN ('queued', 'running', 'completed', 'failed', 'superseded')),
+    phase TEXT NOT NULL DEFAULT 'queued',
+    progress INTEGER DEFAULT NULL,
+    error TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '', provider TEXT NOT NULL DEFAULT '', prompt_version TEXT NOT NULL DEFAULT '',
+    run_token TEXT NOT NULL DEFAULT '', lease_expires_at_ms INTEGER DEFAULT NULL,
+    attempt INTEGER NOT NULL DEFAULT 0,
+    result_artifact_id INTEGER DEFAULT NULL, result_revision_id INTEGER DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES content_projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (result_artifact_id) REFERENCES content_artifacts(id) ON DELETE SET NULL,
+    FOREIGN KEY (result_revision_id) REFERENCES content_artifact_revisions(id) ON DELETE SET NULL,
+    UNIQUE (project_id, operation, request_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_content_generation_jobs_project_recent
+    ON content_generation_jobs(project_id, updated_at DESC, id DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_content_generation_jobs_active_input
+    ON content_generation_jobs(project_id, operation, input_sha256)
+    WHERE status IN ('queued', 'running', 'completed');
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_content_artifact_revisions_generation_job
+    ON content_artifact_revisions(generation_job_id) WHERE generation_job_id IS NOT NULL;
+`);
+
+const contentEvidenceLifecycleColumns = [
+  ['decision_state', "TEXT NOT NULL DEFAULT 'candidate'"],
+  ['lifecycle_status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['request_key', "TEXT NOT NULL DEFAULT ''"],
+  ['input_sha256', "TEXT NOT NULL DEFAULT ''"],
+];
+for (const [column, definition] of contentEvidenceLifecycleColumns) {
+  try {
+    db.prepare(`SELECT ${column} FROM content_evidence_cards LIMIT 1`).get();
+  } catch {
+    db.exec(`ALTER TABLE content_evidence_cards ADD COLUMN ${column} ${definition}`);
+  }
+}
+db.exec(`
+  UPDATE content_evidence_cards
+  SET decision_state = CASE
+      WHEN state IN ('candidate', 'selected', 'rejected') THEN state
+      ELSE decision_state
+    END,
+    lifecycle_status = CASE
+      WHEN state = 'stale' THEN 'stale'
+      WHEN state = 'superseded' THEN 'superseded'
+      ELSE lifecycle_status
+    END;
+  CREATE INDEX IF NOT EXISTS idx_content_evidence_project_lifecycle_decision
+    ON content_evidence_cards(project_id, lifecycle_status, decision_state, sort_order, id);
+`);
+
+// 迁移：已有事实只回填里程碑账本，不向用户补发“第一次”庆祝。
+db.exec(`
+  INSERT OR IGNORE INTO content_project_milestones (project_id, kind, result_id)
+  SELECT ps.project_id, 'source_saved', MIN(s.id)
+  FROM content_project_sources ps
+  INNER JOIN content_sources s ON s.id = ps.source_id
+  WHERE TRIM(s.content) <> '' GROUP BY ps.project_id;
+
+  INSERT OR IGNORE INTO content_project_milestones (project_id, kind, result_id)
+  SELECT project_id, 'evidence_selected', MIN(id)
+  FROM content_evidence_cards
+  WHERE decision_state = 'selected' AND lifecycle_status = 'active'
+  GROUP BY project_id;
+
+  INSERT OR IGNORE INTO content_project_milestones (project_id, kind, result_id)
+  SELECT a.project_id, 'outline_saved', MIN(r.id)
+  FROM content_artifact_revisions r
+  INNER JOIN content_artifacts a ON a.id = r.artifact_id
+  WHERE a.kind = 'outline' AND TRIM(r.content) <> '' GROUP BY a.project_id;
+
+`);
+const historicalCitedMasters = db.prepare(`
+  SELECT a.project_id, r.id, r.content
+  FROM content_artifact_revisions r
+  INNER JOIN content_artifacts a ON a.id = r.artifact_id
+  WHERE a.kind = 'master'
+    AND EXISTS (SELECT 1 FROM content_revision_citations c WHERE c.revision_id = r.id)
+  ORDER BY r.id
+`).all();
+const backfillCitedMaster = db.prepare(`
+  INSERT OR IGNORE INTO content_project_milestones (project_id, kind, result_id)
+  VALUES (?, 'cited_master_saved', ?)
+`);
+for (const revision of historicalCitedMasters) {
+  if (revision.content.replace(/\[证据#[1-9]\d*\]/g, '').trim()) {
+    backfillCitedMaster.run(revision.project_id, revision.id);
+  }
 }
 
 try {

@@ -10,6 +10,7 @@ const logger = createScopedLogger('content-workspace-route');
 
 const MAX_SOURCE_CONTENT_LENGTH = 2000000;
 const MAX_ARTIFACT_CONTENT_LENGTH = 5000000;
+const GENERIC_SOURCE_TYPES = new Set(['manual', 'user_paste']);
 
 function trimmedString(value, fallback = '', max = 1000) {
   return typeof value === 'string' ? value.trim().slice(0, max) : fallback;
@@ -45,6 +46,30 @@ function validateScopedArtifactIds(req, res) {
     return undefined;
   }
   return { projectId: projectCheck.id, artifactId: artifactCheck.id };
+}
+
+function parseOptionalId(value, label) {
+  if (value === undefined || value === null || value === '') return { valid: true, id: undefined };
+  const check = validateId(String(value), label);
+  if (!check.valid || Number(value) !== check.id) return { valid: false, error: check.error || `${label}无效` };
+  return { valid: true, id: check.id };
+}
+
+function revisionRequestMetadata(body) {
+  if (body.requestKey !== undefined && typeof body.requestKey !== 'string') {
+    return { valid: false, error: '请求标识必须是字符串' };
+  }
+  const requestKey = trimmedString(body.requestKey, '', 128);
+  if (body.requestKey && !requestKey) return { valid: false, error: '请求标识不能为空' };
+  const parentCheck = parseOptionalId(body.parentRevisionId, '父稿件版本 ID');
+  if (!parentCheck.valid) return parentCheck;
+  return { valid: true, requestKey, parentRevisionId: parentCheck.id };
+}
+
+function revisionErrorStatus(error) {
+  if (error?.code === 'INVALID_CITATION') return 400;
+  if (['CITATION_CONFLICT', 'IDEMPOTENCY_CONFLICT'].includes(error?.code)) return 409;
+  return 500;
 }
 
 /**
@@ -83,6 +108,13 @@ router.post('/:id/sources', (req, res) => {
   }
 
   const usageNote = trimmedString(body.usageNote, '', 2000);
+  if (body.requestKey !== undefined && typeof body.requestKey !== 'string') {
+    return res.status(400).json({ error: '请求标识必须是字符串' });
+  }
+  if (typeof body.requestKey === 'string' && body.requestKey.length > 128) {
+    return res.status(400).json({ error: '请求标识过长' });
+  }
+  const requestKey = trimmedString(body.requestKey, '', 128);
   let sortOrder;
   if (body.sortOrder !== undefined) {
     if (!Number.isInteger(body.sortOrder) || body.sortOrder < 0) {
@@ -103,6 +135,17 @@ router.post('/:id/sources', (req, res) => {
     url = trimmedString(body.url, '', 4000);
     externalRef = trimmedString(body.externalRef, '', 1000);
     if (!sourceType) return res.status(400).json({ error: '请提供来源类型' });
+    if (!GENERIC_SOURCE_TYPES.has(sourceType)) {
+      return res.status(400).json({ error: '通用来源只支持手写或粘贴文本' });
+    }
+    if (url) {
+      try {
+        const parsedUrl = new URL(url);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('unsupported');
+      } catch {
+        return res.status(400).json({ error: '来源链接只支持 http 或 https' });
+      }
+    }
     if (body.content !== undefined && typeof body.content !== 'string') {
       return res.status(400).json({ error: '来源正文必须是字符串' });
     }
@@ -110,8 +153,8 @@ router.post('/:id/sources', (req, res) => {
     if (content.length > MAX_SOURCE_CONTENT_LENGTH) {
       return res.status(400).json({ error: '来源正文过长，请控制在 200 万字以内' });
     }
-    if (!title && !content && !url && !externalRef) {
-      return res.status(400).json({ error: '请至少提供来源标题、正文、URL 或外部标识中的一项' });
+    if (!content.trim()) {
+      return res.status(400).json({ error: '本阶段不会抓取网页，请粘贴可核验的来源原文' });
     }
     const metadataCheck = parseMetadataInput(body);
     if (!metadataCheck.valid) return res.status(400).json({ error: metadataCheck.error });
@@ -119,7 +162,7 @@ router.post('/:id/sources', (req, res) => {
   }
 
   try {
-    const source = contentSourceStore.createAndLink({
+    const result = contentSourceStore.createAndLink({
       projectId: projectCheck.id,
       sourceId,
       sourceType,
@@ -130,12 +173,18 @@ router.post('/:id/sources', (req, res) => {
       metadataJson,
       usageNote,
       sortOrder,
+      requestKey,
     });
-    if (!source) return res.status(404).json({ error: '内容项目或来源不存在' });
-    res.status(201).json({ source });
+    if (!result) return res.status(404).json({ error: '内容项目或来源不存在' });
+    res.status(result.reused ? 200 : 201).json({
+      source: result.source,
+      reused: result.reused,
+      milestone: result.milestone,
+    });
   } catch (error) {
-    logger.error({ err: error, projectId: projectCheck.id, hasExistingSource: Boolean(sourceId) }, '关联内容来源失败');
-    res.status(500).json({ error: '关联内容来源失败' });
+    const statusCode = error?.code === 'IDEMPOTENCY_CONFLICT' ? 409 : 500;
+    logger[statusCode === 500 ? 'error' : 'warn']({ err: error, projectId: projectCheck.id, hasExistingSource: Boolean(sourceId) }, '关联内容来源失败');
+    res.status(statusCode).json({ error: statusCode === 500 ? '关联内容来源失败' : error.message });
   }
 });
 
@@ -165,9 +214,11 @@ router.post('/:id/artifacts', (req, res) => {
     return res.status(400).json({ error: '稿件正文过长，请控制在 500 万字以内' });
   }
   const changeReason = trimmedString(body.changeReason, 'manual', 1000) || 'manual';
+  const metadata = revisionRequestMetadata(body);
+  if (!metadata.valid) return res.status(400).json({ error: metadata.error });
 
   try {
-    const artifact = contentArtifactStore.create({
+    const result = contentArtifactStore.create({
       projectId: check.id,
       kind,
       title,
@@ -176,12 +227,20 @@ router.post('/:id/artifacts', (req, res) => {
       hasContent,
       content,
       changeReason,
+      requestKey: metadata.requestKey,
+      parentRevisionId: metadata.parentRevisionId,
+      provenance: { blocks: [], origin: 'manual', operation: 'manual_save' },
     });
-    if (!artifact) return res.status(404).json({ error: '内容项目不存在' });
-    res.status(201).json({ artifact });
+    if (!result) return res.status(404).json({ error: '内容项目不存在' });
+    res.status(result.reused ? 200 : 201).json({
+      artifact: result.artifact,
+      reused: result.reused,
+      milestone: result.milestone,
+    });
   } catch (error) {
-    logger.error({ err: error, projectId: check.id, kind }, '创建内容稿件失败');
-    res.status(500).json({ error: '创建内容稿件失败' });
+    const statusCode = revisionErrorStatus(error);
+    logger[statusCode === 500 ? 'error' : 'warn']({ err: error, projectId: check.id, kind }, '创建内容稿件失败');
+    res.status(statusCode).json({ error: statusCode === 500 ? '创建内容稿件失败' : error.message });
   }
 });
 
@@ -200,6 +259,8 @@ router.post('/:id/artifacts/:artifactId/revisions', (req, res) => {
     return res.status(400).json({ error: '稿件正文过长，请控制在 500 万字以内' });
   }
   const changeReason = trimmedString(body.changeReason, 'manual', 1000) || 'manual';
+  const metadata = revisionRequestMetadata(body);
+  if (!metadata.valid) return res.status(400).json({ error: metadata.error });
 
   try {
     const result = contentArtifactStore.addRevision({
@@ -207,12 +268,16 @@ router.post('/:id/artifacts/:artifactId/revisions', (req, res) => {
       artifactId: ids.artifactId,
       content: body.content,
       changeReason,
+      requestKey: metadata.requestKey,
+      parentRevisionId: metadata.parentRevisionId,
+      provenance: { blocks: [], origin: 'manual', operation: 'manual_save' },
     });
     if (!result) return res.status(404).json({ error: '内容稿件不存在' });
-    res.status(201).json(result);
+    res.status(result.reused ? 200 : 201).json(result);
   } catch (error) {
-    logger.error({ err: error, projectId: ids.projectId, artifactId: ids.artifactId }, '保存稿件新版本失败');
-    res.status(500).json({ error: '保存稿件新版本失败' });
+    const statusCode = revisionErrorStatus(error);
+    logger[statusCode === 500 ? 'error' : 'warn']({ err: error, projectId: ids.projectId, artifactId: ids.artifactId }, '保存稿件新版本失败');
+    res.status(statusCode).json({ error: statusCode === 500 ? '保存稿件新版本失败' : error.message });
   }
 });
 

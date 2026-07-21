@@ -41,7 +41,7 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
       const revision = await saveProjectArtifactRevision(
         projectContext.projectId,
         projectContext.artifactId,
-        { content, changeReason }
+        { content, changeReason, parentRevisionId: projectContext.revision.id }
       );
       updateScript(revision.content);
       setLocalScript(revision.content);

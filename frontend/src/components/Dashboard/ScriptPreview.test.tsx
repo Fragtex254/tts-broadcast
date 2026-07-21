@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import useStore, { type ContentArtifactRevision, type ProjectEditorContext } from '../../store';
+import { CONTENT_REVISION_DEFAULTS } from '../../test/contentProjectFixtures';
 import { ScriptPreview } from './ScriptPreview';
 
 const revision: ContentArtifactRevision = {
+  ...CONTENT_REVISION_DEFAULTS,
   id: 31,
   artifact_id: 8,
   revision_number: 2,
@@ -47,6 +49,7 @@ describe('ScriptPreview 项目口播模式', () => {
     await waitFor(() => expect(saveRevision).toHaveBeenCalledWith(2, 8, {
       content: '\n新的口播稿\n',
       changeReason: '人工编辑口播稿',
+      parentRevisionId: 31,
     }));
     expect(updateScript).toHaveBeenCalledWith('\n新的口播稿\n');
     expect(onRevisionSaved).toHaveBeenCalledWith(savedRevision);
@@ -79,7 +82,7 @@ describe('ScriptPreview 项目口播模式', () => {
     render(<ScriptPreview projectContext={context} onProjectRevisionSaved={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: buttonName }));
 
-    await waitFor(() => expect(saveRevision).toHaveBeenCalledWith(2, 8, { content: expectedContent, changeReason }));
+    await waitFor(() => expect(saveRevision).toHaveBeenCalledWith(2, 8, { content: expectedContent, changeReason, parentRevisionId: 31 }));
     expect(updateScript).toHaveBeenCalledWith(expectedContent);
   });
 

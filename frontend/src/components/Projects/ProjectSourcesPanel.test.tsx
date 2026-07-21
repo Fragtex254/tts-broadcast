@@ -10,6 +10,7 @@ const savedSource: ContentProjectSource = {
   source_type: 'manual',
   title: '现场记录',
   content: '\n原样素材\n',
+  content_sha256: 'sha',
   url: '',
   external_ref: '',
   metadata: {},
@@ -43,11 +44,11 @@ describe('ProjectSourcesPanel', () => {
     const onAdd = vi.fn().mockResolvedValue(savedSource);
     render(<ProjectSourcesPanel sources={[]} isSaving={false} saveError={null} onAdd={onAdd} />);
 
-    fireEvent.change(screen.getByRole('textbox', { name: '来源标题' }), { target: { value: '  现场记录  ' } });
-    fireEvent.change(screen.getByRole('textbox', { name: '来源内容' }), { target: { value: '\n原样素材\n' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '原文标题' }), { target: { value: '  现场记录  ' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '粘贴的原文内容' }), { target: { value: '\n原样素材\n' } });
     expect(onAdd).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: '保存来源' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存原文快照' }));
 
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith({
       sourceType: 'manual',
@@ -73,9 +74,9 @@ describe('ProjectSourcesPanel', () => {
 
     rerender(<ProjectSourcesPanel sources={[]} isSaving saveError={null} onAdd={vi.fn()} />);
 
-    expect(screen.getByRole('textbox', { name: '来源标题' }).matches(':disabled')).toBe(true);
-    expect(screen.getByRole('textbox', { name: '来源内容' }).matches(':disabled')).toBe(true);
-    expect(screen.getByRole('textbox', { name: '原始链接（可选）' }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('textbox', { name: '原文标题' }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('textbox', { name: '粘贴的原文内容' }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('textbox', { name: '用户提供的出处链接（可选，未抓取／未核验）' }).matches(':disabled')).toBe(true);
     expect(screen.getByRole('textbox', { name: '使用备注（可选）' }).matches(':disabled')).toBe(true);
   });
 
@@ -93,5 +94,84 @@ describe('ProjectSourcesPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '继续播客观点研究' }));
     expect(onContinueResearch).toHaveBeenCalledTimes(1);
+  });
+
+  test('来源表单草稿报告 dirty，且拒绝非 http/https URL', async () => {
+    const onDirtyChange = vi.fn();
+    const onAdd = vi.fn();
+    render(
+      <ProjectSourcesPanel
+        sources={[]}
+        isSaving={false}
+        saveError={null}
+        onAdd={onAdd}
+        onDirtyChange={onDirtyChange}
+      />
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: '原文标题' }), { target: { value: '待保存材料' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '粘贴的原文内容' }), { target: { value: '原始材料' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '用户提供的出处链接（可选，未抓取／未核验）' }), { target: { value: 'javascript:alert(1)' } });
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
+
+    fireEvent.click(screen.getByRole('button', { name: '保存原文快照' }));
+    expect(await screen.findByRole('alert')).not.toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('http:// 或 https://');
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  test('长来源通过 ModalShell 查看全文，移出项目明确不删除原始素材', async () => {
+    const source = { ...savedSource, content: '长原文'.repeat(200) };
+    const onUnlink = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProjectSourcesPanel
+        sources={[source]}
+        isSaving={false}
+        saveError={null}
+        onAdd={vi.fn()}
+        onUnlink={onUnlink}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '查看现场记录完整原文' }));
+    expect(await screen.findByRole('dialog', { name: '现场记录' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '将现场记录移出项目' }));
+    expect(await screen.findByRole('dialog', { name: '移出项目来源' })).not.toBeNull();
+    expect(screen.getByText(/不会删除原始素材/)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '移出项目，不删除原始素材' }));
+    await waitFor(() => expect(onUnlink).toHaveBeenCalledWith(source.id));
+  });
+
+  test('播客观点明确区分 AI 提取说明与逐字稿原文摘录', () => {
+    render(<ProjectSourcesPanel sources={[]} claims={claimLinks} isSaving={false} saveError={null} onAdd={vi.fn()} />);
+
+    expect(screen.getByText('AI 提取的播客观点')).not.toBeNull();
+    expect(screen.getByText('逐字稿原文摘录')).not.toBeNull();
+  });
+
+  test('旧 URL-only 来源明确提示未采集原文，且不提供虚假的全文入口', () => {
+    render(
+      <ProjectSourcesPanel
+        sources={[{ ...savedSource, content: '', content_sha256: '' }]}
+        isSaving={false}
+        saveError={null}
+        onAdd={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/仅保存用户提供的出处，未抓取、未核验原文/)).not.toBeNull();
+    expect(screen.queryByRole('button', { name: '查看现场记录完整原文' })).toBeNull();
+  });
+
+  test('采集入口只邀请粘贴原文，并明确链接和材料都未经抓取核验', () => {
+    render(<ProjectSourcesPanel sources={[{ ...savedSource, url: 'https://example.com' }]} isSaving={false} saveError={null} onAdd={vi.fn()} />);
+
+    expect(screen.getByText('用户粘贴材料（未核验）')).not.toBeNull();
+    expect(screen.getByText(/用户提供链接（未抓取／未核验）/)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '粘贴一份原文' }));
+    expect(screen.getAllByText(/个人观察、经验与判断请写在 Brief/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('textbox', { name: '粘贴的原文内容' }).getAttribute('placeholder')).not.toContain('写下观察');
   });
 });

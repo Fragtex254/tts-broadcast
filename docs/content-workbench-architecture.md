@@ -9,13 +9,15 @@
 ## 2. 主干模型
 
 ```text
-Source -> Evidence / Insight -> Content Project / Brief
-                                      |
-                                      v
-                             Artifact -> Revision
-                                      |
-                                      v
-                          Render / Export / Publication
+Source snapshot -> deterministic Fragment -> Evidence Card
+                                               |
+Content Project / Brief -----------------------+
+             |                                 |
+             v                                 v
+      Artifact:outline -> Revision -> Artifact:master -> Revision + Citation
+                                                       |
+                                                       v
+                                           Render / Export / Publication
 ```
 
 ### Content Project
@@ -38,11 +40,27 @@ Source -> Evidence / Insight -> Content Project / Brief
 
 ### Source
 
-来源是可复用的素材资产。首期支持手写内容，后续通过适配器接入 URL、AI HOT、Transcript 和 Claim。
+来源是可复用的素材资产。首期支持用户粘贴文本快照，后续通过适配器接入 URL、AI HOT、Transcript 和 Claim。
 
 - 来源本体不因移出某个项目而修改。
 - 项目关联保存使用说明与排序。
 - 外部来源进入项目时保存必要快照，避免原链接变化后失去上下文。
+
+Source 原文只作为不可信数据进入 LLM 上下文，不执行其中的指令。当前通用入口只允许 `manual` / `user_paste` 的用户粘贴文本快照；“快照”只证明系统保存了用户提交的文字，不代表应用核验了客观事实。URL 字段是用户填写的线索，既未抓取也未核验。AI HOT、Transcript、Claim 和受控 URL 抓取必须通过未来的明确适配器接入，禁止只伪造 `source_type`。
+
+来源写入的 request key 记录在不可被后续关联编辑覆盖的独立账本中。相同 key 重放只能收敛到原 Source 身份；Source 已被用户移出项目后，旧请求重放不得复制或静默重新关联该资产。
+
+### Fragment 与 Evidence
+
+Fragment 是后端按稳定规则从 Source 原文派生的连续片段，包含可回查的 index 与字符 offset。模型只能从当前项目的 fragment 白名单中提出范围，不能提供可信 excerpt 或 offset。
+
+Evidence Card 是一次创作选择，不是来源事实本身：
+
+- `excerpt` 必须由后端根据 Source 快照与连续 fragment 范围派生；
+- AI 候选说明、用户备注和原文摘录分别保存、分别展示；用户备注是本地研究资产，本阶段不进入外部模型上下文。需要参与生成的个人判断只能来自用户在任务前显式勾选的 Brief 字段；
+- `decision_state` 区分候选、采用、驳回；`lifecycle_status` 独立区分 active、被修正版取代和来源失效，技术变化不得覆盖用户曾经的编辑判断；
+- 用户修正创建新卡并保留旧卡，不覆盖历史判断；
+- Source 移出项目后不删除 Source、Evidence 或历史 Citation，只把 Evidence 生命周期置为 stale 并禁止新生成；历史 Citation 的快照完整性不因当前关联或选择状态被追溯性改判，当前复用资格另行展示。
 
 ### Artifact
 
@@ -63,6 +81,20 @@ Revision 是不可覆盖的稿件版本：
 - 当前版本由最高 `revision_number` 派生。
 - 旧版本不得被更新或静默删除。
 - AI 生成、人工编辑、导入或迁移通过 `change_reason` 留下原因。
+- Creation Job 成功会把模型输出保存为 `ai_generated` 草案 Revision，用于追踪与幂等，但不代表用户已接受；用户通过选择确切 outline Revision 继续生成，或编辑后另存新 Revision，完成显式确认。AI 主稿也必须先经一次显式人工保存形成后继 Revision，才可进入复制、下载或口播准备等输出动作。
+- 生成 Revision 保存父版本、生成任务、请求幂等键与 provenance；手工旧 Revision 的这些字段允许为空。
+- 主稿引用通过独立 Citation 关联到 Evidence，正文中的引用标记只是可读投影，不能替代数据库关系。
+
+### Creation Job
+
+证据提取、AI 提纲和 AI 主稿都是持久化 Creation Job：
+
+- operation 固定为 `extract_evidence`、`generate_outline` 或 `generate_master`；
+- 相同 request key 与相同输入返回同一个 Job，相同 key 不同输入返回冲突；
+- Job 使用 lease、heartbeat、输入指纹和唯一 run token；最终收口必须做 token + 当前上下文 CAS，旧 worker 不得 ABA 创建 Revision；
+- 前端不得用固定的一分钟墙钟超时主动中止仍有 SSE / 持久进度的长任务；进度和 heartbeat 必须延长观察窗口，直到服务端进入 terminal 状态或用户显式离开；
+- 只有事务真正提交后才发送完成事件；HTTP 202、排队或模型返回本身都不等于业务完成；
+- 失败不创建半成品 Evidence、Artifact 或 Revision，保留用户输入与最后一版有效产物。
 
 ### Render
 
@@ -83,8 +115,15 @@ Render 是某个 Revision 的生产结果。现有 `broadcasts`、`segments` 和
 - 创建 Artifact
 - 为 Artifact 保存新 Revision
 - 查看 Revision 历史
+- 读取 Source 的确定 Fragment
+- 创建、采用、驳回和修正 Evidence
+- 解除 Source 的项目关联但保留历史资产
+- 启动、恢复和读取证据提取 / 提纲 / 主稿 Creation Job
+- 读取 Revision Citation 与 provenance
 
 来源表、关联表、Artifact 表和 Revision 表的组合、JSON 解析及“当前版本”计算属于后端实现，不泄漏到页面。
+
+前端以工作区聚合响应作为唯一真实来源。SSE 只提供即时进度；刷新后必须用持久化 Job 状态收敛。异步失败在 `activeOperation` 清空后仍必须可见；相关 Brief、Evidence 备注或目标稿存在未保存修改时禁止提交生成，并解释需要先保存。任务完成不得静默覆盖本地草稿。里程碑反馈只消费服务端事务提交后的唯一 event ID，重连和幂等重放不得重复庆祝。
 
 ## 4. 数据生命周期不变量
 
@@ -97,15 +136,21 @@ Render 是某个 Revision 的生产结果。现有 `broadcasts`、`segments` 和
 7. 自动化只有在存在真实业务执行器和可追踪 Run 时才可显示为“运行中”或更新成功时间；仅保存 cron 配置不等于执行内容生产。
 8. 含内容项目观点引用的 Transcript 不得级联删除；删除聚合根前必须在 DAL 事务内检查并阻止。
 9. Source 关联、Artifact 创建与 Revision 保存都是项目活动，必须刷新项目 `updated_at`。
+10. Source 原文、Evidence、AI 说明和创作者输入属于不同事实层；任何 DTO、提示词或界面不得把 AI 推断伪装成来源原话。
+11. 历史 Revision 与 Citation 永不因 Brief、Evidence 选择或 Source 项目关联变化而原地改写；变化只影响新生成任务的上下文指纹。
+12. 证据提取和成稿必须后端派生摘录并校验项目归属；模型输出的 ID、范围、引用、第一人称经验与最终正文都按不可信输入处理。
+13. AI 上下文只包含本次 operation 明确允许的字段：目标平台与讨论问题属于 Brief 快照；Evidence 用户备注不属于生成上下文；个人实践和判断必须由请求显式勾选。
+14. 内部 `[证据#ID]` 只用于保存态定位，复制和下载不得宣称它是可直接发布文本；输出投影必须转换为人类可读引用与依据列表，且不得修改不可变 Revision。
 
 ## 5. 迁移顺序
 
 1. 建立 Brief、Source、Artifact、Revision 与项目化页面。
 2. 将口播稿 Revision 作为现有 TTS 生成的输入来源，并保存 Render 关联。
-3. 把 AI HOT、Transcript、Claim 和 URL 通过来源适配器接入项目。
-4. 增加证据引用、AI 辅助大纲/成稿与版本比较。
-5. 建立真实 Automation Run、发布记录和反馈闭环。
-6. 兼容验证后逐项提出旧字段、路由与页面的清理申请。
+3. 增加确定 Fragment、可确认 Evidence、AI 辅助大纲 / 主稿、引用与持久化生成任务。
+4. 在闭环可靠后，把 AI HOT、Transcript、Claim 和受控 URL 通过明确来源适配器接入项目。
+5. 复用 Artifact / Revision 派生平台版本，并验证引用继承或引用子集规则。
+6. 建立真实 Automation Run、发布记录和反馈闭环。
+7. 兼容验证后逐项提出旧字段、路由与页面的清理申请。
 
 ## 6. 删除审批协议
 

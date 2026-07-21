@@ -1,12 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
-import { ModalShell } from '../components/ModalShell';
 import { ProjectBriefForm } from '../components/Projects/ProjectBriefForm';
+import { ProjectAssetSummary } from '../components/Projects/ProjectAssetSummary';
+import { ProjectCreationFlow } from '../components/Projects/ProjectCreationFlow';
 import { ProjectDraftEditor } from '../components/Projects/ProjectDraftEditor';
+import { ProjectMilestoneFeedback } from '../components/Projects/ProjectMilestoneFeedback';
 import { ProjectOutputGuide } from '../components/Projects/ProjectOutputGuide';
 import { ProjectSourcesPanel } from '../components/Projects/ProjectSourcesPanel';
 import { ProjectWorkspaceSkeleton } from '../components/Projects/ProjectWorkspaceSkeleton';
+import { selectCanonicalProjectArtifact } from '../components/Projects/projectArtifactModel';
+import { isRevisionConfirmedForOutput } from '../components/Projects/projectRevisionModel';
+import { ProjectUnsavedChangesDialog } from '../components/Projects/ProjectUnsavedChangesDialog';
 import { ActionButton } from '../components/ui/ActionButton';
 import type { ContentArtifactRevision, ContentProjectSourceInput, ContentProjectUpdateInput } from '../store';
 import useStore from '../store';
@@ -16,6 +21,7 @@ interface DraftSaveInput {
   title: string;
   content: string;
   changeReason: string;
+  parentRevisionId: number | null;
 }
 
 const parseProjectId = (value: string | undefined): number | null => {
@@ -38,9 +44,14 @@ export const ProjectWorkspace: React.FC = () => {
   const clearWorkspace = useStore((state) => state.clearProjectWorkspace);
   const updateProject = useStore((state) => state.updateContentProject);
   const addSource = useStore((state) => state.addProjectWorkspaceSource);
+  const unlinkSource = useStore((state) => state.unlinkProjectWorkspaceSource);
+  const milestone = useStore((state) => state.projectMilestoneFeedback);
+  const dismissMilestone = useStore((state) => state.dismissProjectMilestone);
   const createArtifact = useStore((state) => state.createProjectWorkspaceArtifact);
   const saveRevision = useStore((state) => state.saveProjectArtifactRevision);
   const fetchRevisions = useStore((state) => state.fetchProjectArtifactRevisions);
+  const fetchFragments = useStore((state) => state.fetchProjectSourceFragments);
+  const activeCreationOperation = useStore((state) => state.activeProjectJobOperation);
   const updateScript = useStore((state) => state.updateScript);
   const [isPreparingAudioScript, setIsPreparingAudioScript] = useState(false);
   const [audioScriptError, setAudioScriptError] = useState<string | null>(null);
@@ -49,8 +60,10 @@ export const ProjectWorkspace: React.FC = () => {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSaveError, setDraftSaveError] = useState<string | null>(null);
   const [isBriefDirty, setIsBriefDirty] = useState(false);
+  const [isSourceDirty, setIsSourceDirty] = useState(false);
+  const [isCreationFlowDirty, setIsCreationFlowDirty] = useState(false);
   const [isMasterDirty, setIsMasterDirty] = useState(false);
-  const hasUnsavedChanges = isBriefDirty || isMasterDirty;
+  const hasUnsavedChanges = isBriefDirty || isSourceDirty || isCreationFlowDirty || isMasterDirty;
   const navigationBlocker = useBlocker(hasUnsavedChanges);
 
   useEffect(() => {
@@ -72,11 +85,11 @@ export const ProjectWorkspace: React.FC = () => {
   }, [hasUnsavedChanges]);
 
   const masterArtifact = useMemo(
-    () => workspace?.artifacts.find((artifact) => artifact.kind === 'master') || null,
+    () => selectCanonicalProjectArtifact(workspace?.artifacts || [], 'master'),
     [workspace?.artifacts]
   );
   const audioScriptArtifact = useMemo(
-    () => workspace?.artifacts.find((artifact) => artifact.kind === 'audio_script') || null,
+    () => selectCanonicalProjectArtifact(workspace?.artifacts || [], 'audio_script'),
     [workspace?.artifacts]
   );
 
@@ -105,7 +118,11 @@ export const ProjectWorkspace: React.FC = () => {
     setDraftSaveError(null);
     try {
       if (masterArtifact) {
-        await saveRevision(projectId, masterArtifact.id, { content: data.content, changeReason: data.changeReason });
+        await saveRevision(projectId, masterArtifact.id, {
+          content: data.content,
+          changeReason: data.changeReason,
+          parentRevisionId: data.parentRevisionId,
+        });
         return;
       }
       await createArtifact(projectId, {
@@ -132,6 +149,10 @@ export const ProjectWorkspace: React.FC = () => {
   const handleOpenAudioScript = useCallback(async (intent: AudioScriptPreparationIntent) => {
     const masterRevision = masterArtifact?.current_revision;
     if (!projectId || !masterRevision) return;
+    if (!isRevisionConfirmedForOutput(masterRevision)) {
+      setAudioScriptError('AI 主稿需要先由你显式保存为人工版本，才能准备口播。');
+      return;
+    }
     if (hasUnsavedChanges) {
       setAudioScriptError('请先保存 Brief 和主稿修改，再准备输出。');
       return;
@@ -162,6 +183,7 @@ export const ProjectWorkspace: React.FC = () => {
         revision = await saveRevision(projectId, plan.artifactId, {
           content: plan.content,
           changeReason: plan.changeReason,
+          parentRevisionId: audioScriptArtifact?.current_revision?.id ?? null,
         });
       }
       updateScript(revision.content);
@@ -183,7 +205,7 @@ export const ProjectWorkspace: React.FC = () => {
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <Header
         title={workspace?.project.title || '内容项目'}
-        subtitle="从 Brief 和可靠来源出发，持续沉淀可追溯的主稿版本"
+        subtitle="从 Brief 和可回查材料出发，持续沉淀可追溯的主稿版本"
       />
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-6xl">
@@ -203,6 +225,7 @@ export const ProjectWorkspace: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
+              <ProjectAssetSummary workspace={workspace} />
               {hasUnsavedChanges && (
                 <div role="status" className="sticky top-0 z-10 rounded-2xl border border-lemon/45 bg-lemon/90 p-3 shadow-card backdrop-blur-sm">
                   <p className="ui-control-label text-ink">项目里有尚未保存的修改</p>
@@ -221,7 +244,20 @@ export const ProjectWorkspace: React.FC = () => {
                 isSaving={isSavingSource}
                 saveError={sourceSaveError}
                 onAdd={handleSourceAdd}
+                onDirtyChange={setIsSourceDirty}
+                onUnlink={(sourceId) => unlinkSource(workspace.project.id, sourceId)}
                 onContinueResearch={() => navigate(`/history?tab=research&project=${workspace.project.id}`)}
+              />
+              {milestone?.kind === 'source_saved' && (
+                <ProjectMilestoneFeedback milestone={milestone} onDismiss={dismissMilestone} />
+              )}
+              <ProjectCreationFlow
+                workspace={workspace}
+                milestone={milestone?.kind === 'source_saved' ? null : milestone}
+                onDismissMilestone={dismissMilestone}
+                onDirtyChange={setIsCreationFlowDirty}
+                hasUnsavedBrief={isBriefDirty}
+                hasUnsavedMasterDraft={isMasterDirty}
               />
               <ProjectDraftEditor
                 key={masterArtifact ? `${masterArtifact.id}:${masterArtifact.current_revision?.id || 'empty'}` : 'new-master'}
@@ -234,11 +270,16 @@ export const ProjectWorkspace: React.FC = () => {
                 onSave={handleDraftSave}
                 onLoadRevisions={handleLoadRevisions}
                 onDirtyChange={setIsMasterDirty}
+                evidence={workspace.evidence.filter((item) => item.reuse_eligible)}
+                isGenerationActive={activeCreationOperation === 'generate_master'}
+                onFetchFragments={(sourceId) => fetchFragments(workspace.project.id, sourceId)}
               />
               <ProjectOutputGuide
                 hasMasterRevision={Boolean(masterArtifact?.current_revision)}
+                isMasterConfirmed={isRevisionConfirmedForOutput(masterArtifact?.current_revision)}
                 masterRevisionNumber={masterArtifact?.current_revision?.revision_number}
                 masterContent={masterArtifact?.current_revision?.content}
+                masterCitations={masterArtifact?.current_revision?.citations}
                 fileName={workspace.project.title}
                 targetPlatform={workspace.project.target_platform}
                 contentFormat={workspace.project.content_format}
@@ -258,40 +299,11 @@ export const ProjectWorkspace: React.FC = () => {
           )}
         </div>
       </main>
-      <ModalShell
+      <ProjectUnsavedChangesDialog
         isOpen={navigationBlocker.state === 'blocked'}
-        title="还有修改没有保存"
-        subtitle="离开后，本次在 Brief 或主稿编辑区里的修改不会进入版本记录。"
-        accent="lemon"
-        size="sm"
-        showCloseButton={false}
-        closeOnBackdrop={false}
-        onClose={() => {
-          if (navigationBlocker.state === 'blocked') navigationBlocker.reset();
-        }}
-        footer={(
-          <div className="flex flex-wrap justify-end gap-2">
-            <ActionButton
-              tone="secondary"
-              onClick={() => {
-                if (navigationBlocker.state === 'blocked') navigationBlocker.reset();
-              }}
-            >
-              继续编辑
-            </ActionButton>
-            <ActionButton
-              tone="danger"
-              onClick={() => {
-                if (navigationBlocker.state === 'blocked') navigationBlocker.proceed();
-              }}
-            >
-              放弃修改并离开
-            </ActionButton>
-          </div>
-        )}
-      >
-        <p className="ui-body text-ink-soft/80">建议先关闭此提示，回到对应区域保存；如果确认不需要这些修改，可以选择放弃并离开。</p>
-      </ModalShell>
+        onStay={() => { if (navigationBlocker.state === 'blocked') navigationBlocker.reset(); }}
+        onLeave={() => { if (navigationBlocker.state === 'blocked') navigationBlocker.proceed(); }}
+      />
     </div>
   );
 };

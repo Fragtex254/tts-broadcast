@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-TTS Broadcast 是一个全栈应用，用于自动化 AI 新闻播报。它从 AI HOT 抓取每日 AI 新闻，使用 MiMo LLM 将其改写为播报稿件，并通过 MiMo TTS API 生成语音音频。
+TTS Broadcast 是一个以内容项目为主线、可选继续生成音频的全栈创作工作台。核心流程是 Brief → 原始来源 → 用户确认的证据 → 不可变提纲 / 主稿 Revision → 可选口播稿与 TTS Render；AI HOT、转录和播客观点仍作为既有研究能力保留，并逐步通过明确的来源适配器接入项目，而不是冒充已经入库的原始证据。
 
 ## 技术栈
 
@@ -109,8 +109,13 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `transcription_claims` / `transcription_claim_jobs`：可重建观点卡与分析任务 lease；观点绑定合法 Speaker/Segment，证据摘录和时间由后端派生，Embedding 直接保存在 SQLite
 - `claim_relations`：用户选中的 Top N 候选观点关系缓存，不做全库两两比较
 - `content_projects` / `content_project_claims`：内容创作项目聚合根与有序观点引用；项目持久化受众、目标、角度、语气和内容形式等 Brief，重新分析时已引用旧观点保留为 stale 快照
-- `content_sources` / `content_project_sources`：可跨项目复用的通用来源与项目内用途/排序关系；当前支持手写来源，后续 AI HOT、转录和链接导入共用同一边界
+- `content_sources` / `content_project_sources`：可跨项目复用的用户粘贴文本快照与项目内用途/排序关系；用户填写 URL 未抓取、未核验，后续 AI HOT、转录和链接导入必须通过明确适配器共用同一边界
+- `content_source_requests`：Source 写入的不可覆盖幂等账本；后续关联编辑不能抹掉旧 request key，已移出项目的旧请求也不能复制或静默重新关联 Source
 - `content_artifacts` / `content_artifact_revisions`：项目下的大纲、主稿、平台稿和口播稿，每次保存新增不可变 Revision；当前版本由最大 `revision_number` 派生，不保存循环 current FK
+- `content_evidence_cards`：从 Source 的连续确定片段派生的证据卡；原文摘录和 offset 由后端生成，用户决策 `decision_state` 与技术生命周期 `lifecycle_status` 分开保存，修正只新增卡片并保留旧判断
+- `content_revision_citations`：Revision 的直接引用快照；绑定 Evidence、Source hash、原文摘录和片段范围，当前是否可复用不会改写历史引用在创建时的完整性
+- `content_generation_jobs`：证据提取、提纲草案和主稿草案的持久任务；保存输入指纹、模型配置快照、lease、run token、进度和结果 Revision，防刷新、多标签页、重试与旧 worker 重复物化
+- `content_project_milestones`：项目内稀有创作里程碑的唯一账本；只在真实首次事务提交后产生一次事件，旧项目已有事实会回填但不补发庆祝
 - `api_rate_limit_events` / `api_rate_limit_state`：外部模型限速账本，保存最近窗口的真实请求/token/payload 观测、429 backoff、自适应安全并发和熔断状态，用于跨后端进程重启延续 MiMo/MiniMax 账户侧限速记忆
 - `generation_jobs`：长生成任务 lease 表，当前用于分段批量 TTS，防止同一播报在刷新、多标签页或 HTTP 重试下重复入队
 
@@ -150,8 +155,12 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `transcription_claims.status`：当前观点为 `active`；逐字稿校对或被新一代观点替换后为 `stale`
 - `content_projects.audience/goal/angle/tone/content_format`：内容项目 Brief 字段，旧数据安全回填空字符串
 - `content_sources.metadata_json`：数据库内保存 JSON 字符串，工作区 API 对外统一返回 `metadata` 对象；遇到损坏历史 JSON 时安全降级为 `{}`
+- `content_sources.content_sha256`：Source 原文快照哈希；旧数据启动时回填，Evidence 与生成任务收口前必须再次核对，正文不提供原地编辑入口
+- `content_evidence_cards.decision_state/lifecycle_status`：前者只记录用户的 `candidate/selected/rejected` 判断，后者记录 `active/stale/superseded` 技术状态；Source 移出或证据修正不得抹掉用户原判断
+- `content_evidence_cards.request_key/input_sha256`：人工证据“保存并采用”的幂等身份；相同键异输入返回冲突，相同逻辑重试不新增半状态卡片
 - `content_artifact_revisions.content`：稿件正文按用户输入原样保存（包括首尾换行和显式空稿）；不对旧 Revision 做覆盖更新
 - `content_artifact_revisions.change_reason`：版本修改原因，默认 `manual`
+- `content_artifact_revisions.parent_revision_id/generation_job_id/request_key/provenance_json`：保存 Revision 血缘、AI Job 身份、幂等键和生成时的 prompt/model/creator inputs/outline/evidence/结构块快照；AI 草案落盘不代表用户已确认
 - `api_rate_limit_events.scope`：限速范围（如 `mimo-tts`），同一 scope 共享 RPM/TPM/payload 窗口
 - `api_rate_limit_events.request_cost/token_cost/payload_cost`：一次外部模型请求的加权成本；MiMo voiceclone 会按 base64 payload 额外增加 request/payload/concurrency 成本
 - `api_rate_limit_state.backoff_until_ms`：429 后持久化退避截止时间
@@ -187,6 +196,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 - **WSL ASR 网关（Windows GPU）**：由 `asr_provider=wsl_asr` 表示统一的局域网服务位置，共享 `wsl_asr_base_url` 与 API Key；`asr_engine=qwen` 时通过 `services/wslAsr.js` 调用 `/v1/audio/transcription-jobs` 和 `/v1/jobs/{job_id}`，由网关负责预处理、切片、队列与 chunk 进度；`asr_engine=moss` 时通过 `services/mossAsr.js` 调用同一连接下的 OpenAI-compatible `/v1/audio/transcriptions`，短音频直接解析同步结果，长音频收到 `202 + job id` 后自动轮询 `/v1/jobs/{job_id}`。MOSS job 轮询不设任务总时长上限，只在服务端返回失败、取消、过期或单次网络请求真实超时时结束；chunked job 每完成一块会返回累计 `progress.text`、最新 `progress.chunk_text` 与有序 `progress.chunks` 快照，BFF 通过 SSE 透传；native long-form 没有真实中间块时只报告阶段。模型列表通过 `/models` 动态发现。两种引擎都直接转发上传文件，不走本项目本地切片；协议差异只存在于后端适配层，不在产品层拆成两个服务
 - **播客整理模式**：当前只在 WSL/MOSS 模型声明 `diarization` 与 `segment_timestamps` 能力时开放，强制自动语言并请求结构化结果；保存 Speaker/Segment/Turn 后可一键生成分层摘要。当前明确不保存用户上传源音频、不提供时间码跳转或片段播放；未来若启用“回到现场”，先评估 Qwen Forced Alignment 并另行设计音频资产生命周期。
 - **播客观点研究**：一键总结会把分批 claims 升级为永久观点卡；也可从内容详情独立重新分析。模型不得提供可信时间码或摘录，后端验证完整同 Speaker Segment 范围后再派生证据。观点文本生成与关系判断经 `llmQueue`，Embedding 请求也经同一全局队列；SQLite 保存向量并在 Node.js 计算余弦相似度，配置缺失时使用关键词检索。内容库的「观点研究」只对搜索 Top N 中用户选择的 2–10 条观点做关系分析。
+- **证据驱动创作**：只有用户本次明确勾选的 Source 原文和 creator input keys 会进入外部 LLM 上下文；Evidence 的 `user_note` 是本地研究备注，本阶段不外发。Brief 快照包含目标平台和讨论问题，个人实践/判断仍必须逐项显式授权。证据提取按确定 Fragment 串行分批并经 `llmQueue`；模型只能返回 Source/Fragment ID 和候选说明，excerpt/offset 由后端派生。提纲与主稿中的直接引用只能逐字使用已选择 Evidence 的后端摘录；模型自写内容逐段标记 `【AI 推断，待核对】`，第一人称经验会被拒绝，supporting Evidence 只进入 provenance，不伪装成直接 Citation。AI 草案必须经用户显式人工保存后才能进入复制、下载或口播准备；AI 不可用时，Source、Evidence、Outline、带引用 Master 均有完整人工路径。
 - **LLM API**（默认 `https://token-plan-cn.xiaomimimo.com/anthropic`）：稿件改写、文本切分、转录排版、音色/段落标签优化，通过 `settings` 中的 `llm_api_format`、`llm_base_url`、`llm_model` 配置，可选择 Anthropic 兼容或 OpenAI 兼容格式；模型发现通过 `POST /api/settings/llm-models` 探测 OpenAI-compatible `/models` 端点；OpenAI 兼容格式接入 MiniMax/MiMo `minimax` 域名时，请求体会显式禁用 thinking，结构化返回会剥离 `<think>` 和 Markdown code fence 后再解析 JSON，避免切分口播稿时因推理文本污染 JSON 失败；所有 `createLlmMessage()` / 视觉 LLM 请求经 `services/llmQueue.js` 全局 RPM/TPM 队列限速
 - **AI HOT API**（`https://aihot.virxact.com`）：每日 AI 新闻数据源
 
@@ -285,6 +295,8 @@ SQLite 数据库包含核心业务表和运行控制表：
 | 预设角色立绘图片 | `backend/assets/` 目录 + SQLite `voice_presets.character_image_path` | 随音色预设存在；替换、移除或删除预设时清理文件 |
 | 变速合并音频（分段主播放器/下载） | 请求内内存响应 + 系统临时目录 | 不持久化；请求结束后释放，临时文件由后端清理 |
 | 转录聚合（原文、Speaker/Segment/Turn、摘要、任务状态） | SQLite `transcription_*` 表族 | 永久；未被内容项目引用时删除聚合根可级联清理，被项目引用观点存在时原子阻止删除；用户上传源音频不持久化 |
+| 内容项目资产（Brief、Source、Evidence、Artifact/Revision、Citation） | SQLite `content_*` 表族 | 原始材料与用户判断永久保留；AI 派生物可重建但仍按不可变 Revision / 历史快照保存；Source 移出项目只解除关联 |
+| 内容创作任务与里程碑 | SQLite `content_generation_jobs` / `content_project_milestones` | Job 保留可恢复状态与结果身份；每类首次真实里程碑在项目生命周期内只记一次 |
 | 应用设置（API Key、音色、开场白等） | SQLite `settings` 表 | 永久 |
 | 定时任务 | SQLite `schedules` 表 | 永久 |
 

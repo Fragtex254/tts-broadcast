@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import type { ContentArtifact, ContentArtifactRevision } from '../store';
+import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { getAudioScriptPreparationPlan } from './projectAudioScriptModel';
 
 const masterRevision: ContentArtifactRevision = {
+  ...CONTENT_REVISION_DEFAULTS,
   id: 11,
   artifact_id: 4,
   revision_number: 3,
@@ -12,6 +14,7 @@ const masterRevision: ContentArtifactRevision = {
 };
 
 const audioRevision: ContentArtifactRevision = {
+  ...CONTENT_REVISION_DEFAULTS,
   id: 21,
   artifact_id: 8,
   revision_number: 2,

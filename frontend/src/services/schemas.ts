@@ -252,12 +252,65 @@ export const ContentProjectSchema = z.object({
   created_at: z.string(), updated_at: z.string(),
 });
 export const ContentProjectSourceSchema = z.object({
-  id: z.number(), project_id: z.number(), project_source_id: z.number(), source_type: z.string(), title: z.string(), content: z.string(),
+  id: z.number(), project_id: z.number(), project_source_id: z.number(), source_type: z.string(), title: z.string(), content: z.string(), content_sha256: z.string(),
   url: z.string(), external_ref: z.string(), metadata: z.record(z.string(), z.unknown()), usage_note: z.string(), sort_order: z.number(),
   linked_at: z.string(), link_updated_at: z.string(), created_at: z.string(), updated_at: z.string(),
 });
+export const ContentSourceFragmentSchema = z.object({
+  index: z.number().int().nonnegative(), content: z.string(), start_offset: z.number().int().nonnegative(), end_offset: z.number().int().nonnegative(),
+});
+export const ContentEvidenceSchema = z.object({
+  id: z.number(), project_id: z.number(), source_id: z.number(), source_title: z.string(), origin: z.enum(['ai', 'user']),
+  state: z.enum(['candidate', 'selected', 'rejected']), decision_state: z.enum(['candidate', 'selected', 'rejected']),
+  lifecycle_status: z.enum(['active', 'stale', 'superseded']), source_linked: z.boolean(), source_snapshot_intact: z.boolean(),
+  reuse_eligible: z.boolean(), unavailable_reason: z.enum(['', 'source_changed', 'source_unlinked', 'stale', 'superseded', 'not_selected']),
+  start_fragment_index: z.number().int().nonnegative(), end_fragment_index: z.number().int().nonnegative(),
+  start_offset: z.number().int().nonnegative(), end_offset: z.number().int().nonnegative(), excerpt: z.string(),
+  source_content_sha256: z.string(), ai_note: z.string(), user_note: z.string(), supersedes_id: z.number().nullable(),
+  generation_job_id: z.number().nullable(), sort_order: z.number().int().nonnegative(), created_at: z.string(), updated_at: z.string(),
+});
+export const ContentGenerationJobSchema = z.object({
+  id: z.number(), project_id: z.number(), operation: z.enum(['extract_evidence', 'generate_outline', 'generate_master']),
+  request_key: z.string(), status: z.enum(['queued', 'running', 'completed', 'failed', 'superseded']), phase: z.string(),
+  progress: z.number().nullable(), error: z.string(), result_artifact_id: z.number().nullable(), result_revision_id: z.number().nullable(),
+  created_at: z.string(), updated_at: z.string(),
+});
+export const ContentProjectMilestoneSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  kind: z.enum(['source_saved', 'evidence_selected', 'outline_saved', 'cited_master_saved']),
+  title: z.string(), description: z.string(),
+});
+export const ContentJobProgressEventSchema = z.object({ job: ContentGenerationJobSchema });
+export const ContentJobErrorEventSchema = z.object({ job: ContentGenerationJobSchema, error: z.string() });
+export const ContentRevisionCitationSchema = z.object({
+  id: z.number(), revision_id: z.number(), evidence_id: z.number().nullable(), marker: z.string(), excerpt: z.string(),
+  source_id: z.number(), source_title: z.string(), source_content_sha256: z.string(),
+  start_fragment_index: z.number().int().nonnegative(), end_fragment_index: z.number().int().nonnegative(),
+  start_offset: z.number().int().nonnegative(), end_offset: z.number().int().nonnegative(), is_stale: z.boolean(), source_linked: z.boolean(),
+  evidence_decision_state: z.enum(['candidate', 'selected', 'rejected']), evidence_lifecycle_status: z.enum(['active', 'stale', 'superseded']),
+  reuse_eligible: z.boolean(),
+});
+export const ContentRevisionProvenanceSchema = z.object({
+  blocks: z.array(z.object({
+    basis: z.enum(['evidence', 'creator', 'inference']), text: z.string(), evidence_ids: z.array(z.number()),
+  })).default([]),
+  origin: z.enum(['manual', 'ai']).default('manual'),
+  operation: z.enum(['manual_save', 'extract_evidence', 'generate_outline', 'generate_master']).default('manual_save'),
+  prompt_version: z.string().default(''), model: z.string().default(''), provider: z.string().default(''), input_fingerprint: z.string().default(''),
+  creator_input_keys: z.array(z.enum(['personal_practice', 'personal_judgment'])).default([]),
+  creator_inputs: z.object({ personal_practice: z.string().optional(), personal_judgment: z.string().optional() }).default({}),
+  outline_revision_id: z.number().nullable().default(null), evidence_ids: z.array(z.number()).default([]),
+});
 export const ContentArtifactRevisionSchema = z.object({
-  id: z.number(), artifact_id: z.number(), revision_number: z.number(), content: z.string(), change_reason: z.string(), created_at: z.string(),
+  id: z.number(), artifact_id: z.number(), revision_number: z.number(), content: z.string(), change_reason: z.string(),
+  parent_revision_id: z.number().nullable().default(null), generation_job_id: z.number().nullable().default(null), request_key: z.string().default(''),
+  provenance: ContentRevisionProvenanceSchema.default({
+    blocks: [], origin: 'manual', operation: 'manual_save', prompt_version: '', model: '', provider: '', input_fingerprint: '',
+    creator_input_keys: [], creator_inputs: {}, outline_revision_id: null, evidence_ids: [],
+  }),
+  citations: z.array(ContentRevisionCitationSchema).default([]),
+  citation_status: z.enum(['not_applicable', 'valid', 'stale']).default('not_applicable'),
+  created_at: z.string(),
 });
 export const ContentArtifactSchema = z.object({
   id: z.number(), project_id: z.number(), kind: z.string(), title: z.string(), platform: z.string(), status: z.string(),
@@ -266,7 +319,14 @@ export const ContentArtifactSchema = z.object({
 export const ContentProjectWorkspaceSchema = z.object({
   project: ContentProjectSchema,
   sources: z.array(ContentProjectSourceSchema),
+  evidence: z.array(ContentEvidenceSchema).default([]),
+  generation_jobs: z.array(ContentGenerationJobSchema).default([]),
   artifacts: z.array(ContentArtifactSchema),
+});
+export const ContentJobCompleteEventSchema = z.object({
+  job: ContentGenerationJobSchema,
+  workspace: ContentProjectWorkspaceSchema,
+  milestone: ContentProjectMilestoneSchema.optional(),
 });
 
 // === API 响应包装 ===

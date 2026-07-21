@@ -388,6 +388,37 @@ button:not(:disabled),
   animation: fade-in var(--duration-normal) ease-out both;
 }
 
+.animate-project-celebration {
+  animation: project-celebration-in var(--duration-slow) var(--ease-enter) both;
+}
+
+.project-milestone-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--color-sage);
+  opacity: 0;
+  animation: project-milestone-particle 900ms var(--ease-enter) both;
+}
+
+.project-milestone-source_saved .project-milestone-particle { border-radius: 2px; background: var(--color-blush); }
+.project-milestone-evidence_selected .project-milestone-particle { background: var(--color-lilac); }
+.project-milestone-outline_saved .project-milestone-particle { border-radius: 1px; background: var(--color-lemon); }
+.project-milestone-cited_master_saved .project-milestone-particle { background: var(--color-sage); }
+.project-milestone-particle:nth-child(1) { --particle-x: -138px; --particle-y: -27px; animation-delay: 0ms; }
+.project-milestone-particle:nth-child(2) { --particle-x: -104px; --particle-y: 26px; animation-delay: 55ms; }
+.project-milestone-particle:nth-child(3) { --particle-x: -65px; --particle-y: -35px; animation-delay: 90ms; }
+.project-milestone-particle:nth-child(4) { --particle-x: -26px; --particle-y: 31px; animation-delay: 35ms; }
+.project-milestone-particle:nth-child(5) { --particle-x: 12px; --particle-y: -31px; animation-delay: 120ms; }
+.project-milestone-particle:nth-child(6) { --particle-x: 42px; --particle-y: 29px; animation-delay: 70ms; }
+.project-milestone-particle:nth-child(7) { --particle-x: 75px; --particle-y: -29px; animation-delay: 20ms; }
+.project-milestone-particle:nth-child(8) { --particle-x: 102px; --particle-y: 23px; animation-delay: 105ms; }
+.project-milestone-particle:nth-child(9) { --particle-x: 126px; --particle-y: -23px; animation-delay: 45ms; }
+.project-milestone-particle:nth-child(10) { --particle-x: 148px; --particle-y: 18px; animation-delay: 135ms; }
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(42, 36, 27, 0.15); border-radius: 9999px; }
@@ -434,6 +465,17 @@ button:not(:disabled),
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes project-celebration-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes project-milestone-particle {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.65); }
+  28% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
@@ -447,6 +489,8 @@ button:not(:disabled),
   .animate-shake,
   .animate-scale-bounce,
   .animate-waveform-pulse,
+  .animate-project-celebration,
+  .project-milestone-particle,
   .ui-modal-panel {
     animation: none !important;
   }

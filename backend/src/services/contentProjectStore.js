@@ -64,8 +64,24 @@ function update(id, values) {
   return getById(id);
 }
 
-function remove(id) {
+const removeTransaction = db.transaction((id) => {
+  const project = db.prepare('SELECT id FROM content_projects WHERE id = ?').get(id);
+  if (!project) return false;
+  // Citation 对 Evidence 使用 RESTRICT 保护；显式删除聚合根时先按依赖顺序清理派生引用。
+  db.prepare(`
+    DELETE FROM content_revision_citations
+    WHERE revision_id IN (
+      SELECT r.id
+      FROM content_artifact_revisions r
+      INNER JOIN content_artifacts a ON a.id = r.artifact_id
+      WHERE a.project_id = ?
+    )
+  `).run(id);
   return db.prepare('DELETE FROM content_projects WHERE id = ?').run(id).changes > 0;
+});
+
+function remove(id) {
+  return removeTransaction(id);
 }
 
 function addClaim(projectId, { claimId, usageNote = '' }) {

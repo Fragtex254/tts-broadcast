@@ -1,6 +1,6 @@
 ---
 name: backend-testing
-description: 写后端 Jest/supertest 测试时使用。涵盖测试目录镜像 src/、中文 describe 命名、路由 supertest 测试模板、服务 jest.mock 模板、beforeEach 清表、真实内存库不 mock、NODE_ENV=test 隔离、app.js 只导出不 listen、cron 测试 scheduler.shutdown、open handles 排查。触发场景：写测试、单测、补测试、mock 外部 API、supertest、测试隔离、open handles、test runInBand。
+description: 写后端 Jest/supertest 测试时使用。涵盖测试目录镜像、路由 / Store / 服务测试、外部 API mock、真实内存库、内容证据与引用的对抗用例、Creation Job 幂等/lease fencing/上下文竞态、测试隔离、open handles。触发场景：写测试、证据引用测试、生成任务竞态、提示注入、跨项目越权、单测、补测试、mock 外部 API、supertest、测试隔离、open handles、test runInBand。
 ---
 
 # 后端测试开发
@@ -18,6 +18,8 @@ description: 写后端 Jest/supertest 测试时使用。涵盖测试目录镜像
 4. `app.js` 只导出 Express app，只有直接运行入口才 `listen()` + 初始化调度器；supertest 引入 app 不应留端口/cron 句柄。
 5. 创建 cron 任务的测试必须在 `afterEach` 调 `scheduler.shutdown()` 并清表。
 6. Jest 提示 open handles 时用 `--detectOpenHandles` 定位并修复，不靠强制退出掩盖。
+7. 内容创作的模型输出按攻击输入测试：至少覆盖来源内提示注入、伪造 / 跨项目 Evidence ID、越界或非连续 fragment、假 excerpt / offset、无证据主稿、第一人称经验编造、严格 JSON 失败；断言后端派生原文与引用，不只断言模型被调用。
+8. 持久化生成任务至少覆盖同 key 同输入复用、同 key 不同输入 409、重复 SSE complete 不重发 milestone、过期 worker token、lease 恢复、运行中 Brief / Evidence / Source 关联变化、LLM 失败不留半成品。竞态测试必须断言 Revision / Citation / Evidence 的最终数据库数量。
 
 ## 模式与模板
 

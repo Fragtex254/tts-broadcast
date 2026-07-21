@@ -4,6 +4,9 @@ import type {
   AsrProvider,
   ContentArtifactInput,
   ContentArtifactRevisionInput,
+  ContentCreationJobInput,
+  ContentEvidenceInput,
+  ContentEvidenceUpdateInput,
   ContentProjectSourceInput,
   ContentProjectUpdateInput,
   CreateContentProjectInput,
@@ -282,6 +285,16 @@ export const projectWorkspaceApi = {
   getWorkspace: (projectId: number) => api.get(`/content-projects/${projectId}/workspace`),
   addSource: (projectId: number, data: ContentProjectSourceInput) =>
     api.post(`/content-projects/${projectId}/sources`, data),
+  getSourceFragments: (projectId: number, sourceId: number) =>
+    api.get(`/content-projects/${projectId}/sources/${sourceId}/fragments`),
+  unlinkSource: (projectId: number, sourceId: number) =>
+    api.delete(`/content-projects/${projectId}/sources/${sourceId}`),
+  createEvidence: (projectId: number, data: ContentEvidenceInput) =>
+    api.post(`/content-projects/${projectId}/evidence`, data),
+  updateEvidence: (projectId: number, evidenceId: number, data: ContentEvidenceUpdateInput) =>
+    api.patch(`/content-projects/${projectId}/evidence/${evidenceId}`, data),
+  createJob: (projectId: number, data: ContentCreationJobInput) =>
+    api.post(`/content-projects/${projectId}/creation-jobs`, data),
   createArtifact: (projectId: number, data: ContentArtifactInput) =>
     api.post(`/content-projects/${projectId}/artifacts`, data),
   createRevision: (projectId: number, artifactId: number, data: ContentArtifactRevisionInput) =>

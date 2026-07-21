@@ -343,6 +343,121 @@ export interface ClaimRelationAnalysis {
 
 export type ContentTargetPlatform = 'xiaohongshu' | 'wechat' | 'twitter' | 'general';
 
+export type ContentEvidenceOrigin = 'ai' | 'user';
+export type ContentEvidenceDecisionState = 'candidate' | 'selected' | 'rejected';
+export type ContentEvidenceLifecycleStatus = 'active' | 'stale' | 'superseded';
+export type ContentEvidenceState = ContentEvidenceDecisionState;
+export type ContentCreationOperation = 'extract_evidence' | 'generate_outline' | 'generate_master';
+export type ContentCreatorInputKey = 'personal_practice' | 'personal_judgment';
+export type ContentGenerationJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'superseded';
+export type ContentRevisionCitationStatus = 'not_applicable' | 'valid' | 'stale';
+export type ContentRevisionBlockBasis = 'evidence' | 'creator' | 'inference';
+
+export interface ContentSourceFragment {
+  index: number;
+  content: string;
+  start_offset: number;
+  end_offset: number;
+}
+
+export interface ContentEvidence {
+  id: number;
+  project_id: number;
+  source_id: number;
+  source_title: string;
+  origin: ContentEvidenceOrigin;
+  /** @deprecated 兼容旧响应；新代码使用 decision_state。 */
+  state: ContentEvidenceDecisionState;
+  decision_state: ContentEvidenceDecisionState;
+  lifecycle_status: ContentEvidenceLifecycleStatus;
+  source_linked: boolean;
+  source_snapshot_intact: boolean;
+  reuse_eligible: boolean;
+  unavailable_reason: '' | 'source_changed' | 'source_unlinked' | 'stale' | 'superseded' | 'not_selected';
+  start_fragment_index: number;
+  end_fragment_index: number;
+  start_offset: number;
+  end_offset: number;
+  excerpt: string;
+  source_content_sha256: string;
+  ai_note: string;
+  user_note: string;
+  supersedes_id: number | null;
+  generation_job_id: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContentRevisionCitation {
+  id: number;
+  revision_id: number;
+  evidence_id: number | null;
+  marker: string;
+  excerpt: string;
+  source_id: number;
+  source_title: string;
+  source_content_sha256: string;
+  start_fragment_index: number;
+  end_fragment_index: number;
+  start_offset: number;
+  end_offset: number;
+  evidence_decision_state: ContentEvidenceDecisionState;
+  evidence_lifecycle_status: ContentEvidenceLifecycleStatus;
+  source_linked: boolean;
+  reuse_eligible: boolean;
+  is_stale: boolean;
+}
+
+export interface ContentRevisionProvenanceBlock {
+  basis: ContentRevisionBlockBasis;
+  text: string;
+  evidence_ids: number[];
+}
+
+export interface ContentRevisionProvenance {
+  blocks: ContentRevisionProvenanceBlock[];
+  origin: 'manual' | 'ai';
+  operation: ContentCreationOperation | 'manual_save';
+  prompt_version: string;
+  model: string;
+  provider: string;
+  input_fingerprint: string;
+  creator_input_keys: ContentCreatorInputKey[];
+  creator_inputs: Partial<Record<ContentCreatorInputKey, string>>;
+  outline_revision_id: number | null;
+  evidence_ids: number[];
+}
+
+export interface ContentGenerationJob {
+  id: number;
+  project_id: number;
+  operation: ContentCreationOperation;
+  status: ContentGenerationJobStatus;
+  phase: string;
+  progress: number | null;
+  error: string;
+  request_key: string;
+  result_artifact_id: number | null;
+  result_revision_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ContentProjectMilestoneKind = 'source_saved' | 'evidence_selected' | 'outline_saved' | 'cited_master_saved';
+
+export interface ContentProjectMilestone {
+  id: string;
+  kind: ContentProjectMilestoneKind;
+  title: string;
+  description: string;
+}
+
+export interface ContentMutationResult<T> {
+  value: T;
+  milestone: ContentProjectMilestone | null;
+}
+
 export interface ContentProject {
   id: number;
   title: string;
@@ -399,6 +514,7 @@ export interface ContentProjectSource {
   source_type: string;
   title: string;
   content: string;
+  content_sha256: string;
   url: string;
   external_ref: string;
   metadata: Record<string, unknown>;
@@ -418,6 +534,7 @@ export interface ContentProjectSourceInput {
   externalRef?: string;
   metadata?: Record<string, unknown>;
   usageNote?: string;
+  requestKey?: string;
 }
 
 export interface ContentArtifactRevision {
@@ -426,6 +543,12 @@ export interface ContentArtifactRevision {
   revision_number: number;
   content: string;
   change_reason: string;
+  parent_revision_id: number | null;
+  generation_job_id: number | null;
+  request_key: string;
+  provenance: ContentRevisionProvenance;
+  citations: ContentRevisionCitation[];
+  citation_status: ContentRevisionCitationStatus;
   created_at: string;
 }
 
@@ -448,16 +571,54 @@ export interface ContentArtifactInput {
   status?: string;
   content: string;
   changeReason?: string;
+  requestKey?: string;
 }
 
 export interface ContentArtifactRevisionInput {
   content: string;
   changeReason?: string;
+  parentRevisionId?: number | null;
+  requestKey?: string;
+}
+
+export interface ContentEvidenceInput {
+  sourceId: number;
+  startFragmentIndex: number;
+  endFragmentIndex: number;
+  decisionState?: ContentEvidenceDecisionState;
+  userNote?: string;
+  supersedesEvidenceId?: number;
+  requestKey?: string;
+}
+
+export interface ContentEvidenceUpdateInput {
+  state?: ContentEvidenceDecisionState;
+  userNote?: string;
+}
+
+export interface ContentCreationJobInput {
+  operation: ContentCreationOperation;
+  requestKey: string;
+  taskId: string;
+  sourceIds?: number[];
+  evidenceIds?: number[];
+  outlineRevisionId?: number;
+  creatorInputKeys?: ContentCreatorInputKey[];
+}
+
+export interface StartContentCreationJobInput {
+  operation: ContentCreationOperation;
+  sourceIds?: number[];
+  evidenceIds?: number[];
+  outlineRevisionId?: number;
+  creatorInputKeys?: ContentCreatorInputKey[];
 }
 
 export interface ContentProjectWorkspace {
   project: ContentProject;
   sources: ContentProjectSource[];
+  evidence: ContentEvidence[];
+  generation_jobs: ContentGenerationJob[];
   artifacts: ContentArtifact[];
 }
 
@@ -679,9 +840,21 @@ export interface AppState {
   projectWorkspaceError: string | null;
   isSavingProjectWorkspace: boolean;
   projectWorkspaceSaveError: string | null;
+  projectSourceFragments: Record<number, ContentSourceFragment[]>;
+  isLoadingProjectSourceFragments: boolean;
+  projectSourceFragmentsError: string | null;
+  isUnlinkingProjectSourceId: number | null;
+  activeProjectTaskId: string | null;
+  activeProjectJobOperation: ContentCreationOperation | null;
+  projectWorkspaceJobError: string | null;
+  projectMilestoneFeedback: ContentProjectMilestone | null;
+  consumedProjectMilestoneIds: string[];
   projectArtifactRevisions: ContentArtifactRevision[];
   isLoadingProjectArtifactRevisions: boolean;
   projectArtifactRevisionsError: string | null;
+  projectOutlineRevisions: ContentArtifactRevision[];
+  isLoadingProjectOutlineRevisions: boolean;
+  projectOutlineRevisionsError: string | null;
   projectEditorContext: ProjectEditorContext | null;
   isLoadingProjectEditorRevision: boolean;
   projectEditorRevisionError: string | null;
@@ -704,9 +877,16 @@ export interface AppState {
   fetchProjectWorkspace: (projectId: number) => Promise<ContentProjectWorkspace>;
   clearProjectWorkspace: () => void;
   addProjectWorkspaceSource: (projectId: number, data: ContentProjectSourceInput) => Promise<ContentProjectSource>;
+  fetchProjectSourceFragments: (projectId: number, sourceId: number) => Promise<ContentSourceFragment[]>;
+  unlinkProjectWorkspaceSource: (projectId: number, sourceId: number) => Promise<void>;
+  createManualProjectEvidence: (projectId: number, data: ContentEvidenceInput) => Promise<ContentEvidence>;
+  updateProjectEvidence: (projectId: number, evidenceId: number, data: ContentEvidenceUpdateInput) => Promise<ContentEvidence>;
+  startProjectCreationJob: (projectId: number, data: StartContentCreationJobInput) => Promise<ContentGenerationJob>;
+  dismissProjectMilestone: () => void;
   createProjectWorkspaceArtifact: (projectId: number, data: ContentArtifactInput) => Promise<ContentArtifact>;
   saveProjectArtifactRevision: (projectId: number, artifactId: number, data: ContentArtifactRevisionInput) => Promise<ContentArtifactRevision>;
   fetchProjectArtifactRevisions: (projectId: number, artifactId: number) => Promise<ContentArtifactRevision[]>;
+  fetchProjectOutlineRevisions: (projectId: number, artifactId: number) => Promise<ContentArtifactRevision[]>;
   loadProjectEditorRevision: (projectId: number, artifactId: number, revisionId: number) => Promise<ContentArtifactRevision>;
   adoptProjectEditorRevision: (revision: ContentArtifactRevision) => void;
   clearProjectEditorContext: () => void;

@@ -1,6 +1,6 @@
 ---
 name: frontend-state-data
-description: 修改前端状态管理、数据流、API 调用时使用。涵盖 Zustand store 按领域拆 slice、观点研究 researchSlice、store/index.ts 只组合、强制 selector 禁无 selector useStore、store/types.ts 共享类型、services/api.ts 只封装 HTTP、Zod schema 运行时校验、safeParseArray 用法、useDebounce 高频防抖、Settings draft+dirtyFields 自动保存、SSE 长任务进度状态。触发场景：改 store、加 slice、观点搜索、内容项目、selector、Zustand、调 api.ts、Zod、schemas、防抖、debounce、Settings 保存、SSE 进度、loading 状态。
+description: 修改前端状态管理、数据流、API 调用时使用。涵盖 Zustand store 按领域拆 slice、内容项目 Evidence/Citation/Creation Job、服务端唯一里程碑事件、观点研究、store/index.ts 只组合、强制 selector、共享类型、API 封装、Zod 运行时校验、SSE 长任务、草稿与失败恢复。触发场景：改 store、加 slice、证据工作台、引用、创作生成任务、里程碑事件、观点搜索、内容项目、selector、Zustand、调 api.ts、Zod、schemas、SSE 进度、loading 状态。
 ---
 
 # 前端状态管理与数据流
@@ -23,6 +23,9 @@ description: 修改前端状态管理、数据流、API 调用时使用。涵盖
 8. 观点研究状态放 `researchSlice.ts`；搜索结果区分 `embedding` / `keyword` 降级模式，关系分析只提交显式选中的 claim ID，内容项目详情始终以服务端返回为准。观点分析 SSE 与总结 SSE 分开维护 loading/error，刷新后以 `claims_status` 收敛。
 9. 内容项目工作区通过独立领域 slice 管理 Source、Artifact 与 Revision；服务器聚合响应是唯一真实来源。详情响应必须严格解析，mutation 后使用服务端返回对象合并或重新读取工作区，不在页面自行推导 revision number、项目归属或当前版本。
 10. 项目口播编辑器必须用完整 `projectId + artifactId + revisionId` 上下文加载并核验 `audio_script` Revision；参数残缺时不得降级为旧内存稿。项目正文编辑、添加开场/结尾必须先成功 INSERT 新 Revision，再更新全局 `script` 与 URL；只有 `script` 与当前 Revision 逐字一致时才允许把 `artifactRevisionId` 传给 TTS。旧 `/editor` 无参数流程继续不传该字段。
+11. 内容项目聚合响应同时承载 Evidence、Revision Citation 与持久化 Creation Job；Evidence 的用户 `decision_state` 与技术 `lifecycle_status` 不得在 slice 中合并，生成筛选要求 selected + active，历史 Citation 的快照状态与当前 `reuse_eligible/source_linked` 分开保存。SSE 只做即时进度，`complete.workspace` 或随后重新读取的聚合才负责收敛。事件到达时先核验当前 project / job / request key，离开项目后的旧事件不得污染新页面。
+12. 创作里程碑只接收服务端事务成功后返回的 `{id, kind, title, description}`；slice 按 event ID 去重并在用户关闭后清除当前展示。刷新、列表数量变化、重复 complete 和已完成幂等响应不得在前端合成或重播 milestone。
+13. AI 创作提交前必须把相关局部 dirty 状态提升到工作区协调层：未保存 Brief、Evidence 用户备注或目标 Outline/Master 草稿时禁用对应任务并解释原因；任务完成不得用服务端 workspace 静默覆盖本地草稿。异步失败不能因 `activeOperation` 清空而消失。SSE 健康或持久 Job 仍有 progress/heartbeat 时不得用固定短墙钟超时关闭任务，轮询持续到 terminal 状态或用户显式离开。Outline 与 Master 历史分别维护，保存任一类型不得污染另一类型的 Revision 列表。
 
 ## 模式与模板
 

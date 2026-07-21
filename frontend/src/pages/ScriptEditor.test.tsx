@@ -2,9 +2,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import useStore, { type ContentArtifactRevision, type ProjectEditorContext } from '../store';
+import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { ScriptEditor } from './ScriptEditor';
 
 const revision: ContentArtifactRevision = {
+  ...CONTENT_REVISION_DEFAULTS,
   id: 21,
   artifact_id: 8,
   revision_number: 2,
