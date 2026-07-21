@@ -5,7 +5,9 @@ import { createScheduleSlice } from './scheduleSlice';
 import { createSegmentSlice } from './segmentSlice';
 import { createSettingsSlice } from './settingsSlice';
 import { createVoiceConfigSlice } from './voiceConfigSlice';
-import { createTranscribeSlice } from './transcribeSlice';
+import { createTranscribeTaskSlice } from './transcribeTaskSlice';
+import { createTranscribeBatchSlice } from './transcribeBatchSlice';
+import { createTranscribeResultsSlice } from './transcribeResultsSlice';
 import { createResearchSlice } from './researchSlice';
 import { createProjectWorkspaceSlice } from './projectWorkspaceSlice';
 import type { AppState } from './types';
@@ -91,7 +93,9 @@ export const useStore = create<AppState>((set, get) => ({
   ...createBroadcastSlice(set),
   ...createVoiceConfigSlice(set),
   ...createSegmentSlice(set, get),
-  ...createTranscribeSlice(set),
+  ...createTranscribeTaskSlice(set),
+  ...createTranscribeBatchSlice(set),
+  ...createTranscribeResultsSlice(set),
   ...createResearchSlice(set),
   ...createProjectWorkspaceSlice(set, get),
   ...createSettingsSlice(set),
