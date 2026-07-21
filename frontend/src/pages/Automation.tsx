@@ -92,7 +92,7 @@ export const Automation: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <Header
-        title={executionAvailable ? '自动化' : '自动化（规划中）'}
+        title={executionAvailable ? '自动化' : '功能暂不可用：自动化'}
         subtitle={executionAvailable
           ? '执行器已连接；任务运行态以服务端记录为准'
           : '保留旧定时配置；真实的采集、写作与音频工作流尚未接入'}
@@ -102,7 +102,7 @@ export const Automation: React.FC = () => {
         <div className="mx-auto max-w-5xl space-y-4">
           <section role="status" className={`rounded-card border p-5 ${executionAvailable ? 'border-sage/45 bg-sage/15' : 'border-lemon/45 bg-lemon/15'}`}>
             <h2 className="ui-section-title text-ink">
-              {executionAvailable ? '自动化执行器已连接' : '当前只保存时间配置，不会执行内容生产'}
+              {executionAvailable ? '自动化执行器已连接' : '功能暂不可用：当前只保存时间配置，不会执行内容生产'}
             </h2>
             <p className="ui-body mt-2 max-w-3xl text-ink-soft/80">
               {executionAvailable

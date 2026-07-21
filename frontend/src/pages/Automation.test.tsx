@@ -24,7 +24,8 @@ describe('Automation', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('当前只保存时间配置，不会执行内容生产')).not.toBeNull();
+    expect(screen.getByText('功能暂不可用：自动化')).not.toBeNull();
+    expect(screen.getByText('功能暂不可用：当前只保存时间配置，不会执行内容生产')).not.toBeNull();
     expect(screen.getByRole('button', { name: '等待执行器接入' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByLabelText('任务名称').hasAttribute('disabled')).toBe(true);
     expect(screen.getByLabelText('执行时间').hasAttribute('disabled')).toBe(true);
