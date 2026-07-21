@@ -1,6 +1,6 @@
 ---
 name: frontend-component
-description: 新增或修改 React 组件、页面时使用。涵盖组件文件组织顺序、单一职责拆分（超300行）、props 下传 events 上抛、不在组件内直接调 API、内容项目的来源/证据/引用层级、低频创作里程碑反馈、共享 Modal 与播放器、加载/错误/空状态、路由懒加载、TypeScript 严格规则、无障碍、lint/build/test。触发场景：加组件、加页面、内容项目、证据卡、引用面板、创作里程碑、改组件、新 tsx、卡片、按钮交互、骨架屏、错误状态、加路由、ErrorBoundary。
+description: 新增或修改 React 组件、页面时使用。涵盖组件文件组织顺序、单一职责拆分（超300行）、props 下传 events 上抛、不在组件内直接调 API、内容项目的来源/证据/引用层级、低频创作里程碑反馈、共享 Modal 与播放器、Bilibili 逐字稿时间定位与宽屏三栏阅读、加载/错误/空状态、路由懒加载、TypeScript 严格规则、无障碍、lint/build/test。触发场景：加组件、加页面、内容项目、证据卡、引用面板、创作里程碑、改组件、新 tsx、卡片、按钮交互、骨架屏、错误状态、加路由、Bilibili 视频、逐字稿时间跳转、逐字稿阅读布局、ErrorBoundary。
 ---
 
 # 前端组件与页面开发
@@ -163,7 +163,7 @@ export default MyComponent;
 6. 新增用户可访问路径时，确认 `NotFound` 兜底仍存在。
 7. 导航使用 `<NavLink>`（不是 `<Link>`），以支持 `isActive` 高亮。
 8. 顶级导航只展示工作台、内容库、音色库、自动化和设置；编辑器与转录页由任务入口进入，不在 Sidebar 重复展示。
-9. 播客时间码当前只读展示，不挂载音频播放、seek 或“回到现场”交互；未来接入时仍必须复用统一 `AudioPlaybackBar`。
+9. 播客不持久化上传源音频，也不为普通链接伪造“回到现场”。仅当 `source_url` 经严格域名与 BV/av ID 解析为 Bilibili 视频时，可使用 `BilibiliTranscriptPlayer` 嵌入官方外链播放器；Turn 定位只采用持久化 `start_seconds`，通过官方 `t` 参数重载播放器。双击之外必须同时提供键盘与显式按钮入口；第三方 iframe 不得冒充本地 `AudioPlaybackBar`。`2xl` 宽屏全屏阅读采用“说话人 / 逐字稿 / 上下文”三栏，右栏上部只展示与当前 Turn 时间范围相交的 `speaker_viewpoint`、下部固定播放器；当前 Turn 以仍在视口内的 hover/focus 为先，否则取视口中心。不得用最近观点强行补齐无交集语块；必须标注 AI 与 stale 状态。低于 `2xl` 时收回右栏并把播放器降级到阅读器下方。
 
 ### TypeScript
 

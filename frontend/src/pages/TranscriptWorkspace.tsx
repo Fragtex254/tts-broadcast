@@ -11,6 +11,7 @@ import { TranscriptClaimsPanel } from '../components/Research/TranscriptClaimsPa
 import type { TranscriptClaim } from '../store';
 import useStore from '../store';
 import { StatusPill } from '../components/ui/StatusPill';
+import { bilibiliVideoKey, parseBilibiliVideoUrl } from '../components/Transcribe/bilibiliPlayerModel';
 
 export const TranscriptWorkspace: React.FC = () => {
   const navigate = useNavigate();
@@ -33,6 +34,8 @@ export const TranscriptWorkspace: React.FC = () => {
   const claimProgress = useStore((state) => state.transcriptClaimProgress);
   const [error, setError] = useState<string | null>(null);
   const [isConversationOpen, setIsConversationOpen] = useState(false);
+  const [videoSeek, setVideoSeek] = useState({ videoKey: '', seconds: 0, requestId: 0 });
+  const embeddedPlayerRef = useRef<HTMLElement>(null);
   const claimOpenedFromListRef = useRef(false);
   const evidenceOpenedFromDetailRef = useRef(false);
   const hasClaimParam = searchParams.has('claim');
@@ -107,6 +110,27 @@ export const TranscriptWorkspace: React.FC = () => {
         : currentTranscript && ['queued', 'running'].includes(currentTranscript.record.claims_status)
           ? '观点分析中'
           : '待分析观点';
+  const bilibiliVideo = currentTranscript ? parseBilibiliVideoUrl(currentTranscript.record.source_url) : null;
+  const currentVideoKey = bilibiliVideo ? bilibiliVideoKey(bilibiliVideo) : '';
+  const videoSeekSeconds = videoSeek.videoKey === currentVideoKey
+    ? videoSeek.seconds
+    : bilibiliVideo?.initialSeconds || 0;
+  const videoSeekRequestId = videoSeek.videoKey === currentVideoKey ? videoSeek.requestId : 0;
+
+  const handleSeekToVideo = useCallback((seconds: number) => {
+    if (!currentVideoKey) return;
+    setVideoSeek((current) => ({
+      videoKey: currentVideoKey,
+      seconds: Math.max(0, Math.floor(seconds)),
+      requestId: current.videoKey === currentVideoKey ? current.requestId + 1 : 1,
+    }));
+    if (!isConversationOpen && !isEvidenceMode) {
+      window.requestAnimationFrame(() => {
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        embeddedPlayerRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'center' });
+      });
+    }
+  }, [currentVideoKey, isConversationOpen, isEvidenceMode]);
 
   const updateQuery = (updates: { claim?: number | null; evidence?: boolean }, replace = false) => {
     const next = new URLSearchParams(searchParams);
@@ -148,7 +172,19 @@ export const TranscriptWorkspace: React.FC = () => {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <Header title="播客工作区" subtitle="从逐字稿中理解内容、校对事实并沉淀可复用观点" />
+      <Header
+        title="播客工作区"
+        subtitle="从逐字稿中理解内容、校对事实并沉淀可复用观点"
+        actions={currentTranscript ? (
+          <nav aria-label="内容详情分区" className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-card-border bg-white/45 p-1">
+            <a href="#summary" className="ui-pressable min-h-9 shrink-0 rounded-lg px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/75 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">核心摘要</a>
+            <a href="#metadata" className="ui-pressable min-h-9 shrink-0 rounded-lg px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/75 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">资料与出处</a>
+            <a href="#claims" className="ui-pressable min-h-9 shrink-0 rounded-lg px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/75 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">主要观点</a>
+            <a href="#speakers" className="ui-pressable min-h-9 shrink-0 rounded-lg px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/75 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">说话人</a>
+            <a href="#transcript" className="ui-pressable min-h-9 shrink-0 rounded-lg px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/75 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">逐字稿</a>
+          </nav>
+        ) : undefined}
+      />
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-7xl space-y-5">
           <button type="button" onClick={() => navigate('/history?tab=transcriptions')} className="ui-pressable min-h-9 rounded-lg px-2 font-body text-[12px] text-ink-soft hover:bg-white/45 hover:text-ink">← 返回内容库</button>
@@ -187,14 +223,6 @@ export const TranscriptWorkspace: React.FC = () => {
                 </div>
               </header>
 
-              <nav aria-label="内容详情分区" className="sticky top-0 z-20 -mx-2 flex gap-1 overflow-x-auto border-y border-card-border bg-paper px-2 py-2 sm:mx-0 sm:rounded-xl sm:border">
-                <a href="#summary" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">核心摘要</a>
-                <a href="#metadata" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">资料与出处</a>
-                <a href="#claims" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">主要观点</a>
-                <a href="#speakers" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">说话人</a>
-                <a href="#transcript" className="ui-pressable min-h-9 shrink-0 rounded-full px-3 py-2 font-body text-[11px] font-medium text-ink-soft hover:bg-white/70 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lilac">逐字稿</a>
-              </nav>
-
               {shouldWarnSpeaker && (
                 <div className="rounded-2xl border border-lemon/50 bg-lemon/15 p-4 font-body text-[12px] leading-relaxed text-ink-soft">
                   <strong className="text-ink">说话人已自动区分，建议确认。</strong> 当前结果包含 mixed scope 或 {currentTranscript.record.diarization_conflicts} 个跨块冲突；重命名只改变显示名称，不会改写原始 ASR 事实。
@@ -222,7 +250,21 @@ export const TranscriptWorkspace: React.FC = () => {
                   onUpdateClaim={updateClaim}
                 /></div>
               <div id="speakers" className="scroll-mt-20"><TranscriptSpeakerPanel speakers={currentTranscript.speakers} onRename={handleRename} /></div>
-              <div id="transcript" className="scroll-mt-20"><TranscriptTurnList title={transcriptTitle} turns={currentTranscript.turns} speakers={currentTranscript.speakers} onOpenConversation={() => setIsConversationOpen(true)} onCorrect={handleCorrectTurn} /></div>
+              <div id="transcript" className="scroll-mt-20"><TranscriptTurnList
+                title={transcriptTitle}
+                turns={currentTranscript.turns}
+                speakers={currentTranscript.speakers}
+                onOpenConversation={() => setIsConversationOpen(true)}
+                onCorrect={handleCorrectTurn}
+                bilibiliVideo={isConversationOpen || isEvidenceMode ? null : bilibiliVideo}
+                sourceUrl={currentTranscript.record.source_url}
+                videoSeekSeconds={videoSeekSeconds}
+                videoSeekRequestId={videoSeekRequestId}
+                onSeekToVideo={bilibiliVideo && !isConversationOpen && !isEvidenceMode ? handleSeekToVideo : undefined}
+                playerContainerRef={embeddedPlayerRef}
+                summaryItems={currentTranscript.summaryItems}
+                isSummaryStale={currentTranscript.record.summary_status === 'stale'}
+              /></div>
               <ClaimDetailModal
                 key={selectedClaim ? `claim-${selectedClaim.id}` : `missing-${searchParams.get('claim') || 'claim'}`}
                 isOpen={hasClaimParam && (!isEvidenceMode || selectedClaim === null)}
@@ -247,6 +289,13 @@ export const TranscriptWorkspace: React.FC = () => {
                 onCorrect={handleCorrectTurn}
                 initialEvidenceSegmentIndex={selectedClaim?.evidence_start_index ?? null}
                 evidenceEndSegmentIndex={selectedClaim?.evidence_end_index ?? null}
+                bilibiliVideo={bilibiliVideo}
+                sourceUrl={currentTranscript.record.source_url}
+                videoSeekSeconds={videoSeekSeconds}
+                videoSeekRequestId={videoSeekRequestId}
+                onSeekToVideo={bilibiliVideo ? handleSeekToVideo : undefined}
+                summaryItems={currentTranscript.summaryItems}
+                isSummaryStale={currentTranscript.record.summary_status === 'stale'}
               />
             </>
           )}

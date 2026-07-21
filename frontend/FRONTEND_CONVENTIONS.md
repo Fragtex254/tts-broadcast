@@ -85,7 +85,7 @@ frontend/src/
 - `components/ModalShell.tsx` 是二级界面、确认弹窗、全屏编辑面板的统一外壳，集中处理 `role="dialog"`、Esc 关闭、backdrop 关闭、标题区、footer 和尺寸变体。业务组件不得重复手写固定遮罩与对话框基础逻辑。
 - `components/Dashboard/AudioPlaybackBar.tsx` 是音频播放条唯一底层实现，集中处理 `<audio>` 生命周期、播放/暂停、时长、seek、波形、进度条、播放失败和倍速保音高。整篇/历史播放器通过 `AudioPlayer`，试听小播放器通过 `MiniAudioPlayer` 接入；业务组件不得重新实现播放控制。
 - 与播放条相关的纯函数放在 `components/Dashboard/audioPlaybackUtils.ts`，保持组件文件只导出 React 组件，符合 Vite Fast Refresh 规则。
-- 播客详情使用独立上下文路由 `/history/transcriptions/:id`；`TranscriptWorkspace` 只负责编排，Speaker、Summary、Turn 分为展示组件。时间码当前仅作只读事实展示，不绑定播放或 seek。
+- 播客详情使用独立上下文路由 `/history/transcriptions/:id`；`TranscriptWorkspace` 只负责编排，Speaker、Summary、Turn 分为展示组件。普通来源的时间码仍只读；严格解析为 Bilibili BV/av 的 `source_url` 可通过 `BilibiliTranscriptPlayer` 使用 Turn `start_seconds` 定位官方外链播放器，必须保留双击、键盘和显式按钮三种入口。`2xl` 全屏阅读采用说话人、逐字稿、上下文三栏：上下文仅显示与视口当前 Turn 时间相交的 `speaker_viewpoint` 并在下方固定播放器；窄屏退回底部播放器，无交集时显示空态而非猜测最近观点。
 
 ---
 

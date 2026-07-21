@@ -1,4 +1,4 @@
-import type { TranscriptSpeaker, TranscriptTurn } from '../../store';
+import type { TranscriptSpeaker, TranscriptSummaryItem, TranscriptTurn } from '../../store';
 
 export interface TranscriptSpeakerTone {
   badge: string;
@@ -67,4 +67,20 @@ export function filterTranscriptConversationTurns(
     const speakerName = speakerNames.get(turn.speaker_key) || turn.speaker_key;
     return `${speakerName} ${displayText}`.toLocaleLowerCase('zh-CN').includes(normalizedQuery);
   });
+}
+
+export function findTranscriptViewpointsForTurn(
+  summaryItems: TranscriptSummaryItem[],
+  turn: TranscriptTurn | null,
+): TranscriptSummaryItem[] {
+  if (!turn) return [];
+  return summaryItems
+    .filter((item) => {
+      if (item.item_type !== 'speaker_viewpoint') return false;
+      if (turn.end_seconds <= turn.start_seconds) {
+        return item.start_seconds <= turn.start_seconds && item.end_seconds >= turn.start_seconds;
+      }
+      return item.start_seconds < turn.end_seconds && item.end_seconds > turn.start_seconds;
+    })
+    .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
 }

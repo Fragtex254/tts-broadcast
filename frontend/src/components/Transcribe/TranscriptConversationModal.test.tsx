@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
-import type { TranscriptSpeaker, TranscriptTurn } from '../../store';
+import type { TranscriptSpeaker, TranscriptSummaryItem, TranscriptTurn } from '../../store';
 import { TranscriptConversationModal } from './TranscriptConversationModal';
 
 const speakers: TranscriptSpeaker[] = [
@@ -118,6 +118,41 @@ describe('TranscriptConversationModal', () => {
     expect(screen.getByText(/我觉得二零二五对于我来说是行动的一年/)).toBeTruthy();
   });
 
+  test('右侧 AI 核心观点随当前聚焦语块的时间范围切换', () => {
+    render(
+      <TranscriptConversationModal
+        isOpen
+        title="AI时代是谁的黄金时代？"
+        turns={turns}
+        speakers={speakers}
+        onClose={vi.fn()}
+        onCorrect={vi.fn().mockResolvedValue(undefined)}
+        summaryItems={[{
+          id: 91,
+          transcription_id: 9,
+          item_type: 'speaker_viewpoint',
+          sort_order: 0,
+          speaker_key: 'speaker-0002',
+          title: '行动带来真实反馈',
+          content: '先做，再带着具体问题继续学习。',
+          evidence_start_index: 1,
+          evidence_end_index: 1,
+          start_seconds: 29,
+          end_seconds: 67,
+          created_at: '',
+          updated_at: '',
+        }]}
+      />,
+    );
+
+    const zaraTurn = screen.getByLabelText('发言 2，Zara，0:29 到 1:07');
+    fireEvent.mouseEnter(zaraTurn);
+
+    expect(screen.getByText('行动带来真实反馈')).toBeTruthy();
+    expect(screen.getByText('先做，再带着具体问题继续学习。')).toBeTruthy();
+    expect(screen.getByText('AI 总结，需结合左侧逐字稿核对')).toBeTruthy();
+  });
+
   test('长逐字稿只渲染视口附近发言，并可搜索跳转到远端发言', () => {
     const longTurns: TranscriptTurn[] = Array.from({ length: 240 }, (_, index) => ({
       id: 1000 + index,
@@ -224,14 +259,33 @@ describe('TranscriptConversationModal', () => {
       ...turns[index % turns.length],
       id: 2000 + index,
       turn_index: index,
+      start_seconds: index * 10,
+      end_seconds: index * 10 + 8,
       text: `滚动发言 ${index + 1}`,
     }));
+    const summaryItems: TranscriptSummaryItem[] = [{
+      id: 92,
+      transcription_id: 9,
+      item_type: 'speaker_viewpoint',
+      sort_order: 0,
+      speaker_key: 'speaker-0001',
+      title: '中段核心观点',
+      content: '滚动到中段后展示。',
+      evidence_start_index: 50,
+      evidence_end_index: 70,
+      start_seconds: 500,
+      end_seconds: 708,
+      created_at: '',
+      updated_at: '',
+    }];
     const props = {
       title: '延迟打开的长播客',
       turns: longTurns,
       speakers,
       onClose: vi.fn(),
       onCorrect: vi.fn().mockResolvedValue(undefined),
+      summaryItems,
+      initialEvidenceSegmentIndex: 0,
     };
     const { rerender } = render(<TranscriptConversationModal {...props} isOpen={false} />);
     rerender(<TranscriptConversationModal {...props} isOpen />);
@@ -243,5 +297,6 @@ describe('TranscriptConversationModal', () => {
     fireEvent.scroll(scroller);
 
     await waitFor(() => expect(Number(progress.getAttribute('aria-valuenow'))).toBeGreaterThan(initialProgress));
+    await waitFor(() => expect(screen.getByText('中段核心观点')).toBeTruthy());
   });
 });
