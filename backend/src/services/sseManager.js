@@ -120,6 +120,29 @@ class SSEManager {
     const clients = this.connections.get(taskId);
     return clients ? clients.size : 0;
   }
+
+  /**
+   * 关闭全部 SSE 连接。
+   * @returns {number} 已关闭的连接数
+   */
+  closeAll() {
+    const clients = [];
+    for (const taskClients of this.connections.values()) {
+      clients.push(...taskClients);
+    }
+    this.connections.clear();
+
+    for (const res of clients) {
+      try {
+        res.end();
+      } catch (error) {
+        logger.warn({ err: error }, '关闭 SSE 连接失败');
+      }
+    }
+
+    logger.info({ count: clients.length }, '已关闭全部 SSE 连接');
+    return clients.length;
+  }
 }
 
 // 单例模式

@@ -56,7 +56,7 @@ describe('应用网络边界', () => {
     const fakeServer = { close: jest.fn() };
     const listenSpy = jest.spyOn(app, 'listen').mockReturnValue(fakeServer);
 
-    expect(app.start()).toBe(fakeServer);
+    expect(app.start({ manageProcess: false })).toBe(fakeServer);
     expect(scheduler.init).toHaveBeenCalledTimes(1);
     expect(listenSpy).toHaveBeenCalledWith(expect.anything(), '127.0.0.1', expect.any(Function));
   });

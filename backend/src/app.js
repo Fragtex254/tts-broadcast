@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { createScopedLogger } = require('./services/logger');
+const { createProcessLifecycle } = require('./services/processLifecycle');
 const { audioDir, assetDir } = require('./utils/validation');
 
 const app = express();
@@ -79,15 +80,33 @@ app.use((err, req, res, next) => {
 
 /**
  * 启动 HTTP 服务和调度器
+ * @param {Object} [options]
+ * @param {boolean} [options.manageProcess=true] - 是否注册进程生命周期监听
  * @returns {import('http').Server} HTTP server 实例
  */
-function start() {
+function start({ manageProcess = true } = {}) {
   const scheduler = require('./services/scheduler');
   scheduler.init();
 
-  return app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     logger.info({ host: HOST, port: PORT }, `服务器运行在 http://${HOST}:${PORT}`);
   });
+
+  if (manageProcess) {
+    const db = require('./db');
+    const sseManager = require('./services/sseManager');
+    const lifecycle = createProcessLifecycle({
+      processRef: process,
+      scheduler,
+      sseManager,
+      server,
+      db,
+      logger,
+    });
+    lifecycle.register();
+  }
+
+  return server;
 }
 
 if (require.main === module) {

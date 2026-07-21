@@ -1,5 +1,7 @@
 const mockLogger = {
   error: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
 };
 
 jest.mock('../../src/services/logger', () => ({
@@ -34,5 +36,19 @@ describe('SSE 连接管理器', () => {
       'SSE 推送失败'
     );
     expect(mockLogger.error.mock.calls[0][0]).not.toHaveProperty('taskId');
+  });
+
+  test('closeAll 结束全部响应并清空连接', () => {
+    const sseManager = require('../../src/services/sseManager');
+    const first = { on: jest.fn(), end: jest.fn() };
+    const second = { on: jest.fn(), end: jest.fn() };
+
+    sseManager.addClient('task-a', first);
+    sseManager.addClient('task-b', second);
+
+    expect(sseManager.closeAll()).toBe(2);
+    expect(first.end).toHaveBeenCalledTimes(1);
+    expect(second.end).toHaveBeenCalledTimes(1);
+    expect(sseManager.getConnectionCount()).toBe(0);
   });
 });
