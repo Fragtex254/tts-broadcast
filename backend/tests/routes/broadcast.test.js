@@ -102,6 +102,142 @@ describe('播报 API', () => {
     expect(res.status).toBe(400);
   });
 
+  describe('编辑器 URL 草稿', () => {
+    beforeEach(() => {
+      db.prepare('DELETE FROM broadcasts').run();
+      db.prepare('DELETE FROM content_projects').run();
+    });
+
+    test('无需音色即可创建 draft，并由详情恢复规范化空音色', async () => {
+      const created = await request(app)
+        .post('/api/broadcast/drafts')
+        .send({ text: '来自转录的临时口播稿' });
+
+      expect(created.status).toBe(201);
+      expect(created.body).toMatchObject({
+        broadcast: {
+          content: '来自转录的临时口播稿',
+          status: 'draft',
+          mode: 'segmented',
+          source_artifact_revision_id: null,
+        },
+        voiceConfig: { voiceType: '', voice: '', voiceDesign: '', voiceClone: '' },
+        sourceRevisionContext: null,
+      });
+
+      const detail = await request(app).get(`/api/broadcast/${created.body.broadcast.id}`);
+      expect(detail.status).toBe(200);
+      expect(detail.body).toEqual(created.body);
+    });
+
+    test('项目草稿详情始终返回创建时 Revision，而不是 Artifact 最新版', async () => {
+      const project = await request(app).post('/api/content-projects').send({ title: 'URL 编辑器项目' });
+      const projectId = project.body.project.id;
+      const artifact = await request(app)
+        .post(`/api/content-projects/${projectId}/artifacts`)
+        .send({ kind: 'audio_script', title: '口播稿', content: '\n第一版口播\n' });
+      const artifactId = artifact.body.artifact.id;
+      const firstRevision = artifact.body.artifact.current_revision;
+
+      const created = await request(app)
+        .post('/api/broadcast/drafts')
+        .send({ text: firstRevision.content, artifactRevisionId: firstRevision.id });
+      await request(app)
+        .post(`/api/content-projects/${projectId}/artifacts/${artifactId}/revisions`)
+        .send({ content: '第二版口播', changeReason: '继续编辑' });
+
+      const detail = await request(app).get(`/api/broadcast/${created.body.broadcast.id}`);
+      expect(detail.status).toBe(200);
+      expect(detail.body.sourceRevisionContext).toMatchObject({
+        projectId,
+        artifactId,
+        revision: { id: firstRevision.id, revision_number: 1, content: '\n第一版口播\n' },
+      });
+    });
+
+    test('项目草稿正文必须与 Revision 逐字一致', async () => {
+      const project = await request(app).post('/api/content-projects').send({ title: '来源校验项目' });
+      const artifact = await request(app)
+        .post(`/api/content-projects/${project.body.project.id}/artifacts`)
+        .send({ kind: 'audio_script', title: '口播稿', content: '不可变原文' });
+
+      const created = await request(app)
+        .post('/api/broadcast/drafts')
+        .send({ text: '被改写的正文', artifactRevisionId: artifact.body.artifact.current_revision.id });
+
+      expect(created.status).toBe(409);
+      expect(created.body.error).toBe('口播稿已修改，请先保存为新版本再进入编辑器');
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(0);
+    });
+
+    test('非项目 draft 可持久化修改，切分后拒绝再改原始草稿', async () => {
+      const created = await request(app)
+        .post('/api/broadcast/drafts')
+        .send({ text: '第一份临时稿' });
+      const id = created.body.broadcast.id;
+
+      const updated = await request(app)
+        .patch(`/api/broadcast/${id}/draft`)
+        .send({ text: '刷新后仍在的第二份临时稿' });
+      expect(updated.status).toBe(200);
+      expect(updated.body.broadcast).toMatchObject({ id, content: '刷新后仍在的第二份临时稿' });
+
+      db.prepare('INSERT INTO segments (broadcast_id, "index", text) VALUES (?, ?, ?)')
+        .run(id, 0, '已经切分');
+      const rejected = await request(app)
+        .patch(`/api/broadcast/${id}/draft`)
+        .send({ text: '不应覆盖分段的正文' });
+      expect(rejected.status).toBe(409);
+      expect(broadcastStore.getById(id).content).toBe('刷新后仍在的第二份临时稿');
+    });
+
+    test('从历史 Render 派生独立草稿，保留原音频、分段与音色', async () => {
+      const original = broadcastStore.create({
+        title: '历史音频',
+        content: '不可被继续编辑覆盖的正文',
+        audioPath: '/audio/original.wav',
+        voiceType: 'preset',
+        voiceConfig: { voice: '冰糖', stylePrompt: '沉稳' },
+        status: 'generated',
+        mode: 'segmented',
+      });
+      db.prepare('INSERT INTO segments (broadcast_id, "index", text, audio_path, status) VALUES (?, ?, ?, ?, ?)')
+        .run(original.id, 0, '精修后分段', '/audio/original-segment.wav', 'generated');
+      db.prepare('UPDATE segments SET style_tag = ?, playback_rate = ? WHERE broadcast_id = ?')
+        .run('克制', 1.25, original.id);
+
+      const response = await request(app).post(`/api/broadcast/${original.id}/drafts`);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toMatchObject({
+        broadcast: {
+          content: original.content,
+          status: 'pending',
+          mode: 'segmented',
+          audio_path: null,
+        },
+        voiceConfig: { voiceType: 'preset', voice: '冰糖', stylePrompt: '沉稳' },
+      });
+      expect(response.body.broadcast.id).not.toBe(original.id);
+      expect(db.prepare(`
+        SELECT text, audio_path, status, style_tag, playback_rate
+        FROM segments WHERE broadcast_id = ?
+      `).get(response.body.broadcast.id)).toEqual({
+        text: '精修后分段',
+        audio_path: null,
+        status: 'pending',
+        style_tag: '克制',
+        playback_rate: 1.25,
+      });
+      expect(broadcastStore.getById(original.id)).toMatchObject({
+        status: 'generated',
+        audio_path: '/audio/original.wav',
+      });
+      expect(db.prepare('SELECT text, audio_path, status FROM segments WHERE broadcast_id = ?').get(original.id))
+        .toEqual({ text: '精修后分段', audio_path: '/audio/original-segment.wav', status: 'generated' });
+    });
+  });
+
   // ============ Segment API Tests ============
 
   let segmentedBroadcastId;

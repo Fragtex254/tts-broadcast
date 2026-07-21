@@ -10,6 +10,7 @@ const voiceConfigService = require('../services/voiceConfig');
 const broadcastStore = require('../services/broadcastStore');
 const segmentStore = require('../services/segmentStore');
 const generationJobStore = require('../services/generationJobStore');
+const editorSplitCoordinator = require('../services/editorSplitCoordinator');
 const sseManager = require('../services/sseManager');
 const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
@@ -73,32 +74,40 @@ function getChangedSegmentAudioPaths(oldSegments, nextSegments) {
  * AI 切分口播稿为 100-200 字文段
  */
 router.post('/:id/split', async (req, res) => {
+  let activeSplitId = null;
   try {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
     const broadcast = broadcastStore.getById(idCheck.id);
     if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
-
-    // 若已有 segments，先删除旧的及其音频文件
-    const oldSegments = segmentStore.getByBroadcastId(idCheck.id);
-    for (const seg of oldSegments) {
-      cleanAudioFile(seg.audio_path);
+    if (
+      broadcast.mode !== 'segmented'
+      || broadcast.status !== 'draft'
+      || broadcast.audio_path
+      || segmentStore.getByBroadcastId(idCheck.id).length > 0
+    ) {
+      return res.status(409).json({ error: '只能切分尚未进入生成流程的编辑器草稿' });
     }
-    segmentStore.deleteByBroadcastId(idCheck.id);
+    if (!editorSplitCoordinator.tryStart(idCheck.id)) {
+      return res.status(409).json({ error: '该口播稿正在切分，请等待当前请求完成' });
+    }
+    activeSplitId = idCheck.id;
 
     // 调用 AI 切分
     const segmentTexts = await mimo.splitScript(broadcast.content);
 
-    // 创建 segment 记录
-    segmentStore.createMany(idCheck.id, segmentTexts);
-
-    // 更新广播 mode，删除旧的整段音频文件
-    cleanAudioFile(broadcast.audio_path);
-    broadcastStore.clearAudioAndSetMode(idCheck.id, 'segmented');
+    const committed = segmentStore.createFromEditorDraft({
+      broadcastId: idCheck.id,
+      expectedContent: broadcast.content,
+      texts: segmentTexts,
+    });
+    if (!committed) {
+      return res.status(409).json({ error: '口播稿在切分期间已变化，本次旧结果已丢弃，请重试' });
+    }
 
     const segments = segmentStore.getByBroadcastId(idCheck.id);
-    res.json({ segments });
+    res.json({ broadcast: broadcastStore.getById(idCheck.id), segments });
   } catch (error) {
     logger.error({
       err: error,
@@ -106,6 +115,8 @@ router.post('/:id/split', async (req, res) => {
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '切分失败');
     res.status(500).json({ error: error.message || '切分失败' });
+  } finally {
+    if (activeSplitId !== null) editorSplitCoordinator.finish(activeSplitId);
   }
 });
 

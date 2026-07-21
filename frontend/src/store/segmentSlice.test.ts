@@ -70,10 +70,10 @@ describe('segmentSlice provenance', () => {
       close: sseMocks.close,
     });
     apiMocks.generate.mockResolvedValue({ data: { broadcast } });
-    apiMocks.split.mockResolvedValue({ data: { segments: [] } });
+    apiMocks.split.mockResolvedValue({ data: { broadcast: { ...broadcast, status: 'pending' }, segments: [] } });
     apiMocks.updateVoiceConfig.mockResolvedValue({ data: { broadcast } });
     useStore.setState({
-      currentBroadcast: null,
+      currentBroadcast: broadcast,
       broadcasts: [],
       segments: [],
       backgroundTasks: [],
@@ -86,20 +86,27 @@ describe('segmentSlice provenance', () => {
     });
   });
 
-  test('项目口播切分把 artifactRevisionId 透传给 generate', async () => {
+  test('项目口播切分复用 URL 当前 Broadcast，不再创建第二条记录', async () => {
     await useStore.getState().splitScriptAction('口播正文', 21);
 
-    expect(apiMocks.generate).toHaveBeenCalledWith(expect.objectContaining({
-      text: '口播正文',
-      mode: 'segmented',
-      artifactRevisionId: 21,
-    }));
+    expect(apiMocks.generate).not.toHaveBeenCalled();
+    expect(apiMocks.split).toHaveBeenCalledWith(51);
+    expect(useStore.getState().currentBroadcast?.id).toBe(51);
   });
 
-  test('旧编辑器切分不伪造 artifactRevisionId', async () => {
-    await useStore.getState().splitScriptAction('旧口播正文');
+  test('非项目草稿也切分 URL 当前 Broadcast', async () => {
+    useStore.setState({
+      currentBroadcast: {
+        ...broadcast,
+        content: '临时口播正文',
+        artifact_revision_id: null,
+        source_artifact_revision_id: null,
+      },
+    });
+    await useStore.getState().splitScriptAction('临时口播正文');
 
-    expect(apiMocks.generate.mock.calls[0][0]).not.toHaveProperty('artifactRevisionId');
+    expect(apiMocks.generate).not.toHaveBeenCalled();
+    expect(apiMocks.split).toHaveBeenCalledWith(51);
   });
 
   test('同一播报已有后台生成任务时拒绝重复启动且保留旧连接', async () => {
@@ -108,7 +115,7 @@ describe('segmentSlice provenance', () => {
       kind: 'segment-generation',
       entityId: broadcast.id,
       title: '生成分段语音',
-      href: '/editor',
+      href: '/editor/51',
       status: 'running',
     });
 

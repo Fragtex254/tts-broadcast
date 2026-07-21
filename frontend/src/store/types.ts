@@ -779,6 +779,9 @@ export interface AppState {
   script: string;
   isGenerating: boolean;
   isRewriting: boolean;
+  isLoadingEditorBroadcast: boolean;
+  isCreatingEditorDraft: boolean;
+  editorBroadcastError: string | null;
 
   segments: Segment[];
   isSplitting: boolean;
@@ -845,6 +848,13 @@ export interface AppState {
     pagination: { page: number; limit: number; total: number };
   }>;
   setCurrentBroadcast: (broadcast: Broadcast | null) => void;
+  createEditorDraft: (data: { text: string; artifactRevisionId?: number }) => Promise<Broadcast>;
+  forkEditorDraft: (broadcastId: number) => Promise<Broadcast>;
+  loadEditorBroadcast: (broadcastId: number) => Promise<Broadcast>;
+  updateEditorDraft: (broadcastId: number, text: string) => Promise<Broadcast>;
+  cancelEditorDraftCreation: () => void;
+  cancelEditorBroadcastLoad: () => void;
+  clearEditorBroadcast: () => void;
   saveBroadcast: (id: number) => Promise<Broadcast>;
   updateScript: (script: string) => void;
 
@@ -921,8 +931,6 @@ export interface AppState {
   isLoadingProjectOutlineRevisions: boolean;
   projectOutlineRevisionsError: string | null;
   projectEditorContext: ProjectEditorContext | null;
-  isLoadingProjectEditorRevision: boolean;
-  projectEditorRevisionError: string | null;
   searchClaims: (query: string) => Promise<ClaimSearchResult[]>;
   clearResearchContext: () => void;
   fetchClaimDetail: (claimId: number) => Promise<TranscriptClaim>;
@@ -952,9 +960,6 @@ export interface AppState {
   saveProjectArtifactRevision: (projectId: number, artifactId: number, data: ContentArtifactRevisionInput) => Promise<ContentArtifactRevision>;
   fetchProjectArtifactRevisions: (projectId: number, artifactId: number) => Promise<ContentArtifactRevision[]>;
   fetchProjectOutlineRevisions: (projectId: number, artifactId: number) => Promise<ContentArtifactRevision[]>;
-  loadProjectEditorRevision: (projectId: number, artifactId: number, revisionId: number) => Promise<ContentArtifactRevision>;
-  adoptProjectEditorRevision: (revision: ContentArtifactRevision) => void;
-  clearProjectEditorContext: () => void;
 
   fetchSettings: () => Promise<void>;
   updateSettings: (data: SettingsUpdate) => Promise<void>;

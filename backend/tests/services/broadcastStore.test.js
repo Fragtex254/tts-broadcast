@@ -116,6 +116,24 @@ describe('broadcastStore', () => {
     });
   });
 
+  describe('updateEditorDraft', () => {
+    test('只允许更新尚未进入生成流程的 segmented draft', () => {
+      const draft = insertBroadcast({ mode: 'segmented', status: 'draft' });
+      const updated = broadcastStore.updateEditorDraft(draft.id, {
+        title: '新标题',
+        content: '可恢复的新正文',
+      });
+
+      expect(updated).toMatchObject({ title: '新标题', content: '可恢复的新正文', status: 'draft' });
+      broadcastStore.updateStatus(draft.id, 'pending');
+      expect(broadcastStore.updateEditorDraft(draft.id, {
+        title: '不应写入',
+        content: '不应写入',
+      })).toBeUndefined();
+      expect(broadcastStore.getById(draft.id).content).toBe('可恢复的新正文');
+    });
+  });
+
   describe('completeWholeGeneration', () => {
     test('只将尚未收口的 pending whole Render 原子更新为 generated', () => {
       const pending = insertBroadcast({ status: 'pending', mode: 'whole' });

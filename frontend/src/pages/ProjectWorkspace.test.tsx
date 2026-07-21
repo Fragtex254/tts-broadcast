@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import useStore, { type ContentArtifact, type ContentProjectWorkspace } from '../store';
+import useStore, { type Broadcast, type ContentArtifact, type ContentProjectWorkspace } from '../store';
 import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { ProjectWorkspace } from './ProjectWorkspace';
 
@@ -67,6 +67,24 @@ const audioArtifact: ContentArtifact = {
   },
 };
 
+const editorDraft: Broadcast = {
+  id: 51,
+  title: '项目口播稿',
+  content: '\n主稿原文\n',
+  artifact_revision_id: 21,
+  source_artifact_revision_id: 21,
+  audio_path: null,
+  duration: null,
+  voice_type: null,
+  voice_config: '{}',
+  source_items: null,
+  status: 'draft',
+  saved: 0,
+  mode: 'segmented',
+  created_at: '2026-07-18T00:01:00.000Z',
+  updated_at: '2026-07-18T00:01:00.000Z',
+};
+
 const renderPage = () => {
   const router = createMemoryRouter(
     [{ path: '/projects/:id', element: <ProjectWorkspace /> }],
@@ -77,14 +95,14 @@ const renderPage = () => {
 
 const EditorLocationProbe = () => {
   const location = useLocation();
-  return <div>{`编辑器目标${location.search}`}</div>;
+  return <div>{`编辑器目标${location.pathname}`}</div>;
 };
 
 const renderPageWithEditor = () => {
   const router = createMemoryRouter(
     [
       { path: '/projects/:id', element: <ProjectWorkspace /> },
-      { path: '/editor', element: <EditorLocationProbe /> },
+      { path: '/editor/:broadcastId', element: <EditorLocationProbe /> },
     ],
     { initialEntries: ['/projects/12'] }
   );
@@ -122,6 +140,7 @@ describe('ProjectWorkspace', () => {
       projectOutlineRevisions: [],
       isLoadingProjectOutlineRevisions: false,
       projectOutlineRevisionsError: null,
+      createEditorDraft: vi.fn().mockResolvedValue(editorDraft),
     });
   });
 
@@ -166,18 +185,18 @@ describe('ProjectWorkspace', () => {
 
   test('从主稿创建口播 Artifact 后载入原文并导航到确切 Revision', async () => {
     const createArtifact = vi.fn().mockResolvedValue(audioArtifact);
-    const updateScript = vi.fn((content: string) => useStore.setState({ script: content }));
+    const createEditorDraft = vi.fn().mockResolvedValue(editorDraft);
     useStore.setState({
       projectWorkspace: { ...workspace, artifacts: [masterArtifact] },
       createProjectWorkspaceArtifact: createArtifact,
       saveProjectArtifactRevision: vi.fn(),
-      updateScript,
+      createEditorDraft,
     });
 
     renderPageWithEditor();
     fireEvent.click(screen.getByRole('button', { name: '准备口播版本' }));
 
-    await waitFor(() => expect(screen.getByText(/编辑器目标\?projectId=12&artifactId=8&revisionId=21/)).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('编辑器目标/editor/51')).not.toBeNull());
     expect(createArtifact).toHaveBeenCalledWith(12, {
       kind: 'audio_script',
       title: '口播稿',
@@ -186,7 +205,10 @@ describe('ProjectWorkspace', () => {
       content: '\n主稿原文\n',
       changeReason: '从主稿第 3 版创建口播稿',
     });
-    expect(updateScript).toHaveBeenCalledWith('\n主稿原文\n');
+    expect(createEditorDraft).toHaveBeenCalledWith({
+      text: '\n主稿原文\n',
+      artifactRevisionId: 21,
+    });
   });
 
   test('主稿有未保存修改时不允许用旧 Revision 准备输出', async () => {

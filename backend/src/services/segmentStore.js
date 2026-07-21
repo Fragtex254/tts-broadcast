@@ -24,6 +24,39 @@ function createMany(broadcastId, texts) {
 }
 
 /**
+ * 将 AI 切分结果与 draft -> pending 状态一次性提交。
+ * 外部模型运行期间 draft 仍可恢复；若正文已被编辑，旧结果不会写入。
+ * @param {Object} params
+ * @param {number} params.broadcastId - Broadcast ID
+ * @param {string} params.expectedContent - 启动切分时的正文快照
+ * @param {string[]} params.texts - AI 切分结果
+ * @returns {boolean} 是否成功提交
+ */
+function createFromEditorDraft({ broadcastId, expectedContent, texts }) {
+  const insertStmt = db.prepare(
+    'INSERT INTO segments (broadcast_id, "index", text, status, playback_rate, error_message) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  const commit = db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE broadcasts
+      SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND content = ?
+        AND mode = 'segmented'
+        AND status = 'draft'
+        AND audio_path IS NULL
+        AND NOT EXISTS (SELECT 1 FROM segments WHERE broadcast_id = broadcasts.id)
+    `).run(broadcastId, expectedContent);
+    if (result.changes === 0) return false;
+    texts.forEach((text, index) => {
+      insertStmt.run(broadcastId, index, text, 'pending', 1, '');
+    });
+    return true;
+  });
+  return commit();
+}
+
+/**
  * 用指定顺序整体替换播报 segments；未变化的已有段保留音频与状态。
  * @param {number} broadcastId - 播报 ID
  * @param {Array<{id?:number,text:string,styleTag:string}>} items - 新段落列表
@@ -406,6 +439,7 @@ function countByIds(broadcastId, ids) {
 
 module.exports = {
   createMany,
+  createFromEditorDraft,
   replaceAll,
   getByBroadcastId,
   getByIdAndBroadcastId,

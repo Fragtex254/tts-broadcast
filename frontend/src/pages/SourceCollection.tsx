@@ -7,7 +7,6 @@ import { ActionButton } from '../components/ui/ActionButton';
 import { WorkbenchCard } from '../components/ui/WorkbenchCard';
 import { ProjectList } from '../components/Projects/ProjectList';
 import useStore from '../store';
-import { getProjectEditorUrl } from './projectEditorContext';
 
 export const SourceCollection: React.FC = () => {
   const navigate = useNavigate();
@@ -16,6 +15,10 @@ export const SourceCollection: React.FC = () => {
   const currentBroadcast = useStore((state) => state.currentBroadcast);
   const projectEditorContext = useStore((state) => state.projectEditorContext);
   const isRewriting = useStore((state) => state.isRewriting);
+  const isCreatingEditorDraft = useStore((state) => state.isCreatingEditorDraft);
+  const createEditorDraft = useStore((state) => state.createEditorDraft);
+  const forkEditorDraft = useStore((state) => state.forkEditorDraft);
+  const cancelEditorDraftCreation = useStore((state) => state.cancelEditorDraftCreation);
   const contentProjects = useStore((state) => state.contentProjects);
   const isLoadingContentProjects = useStore((state) => state.isLoadingContentProjects);
   const fetchContentProjects = useStore((state) => state.fetchContentProjects);
@@ -27,6 +30,7 @@ export const SourceCollection: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [editorOpenError, setEditorOpenError] = useState<string | null>(null);
   const [projectDraft, setProjectDraft] = useState({ title: '', topic: '', audience: '' });
   const activeProjectEditorContext = projectEditorContext
     && script === projectEditorContext.revision.content
@@ -34,9 +38,36 @@ export const SourceCollection: React.FC = () => {
     : null;
   const isConfigurationIncomplete = !settings.mimo_api_key.is_set || !settings.mimo_tts_api_key.is_set;
 
-  const handleRewriteComplete = useCallback(() => {
-    navigate('/editor');
-  }, [navigate]);
+  const handleRewriteComplete = useCallback(async (rewrittenScript: string) => {
+    setEditorOpenError(null);
+    const draft = await createEditorDraft({ text: rewrittenScript });
+    navigate(`/editor/${draft.id}`);
+  }, [createEditorDraft, navigate]);
+
+  const handleContinueEditing = useCallback(async () => {
+    if (!script.trim()) return;
+    setEditorOpenError(null);
+    const expectedRevisionId = activeProjectEditorContext?.revision.id ?? null;
+    try {
+      if (
+        currentBroadcast?.content === script
+        && currentBroadcast.source_artifact_revision_id === expectedRevisionId
+      ) {
+        const target = currentBroadcast.saved === 0
+          ? currentBroadcast
+          : await forkEditorDraft(currentBroadcast.id);
+        navigate(`/editor/${target.id}`);
+        return;
+      }
+      const draft = await createEditorDraft({
+        text: script,
+        ...(expectedRevisionId ? { artifactRevisionId: expectedRevisionId } : {}),
+      });
+      navigate(`/editor/${draft.id}`);
+    } catch (error) {
+      setEditorOpenError(error instanceof Error ? error.message : '打开编辑器失败，请重试。');
+    }
+  }, [activeProjectEditorContext, createEditorDraft, currentBroadcast, forkEditorDraft, navigate, script]);
 
   const handleStartNewsIntake = useCallback(() => {
     const newsIntake = newsIntakeRef.current;
@@ -63,6 +94,8 @@ export const SourceCollection: React.FC = () => {
       });
     return () => { isCurrent = false; };
   }, [fetchContentProjects]);
+
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
 
   const handleCreateProject = useCallback(async () => {
     const title = projectDraft.title.trim();
@@ -237,13 +270,17 @@ export const SourceCollection: React.FC = () => {
                   {script && (
                     <ActionButton
                       tone="edit"
-                      onClick={() => navigate(activeProjectEditorContext
-                        ? getProjectEditorUrl(activeProjectEditorContext)
-                        : '/editor')}
+                      onClick={() => void handleContinueEditing()}
+                      disabled={isCreatingEditorDraft}
                       className="mt-3 w-full"
                     >
-                      {activeProjectEditorContext ? '继续项目口播稿' : '继续提炼与写作'}
+                      {isCreatingEditorDraft
+                        ? '正在准备编辑器…'
+                        : activeProjectEditorContext ? '继续项目口播稿' : '继续提炼与写作'}
                     </ActionButton>
+                  )}
+                  {editorOpenError && (
+                    <p role="alert" className="mt-2 font-body text-[11px] text-pink">{editorOpenError}</p>
                   )}
                 </div>
               </WorkbenchCard>

@@ -31,12 +31,14 @@ const formatDate = (dateStr: string): string => {
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
+    draft: 'bg-lemon/25 text-ink',
     pending: 'bg-paper-2 text-ink-soft',
     generated: 'bg-sage/30 text-ink',
     generating: 'bg-lilac/30 text-ink',
     failed: 'bg-pink/20 text-ink',
   };
   const labels: Record<string, string> = {
+    draft: '编辑草稿',
     pending: '文字草稿',
     generated: '音频就绪',
     generating: '正在生成音频',
@@ -55,8 +57,9 @@ export const BroadcastLibrary: React.FC = () => {
   const currentBroadcast = useStore((s) => s.currentBroadcast);
   const setCurrentBroadcast = useStore((s) => s.setCurrentBroadcast);
   const saveBroadcast = useStore((s) => s.saveBroadcast);
-  const fetchSegments = useStore((s) => s.fetchSegments);
   const batchDeleteBroadcasts = useStore((s) => s.batchDeleteBroadcasts);
+  const forkEditorDraft = useStore((s) => s.forkEditorDraft);
+  const cancelEditorDraftCreation = useStore((s) => s.cancelEditorDraftCreation);
   const isBatchDeleting = useStore((s) => s.isBatchDeleting);
 
   const navigate = useNavigate();
@@ -71,6 +74,8 @@ export const BroadcastLibrary: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [reopeningBroadcastId, setReopeningBroadcastId] = useState<number | null>(null);
 
   // 进入多选模式
   const handleEnterMultiSelect = useCallback(() => {
@@ -155,6 +160,8 @@ export const BroadcastLibrary: React.FC = () => {
     }
   }, [deleteError]);
 
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
+
   // 确认删除
   const handleConfirmDelete = useCallback(async () => {
     try {
@@ -174,14 +181,19 @@ export const BroadcastLibrary: React.FC = () => {
   const handleSelectBroadcast = useCallback((broadcast: Broadcast) => setCurrentBroadcast(broadcast), [setCurrentBroadcast]);
   const handleReEdit = useCallback(async (broadcast: Broadcast, e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurrentBroadcast(broadcast);
+    setEditError(null);
+    setReopeningBroadcastId(broadcast.id);
     try {
-      await fetchSegments(broadcast.id);
-    } catch {
-      // Even if segments fail to load, still navigate
+      const draft = broadcast.status === 'draft'
+        ? broadcast
+        : await forkEditorDraft(broadcast.id);
+      navigate(`/editor/${draft.id}`);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : '创建可编辑副本失败，请重试。');
+    } finally {
+      setReopeningBroadcastId(null);
     }
-    navigate('/editor');
-  }, [setCurrentBroadcast, fetchSegments, navigate]);
+  }, [forkEditorDraft, navigate]);
   const getAudioUrl = useCallback((broadcast: Broadcast): string | null => (
     broadcast.audio_path || (broadcast.mode === 'segmented' && broadcast.status === 'generated')
       ? `/api/broadcast/${broadcast.id}/audio?t=${encodeURIComponent(broadcast.updated_at)}`
@@ -331,6 +343,9 @@ export const BroadcastLibrary: React.FC = () => {
                           tone="edit"
                           size="sm"
                           onClick={(e) => handleReEdit(broadcast, e)}
+                          isLoading={reopeningBroadcastId === broadcast.id}
+                          loadingLabel="正在创建副本…"
+                          disabled={reopeningBroadcastId !== null}
                           className="w-full shrink-0 sm:w-auto"
                         >
                           继续编辑
@@ -395,6 +410,11 @@ export const BroadcastLibrary: React.FC = () => {
       {deleteError && (
         <div className="fixed bottom-4 right-4 z-50 bg-pink/10 border border-pink/30 text-pink px-4 py-3 rounded-lg animate-shake">
           {deleteError}
+        </div>
+      )}
+      {editError && (
+        <div role="alert" className="fixed bottom-4 right-4 z-50 rounded-lg border border-pink/30 bg-pink/10 px-4 py-3 text-pink animate-shake">
+          {editError}
         </div>
       )}
     </div>

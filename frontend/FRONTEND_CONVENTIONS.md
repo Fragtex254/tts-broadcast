@@ -91,6 +91,8 @@ frontend/src/
 - 与播放条相关的纯函数放在 `components/Dashboard/audioPlaybackUtils.ts`，保持组件文件只导出 React 组件，符合 Vite Fast Refresh 规则。
 - 播客详情使用独立上下文路由 `/history/transcriptions/:id`；`TranscriptWorkspace` 只负责编排，Speaker、Summary、Turn 分为展示组件。普通来源的时间码仍只读；严格解析为 Bilibili BV/av 的 `source_url` 可通过 `BilibiliTranscriptPlayer` 使用 Turn `start_seconds` 定位官方外链播放器，必须保留双击、键盘和显式按钮三种入口。`2xl` 全屏阅读采用说话人、逐字稿、上下文三栏：上下文仅显示与视口当前 Turn 时间相交的 `speaker_viewpoint` 并在下方固定播放器；窄屏退回底部播放器，无交集时显示空态而非猜测最近观点。
 - `components/Layout/GlobalTaskProgressBar.tsx` 统一展示跨路由继续运行的后台任务。任务链接、阶段、百分比和断线恢复提示来自 `backgroundTaskSlice` 的纯 JSON 快照；断线动作通过 registry 按原 taskId 恢复，组件不得持有或关闭 `EventSource`。
+- 口播编辑器以 `/editor/:broadcastId` 中的正整数 Broadcast ID 为唯一可恢复上下文。入口先持久化或选择 Broadcast 再导航，页面只接收后端在同一 SQLite 读事务中派生的 Broadcast/Voice/Revision/Segments 聚合快照；不得依赖跨路由内存传稿或 query 组装项目上下文。裸 `/editor`、非法或不存在的 ID 必须显示明确错误和返回入口。聚合中 `splitInProgress=true` 时继续轮询整份快照，直到切分提交或失败，硬刷新不得停在切分前状态。
+- 已保存历史 Render 不得原 ID 继续编辑；入口先派生副本。副本若已有 Segments，保留文字、顺序、标签与倍速并清空音频，顶部整稿修改控件改为分段编辑引导。
 
 ---
 

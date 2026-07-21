@@ -93,6 +93,15 @@ export const broadcastApi = {
   getDetail: (id: number) =>
     api.get(`/broadcast/${id}`),
 
+  createDraft: (data: { text: string; artifactRevisionId?: number }) =>
+    api.post('/broadcast/drafts', data),
+
+  forkDraft: (id: number) =>
+    api.post(`/broadcast/${id}/drafts`),
+
+  updateDraft: (id: number, data: { text: string }) =>
+    api.patch(`/broadcast/${id}/draft`, data),
+
   save: (id: number) =>
     api.post(`/broadcast/${id}/save`),
 

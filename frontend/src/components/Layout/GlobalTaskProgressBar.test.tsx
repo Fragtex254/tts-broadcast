@@ -32,7 +32,7 @@ describe('GlobalTaskProgressBar', () => {
       taskId: 'segments-8',
       kind: 'segment_generation',
       title: '生成口播音频',
-      href: '/editor',
+      href: '/editor/8',
       status: 'connecting',
     });
 

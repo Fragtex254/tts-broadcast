@@ -1,5 +1,6 @@
 // 广播记录数据访问层
 const db = require('../db');
+const contentArtifactStore = require('./contentArtifactStore');
 
 function toBroadcastDto(row) {
   if (!row) return undefined;
@@ -44,12 +45,89 @@ function create({ title, content, audioPath, voiceType, voiceConfig, sourceItems
 }
 
 /**
+ * 从历史 Render 派生可编辑副本。已分段 Render 复制当前分段编辑元数据，但不复制音频或生成状态。
+ * @param {Object} source - 来源 Broadcast DTO
+ * @param {number|null} artifactRevisionId - 经后端核验后可保留的来源 Revision
+ * @returns {Object} 新的 Broadcast
+ */
+function forkEditorDraft(source, artifactRevisionId) {
+  const insertBroadcast = db.prepare(`
+    INSERT INTO broadcasts (
+      title, content, audio_path, voice_type, voice_config, source_items, status, mode, artifact_revision_id
+    ) VALUES (?, ?, NULL, ?, ?, ?, ?, 'segmented', ?)
+  `);
+  const insertSegment = db.prepare(`
+    INSERT INTO segments (
+      broadcast_id, "index", text, audio_path, status, style_tag, playback_rate, error_message
+    ) VALUES (?, ?, ?, NULL, 'pending', ?, ?, '')
+  `);
+  const fork = db.transaction(() => {
+    const sourceSegments = db.prepare(`
+      SELECT "index", text, style_tag, playback_rate
+      FROM segments
+      WHERE broadcast_id = ?
+      ORDER BY "index"
+    `).all(source.id);
+    const status = sourceSegments.length > 0 ? 'pending' : 'draft';
+    const result = insertBroadcast.run(
+      source.title,
+      source.content,
+      source.voice_type || null,
+      source.voice_config || '{}',
+      source.source_items || null,
+      status,
+      artifactRevisionId ?? null
+    );
+    const draftId = Number(result.lastInsertRowid);
+    sourceSegments.forEach((segment, index) => {
+      insertSegment.run(
+        draftId,
+        index,
+        segment.text,
+        segment.style_tag || '',
+        segment.playback_rate || 1
+      );
+    });
+    return draftId;
+  });
+  return getById(fork());
+}
+
+/**
  * 根据 ID 获取播报记录
  * @param {number} id - 播报 ID
  * @returns {Object|undefined} 播报记录，不存在时返回 undefined
  */
 function getById(id) {
   return toBroadcastDto(db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id));
+}
+
+/**
+ * 在同一 SQLite 读事务中取得编辑器聚合快照，避免 Broadcast 与 Segments 来自切分提交的两侧。
+ * @param {number} id - Broadcast ID
+ * @returns {{broadcast: Object, segments: Object[], revisionContext: Object|null}|undefined} 聚合快照
+ */
+function getEditorSnapshot(id) {
+  const readSnapshot = db.transaction(() => {
+    const broadcast = toBroadcastDto(db.prepare('SELECT * FROM broadcasts WHERE id = ?').get(id));
+    if (!broadcast) return undefined;
+    const segments = db.prepare(`
+      SELECT id, broadcast_id, "index", text, audio_path, status, style_tag,
+             playback_rate, error_message, created_at, updated_at
+      FROM segments
+      WHERE broadcast_id = ?
+      ORDER BY "index"
+    `).all(id);
+    const revisionContext = broadcast.source_artifact_revision_id
+      ? contentArtifactStore.getRevisionContext({ revisionId: broadcast.source_artifact_revision_id })
+      : null;
+    const validRevisionContext = revisionContext?.artifact.kind === 'audio_script'
+      && revisionContext.revision.content === broadcast.content
+      ? revisionContext
+      : null;
+    return { broadcast, segments, revisionContext: validRevisionContext };
+  });
+  return readSnapshot();
 }
 
 /**
@@ -188,6 +266,24 @@ function updateVoiceConfig(id, { voiceType, voiceConfig }) {
 }
 
 /**
+ * 更新尚未进入分段/TTS 流程的编辑器草稿。
+ * 来源 Revision 不在这里变更；项目稿若产生新 Revision，必须创建新的草稿 Render。
+ * @param {number} id - Broadcast ID
+ * @param {Object} params
+ * @param {string} params.title - 新标题
+ * @param {string} params.content - 新正文
+ * @returns {Object|undefined} 更新后的草稿；状态已变化时返回 undefined
+ */
+function updateEditorDraft(id, { title, content }) {
+  const result = db.prepare(`
+    UPDATE broadcasts
+    SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND mode = 'segmented' AND status = 'draft' AND audio_path IS NULL
+  `).run(title, content, id);
+  return result.changes > 0 ? getById(id) : undefined;
+}
+
+/**
  * 切换保存状态
  * @param {number} id - 播报 ID
  * @returns {Object|null} { newSaved, broadcast } 或不存在时返回 null
@@ -273,7 +369,9 @@ function updateStatus(id, status) {
 
 module.exports = {
   create,
+  forkEditorDraft,
   getById,
+  getEditorSnapshot,
   getHistory,
   countAll,
   countUnsaved,
@@ -283,6 +381,7 @@ module.exports = {
   getOldestEvictableUnsaved,
   getOldestSaved,
   updateAudioPath,
+  updateEditorDraft,
   completeWholeGeneration,
   deletePendingWholeGeneration,
   updateVoiceConfig,

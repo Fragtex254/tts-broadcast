@@ -14,6 +14,7 @@ const tts = require('../../src/services/tts');
 const audio = require('../../src/services/audio');
 const audioAsset = require('../../src/services/audioAsset');
 const mimo = require('../../src/services/mimo');
+const broadcastStore = require('../../src/services/broadcastStore');
 const segmentStore = require('../../src/services/segmentStore');
 const sseManager = require('../../src/services/sseManager');
 const ttsQueue = require('../../src/services/ttsQueue');
@@ -87,6 +88,128 @@ describe('Segments API', () => {
     test('无效 ID 返回 400', async () => {
       const res = await request(app).get('/api/broadcast/abc/segments');
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/broadcast/:id/split', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    test('编辑器 draft 在原 Broadcast ID 上进入 pending 分段流程', async () => {
+      db.prepare("UPDATE broadcasts SET status = 'draft', content = ? WHERE id = ?")
+        .run('准备切分的持久化草稿', broadcastId);
+      jest.spyOn(mimo, 'splitScript').mockResolvedValue(['第一段', '第二段']);
+
+      const res = await request(app).post(`/api/broadcast/${broadcastId}/split`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast).toMatchObject({
+        id: Number(broadcastId),
+        status: 'pending',
+        mode: 'segmented',
+      });
+      expect(res.body.segments.map((segment) => segment.text)).toEqual(['第一段', '第二段']);
+      expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(1);
+    });
+
+    test('切分进行中只拒绝重复切分，并发编辑后原子丢弃旧结果', async () => {
+      db.prepare("UPDATE broadcasts SET status = 'draft', content = ? WHERE id = ?")
+        .run('并发切分草稿', broadcastId);
+      let resolveSplit;
+      let notifyStarted;
+      const started = new Promise((resolve) => { notifyStarted = resolve; });
+      jest.spyOn(mimo, 'splitScript').mockImplementation(() => new Promise((resolve) => {
+        resolveSplit = resolve;
+        notifyStarted();
+      }));
+
+      const firstSplit = request(app).post(`/api/broadcast/${broadcastId}/split`).then((response) => response);
+      await started;
+      expect(mimo.splitScript).toHaveBeenCalledTimes(1);
+
+      const [editResponse, secondSplit] = await Promise.all([
+        request(app).patch(`/api/broadcast/${broadcastId}/draft`).send({ text: '并发覆盖' }),
+        request(app).post(`/api/broadcast/${broadcastId}/split`),
+      ]);
+      expect(editResponse.status).toBe(200);
+      expect(secondSplit.status).toBe(409);
+      expect(mimo.splitScript).toHaveBeenCalledTimes(1);
+
+      resolveSplit(['切分结果']);
+      const completed = await firstSplit;
+      expect(completed.status).toBe(409);
+      expect(db.prepare('SELECT content, status FROM broadcasts WHERE id = ?').get(broadcastId))
+        .toEqual({ content: '并发覆盖', status: 'draft' });
+      expect(segmentStore.getByBroadcastId(broadcastId)).toEqual([]);
+
+      mimo.splitScript.mockResolvedValue(['新稿切分结果']);
+      const retried = await request(app).post(`/api/broadcast/${broadcastId}/split`);
+      expect(retried.status).toBe(200);
+      expect(retried.body.segments.map((segment) => segment.text)).toEqual(['新稿切分结果']);
+    });
+
+    test('AI 切分失败时 draft 始终可恢复并可重试', async () => {
+      db.prepare("UPDATE broadcasts SET status = 'draft', content = ? WHERE id = ?")
+        .run('可重试草稿', broadcastId);
+      jest.spyOn(mimo, 'splitScript').mockRejectedValue(new Error('模型暂时不可用'));
+
+      const response = await request(app).post(`/api/broadcast/${broadcastId}/split`);
+
+      expect(response.status).toBe(500);
+      expect(broadcastStore.getById(broadcastId).status).toBe('draft');
+    });
+
+    test('切分在途刷新仍读到完整 draft，成功时再原子出现 pending segments', async () => {
+      db.prepare("UPDATE broadcasts SET status = 'draft', content = ? WHERE id = ?")
+        .run('刷新可恢复草稿', broadcastId);
+      let resolveSplit;
+      let notifyStarted;
+      const started = new Promise((resolve) => { notifyStarted = resolve; });
+      jest.spyOn(mimo, 'splitScript').mockImplementation(() => new Promise((resolve) => {
+        resolveSplit = resolve;
+        notifyStarted();
+      }));
+
+      const splitRequest = request(app).post(`/api/broadcast/${broadcastId}/split`).then((response) => response);
+      await started;
+
+      const [detailDuringSplit, segmentsDuringSplit] = await Promise.all([
+        request(app).get(`/api/broadcast/${broadcastId}`),
+        request(app).get(`/api/broadcast/${broadcastId}/segments`),
+      ]);
+      expect(detailDuringSplit.body.broadcast.status).toBe('draft');
+      expect(detailDuringSplit.body.splitInProgress).toBe(true);
+      expect(detailDuringSplit.body.segments).toEqual([]);
+      expect(segmentsDuringSplit.body.segments).toEqual([]);
+
+      resolveSplit(['刷新后的第一段', '刷新后的第二段']);
+      expect((await splitRequest).status).toBe(200);
+      const detailAfterSplit = await request(app).get(`/api/broadcast/${broadcastId}`);
+      const segmentsAfterSplit = await request(app).get(`/api/broadcast/${broadcastId}/segments`);
+      expect(detailAfterSplit.body.broadcast.status).toBe('pending');
+      expect(detailAfterSplit.body.splitInProgress).toBe(false);
+      expect(detailAfterSplit.body.segments.map((segment) => segment.text))
+        .toEqual(['刷新后的第一段', '刷新后的第二段']);
+      expect(segmentsAfterSplit.body.segments.map((segment) => segment.text))
+        .toEqual(['刷新后的第一段', '刷新后的第二段']);
+    });
+
+    test('历史 generated Render 不得原地切分或清理音频', async () => {
+      jest.spyOn(mimo, 'splitScript').mockResolvedValue([]);
+      db.prepare("UPDATE broadcasts SET status = 'generated', audio_path = ? WHERE id = ?")
+        .run('/audio/original.wav', broadcastId);
+      db.prepare('INSERT INTO segments (broadcast_id, "index", text, audio_path, status) VALUES (?, ?, ?, ?, ?)')
+        .run(broadcastId, 0, '原分段', '/audio/original-segment.wav', 'generated');
+
+      const response = await request(app).post(`/api/broadcast/${broadcastId}/split`);
+
+      expect(response.status).toBe(409);
+      expect(mimo.splitScript).not.toHaveBeenCalled();
+      expect(cleanAudioFile).not.toHaveBeenCalled();
+      expect(broadcastStore.getById(broadcastId)).toMatchObject({
+        status: 'generated',
+        audio_path: '/audio/original.wav',
+      });
+      expect(segmentStore.getByBroadcastId(broadcastId)).toHaveLength(1);
     });
   });
 

@@ -104,7 +104,7 @@ hcds-studio/
 
 SQLite 数据库包含核心业务表和运行控制表：
 
-- `broadcasts`：播报记录，含稿件快照、音频路径、状态、模式（整篇/分段）；作为内容项目的音频 Render 时可选关联不可变口播稿 Revision
+- `broadcasts`：播报记录，含可恢复编辑草稿或音频 Render 的稿件快照、音频路径、状态、模式（整篇/分段）；作为内容项目的音频 Render 时可选关联不可变口播稿 Revision
 - `segments`：分段记录，关联 broadcast（外键 `ON DELETE CASCADE`），每段是一个适合 TTS 的语义块并独立生成音频
 - `settings`：键值存储，保存 API Key、音色偏好、脚本等配置
 - `schedules`：旧定时配置兼容表；当前应用未注入内容生产执行器，新配置以停用状态保存，不启动任务或更新成功时间；旧 `is_active=1` 意图保留但运行态公开为 `unavailable`
@@ -131,7 +131,7 @@ SQLite 数据库包含核心业务表和运行控制表：
 - `broadcasts.title`：播报标题（必填）
 - `broadcasts.content`：播报稿件正文（必填）
 - `broadcasts.audio_path`：音频文件路径
-- `broadcasts.status`：播报状态（如 `pending`、`completed`）
+- `broadcasts.status`：播报状态；编辑器草稿为 `draft`，分段或整篇待生成为 `pending`，音频就绪为 `generated`
 - `broadcasts.mode`：`whole`（整篇生成）或 `segmented`（分段生成）
 - `broadcasts.saved`：是否已保存（0/1），决定音频生命周期
 - `broadcasts.voice_type`：音色类型（简单值，如音色名称）
@@ -241,9 +241,11 @@ SQLite 数据库包含核心业务表和运行控制表：
 
 ## 关键开发模式
 
+- 口播编辑器以 `/editor/:broadcastId` 中的正整数 Broadcast ID 为唯一恢复键。`POST /api/broadcast/drafts` 创建不触发 TTS 的 `draft/segmented` 草稿，`POST /api/broadcast/:id/drafts` 从历史 Render 派生不修改原音频的独立副本；已分段 Render 保留当前 Segment 文字、顺序、标签和倍速，但清空音频、错误与生成 token 并转为 `pending`；未切分 Render 则成为 `draft`。`GET /api/broadcast/:id` 在同一 SQLite 读事务中返回 `{ broadcast, voiceConfig, sourceRevisionContext, segments, splitInProgress }` 聚合快照，前端严格校验后一次原子落入 store；`splitInProgress=true` 时持续重读整份聚合直到切分提交或失败，请求序号防止 A 的迟到响应覆盖 B，Segment 实体版本号使加载中恰好完成的后台任务触发最新快照重读。`PATCH /api/broadcast/:id/draft` 只保存未关联 Revision、未切分且无音频的草稿；项目稿的可选 Revision 必须是正文逐字一致的 `audio_script`，来源上下文由后端派生。AI 切分在外部请求期间保持 draft 可刷新恢复，最终用启动正文快照 CAS 在同一事务内写入 Segments 并转 `pending`；并发编辑后旧切分结果直接丢弃，进程中断也不会留下 `pending + 空 Segments`。所有入口只在持久化编辑副本成功后按返回 ID 导航，页面卸载会取消未完成的导航意图。
 - 后端通过 `services/mimo.js` 统一处理 LLM：Anthropic 兼容格式使用 Anthropic SDK，OpenAI 兼容格式使用 Axios 调 `/chat/completions`；`llm_rewrite_system_prompt` 与 `llm_split_system_prompt` 分别控制改写和切分的 system prompt，`llm_rewrite_thinking_enabled` 与 `llm_split_thinking_enabled` 控制 Anthropic 格式下是否禁用 thinking；OpenAI 兼容 MiniMax/MiMo 调用会强制禁用 thinking 并容错解析 JSON；风格建议按小批量请求，遇到 422、JSON 解析失败或返回数量不一致时使用本地规则兜底，保证结果数量与句子数量一致；通过 Axios 调用 MiMo TTS API（`services/tts.js`）
 - ASR 上传转录通过 `routes/transcribe.js` 接收音视频文件，上传先写入系统临时目录并在请求结束后清理；前端上传进度使用 axios `onUploadProgress`，后端按 `taskId` 通过 `/api/sse/:taskId` 推送 `transcribe-start`、`progress`、`complete`、`error`；`services/media.js` 支持 multer 的 `buffer` 或 `path` 输入，并转为一个或多个 ASR data URL（MiMo 长音频优先按静音点切片，目标 15 秒、最大 30 秒，并转为 MP3 降低体积；Qwen 本地 ASR 单片上限 256MB，目标 10 分钟、最大 20 分钟）；`services/asr.js` 先按 `asr_provider` 选择云端、Mac 本地或 WSL 局域网，再按 `asr_engine` 在 WSL 内部分发 Qwen job API 或 MOSS OpenAI-compatible API；成功结果通过 `services/transcriptionResultStore.js` 写入 `transcription_results`，同时保存 provider、engine 与 model；`services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射
 - 转录结果列表通过 `GET /api/transcribe/results` 读取 `transcription_results`，转录页历史面板支持查看、下载、导入稿件、刷新和删除；删除通过 `DELETE /api/transcribe/results/:id` 进入 `services/transcriptionResultStore.js`，只删除数据库记录，不删除用户上传源文件。DAL 在同一事务内检查该转录观点是否被 `content_project_claims` 引用；有引用时 API 返回 409 并保留 Transcript、Claim 与项目引用，未引用时沿用外键级联清理。转录页处理中使用只读的 `LiveTranscriptionPreview` 按完成 chunk 展示，阶段事件不清空已有文本；展开进入 `TranscriptionPreviewModal`，播客完成后直接进入 `TranscriptConversationModal`。旧排版能力仍由内容库的 `POST /api/transcribe/results/:id/format` 提供，但不再把转录过程伪装成可编辑 TXT 编辑器。
+- 转录页和转录内容库导入口播编辑器时，先成功创建持久化 editor draft，再按服务端返回 ID 导航到 `/editor/:broadcastId`；创建失败留在原页并显示可重试错误，请求未完成时离开页面会取消迟到 ID 的导航意图。
 - 批量转录（`POST /api/transcribe/batch`）采用异步模型：multer `upload.array` 接收多文件后立即返回 202，实际转录在后台 `runBatchTranscription` 串行进行，所有进度和最终结果通过 SSE 推送（`phase` 为 `batch-preparing`/`file-start`/`file-progress`/`file-complete`/`file-error`/`completed`）；后台任务开始前 `waitForSseConnection` 等待 SSE 连接建立避免早期事件丢失；前端通过 `relativePaths`（JSON 字符串）保留子目录结构；每个成功文件独立保存一条 `transcription_results` 并在 SSE 中返回 `resultId`；multer/busboy 默认用 latin1 解码 multipart filename 导致中文乱码，`decodeFileName` 重编码为 utf8 修复
 - 播客详情通过 `routes/transcriptWorkspace.js` 提供聚合读取、Speaker 重命名、Turn 校对和一键总结。`transcriptionSummaryService` 先串行生成分批笔记，再合成全局摘要；批次与最终证据都经过 index 白名单校验，LLM 不能直接决定时间。模型偶发输出损坏 JSON 时最多追加两次“仅修复 JSON 语法”的队列请求，证据或 Speaker 越界等语义错误不重试、不放宽。任务由 `transcriptionSummaryRunner` 通过 SSE 推送进度，`transcription_summary_jobs` 持久化 lease 并 heartbeat 续租；过期任务在详情读取时收敛为可重试失败态。
 - 分段生成时由 `routes/segments.js` 经 `utils/segmentText.js` 的 `prependStyleTag` 将兼容旧 `segment.style_tag` 前置到合成文本；`mimo.splitScript` 按语义逻辑切块而非逐句硬切，并在模型返回后统一经过 `normalizeAutoSegmentTexts` 做 100-200 字文段规整，模型碎句会合并、超长块会按自然标点或硬边界拆分，短尾段会与前一段重平衡；`POST /api/broadcast/:id/segments/replace` 支持前端二级页面一次性保存合并、拆分、重排与情绪提示，未变化段保留既有音频，文本或提示变化的段重置为 `pending`；`POST /api/broadcast/:id/segments/suggest-audio-tags` 调 `mimo.suggestSegmentAudioTags` 为各段批量插入合法方括号复杂标签，写回 `segments.text` 并清空 `style_tag`，旧 `suggest-tags` 端点仅保留兼容；批量语音生成先通过 `generation_jobs` 获取播报级 lease，同一播报已有运行中批量任务时返回 409，不重复入队；批量与单段 regenerate 均以启动时 Segment ID、Broadcast ID、文本、风格和序号为生成快照，并写入持久 `generation_token`，成功/失败只在快照、token 与 `generating` 状态同时匹配时用 DAL CAS 收口。恢复遗留 generating 会换新 token，因此旧请求即使字段相同也不能 ABA 写回；并发编辑、重排或删除后清 token、丢弃旧结果并清理本次唯一音频，不覆盖用户的新状态。查询待处理片段时包含 `pending`、`failed` 和可能因中断遗留的 `generating`，单段失败会写入 `segments.error_message` 并通过 SSE progress / HTTP result 返回，前端在对应段落下方展示具体原因，避免只显示泛化“失败”

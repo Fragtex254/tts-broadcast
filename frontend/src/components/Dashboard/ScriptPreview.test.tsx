@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import useStore, { type ContentArtifactRevision, type ProjectEditorContext } from '../../store';
+import useStore, { type Broadcast, type ContentArtifactRevision, type ProjectEditorContext } from '../../store';
 import { CONTENT_REVISION_DEFAULTS } from '../../test/contentProjectFixtures';
 import { ScriptPreview } from './ScriptPreview';
 
@@ -20,11 +20,29 @@ const context: ProjectEditorContext = {
   revision,
 };
 
+const broadcast: Broadcast = {
+  id: 51,
+  title: '编辑器草稿',
+  content: revision.content,
+  artifact_revision_id: null,
+  source_artifact_revision_id: null,
+  audio_path: null,
+  duration: null,
+  voice_type: null,
+  voice_config: '{}',
+  source_items: null,
+  status: 'draft',
+  saved: 0,
+  mode: 'segmented',
+  created_at: '2026-07-18T00:00:00.000Z',
+  updated_at: '2026-07-18T00:00:00.000Z',
+};
+
 describe('ScriptPreview 项目口播模式', () => {
   beforeEach(() => {
     useStore.setState({
       script: revision.content,
-      currentBroadcast: null,
+      currentBroadcast: broadcast,
       segments: [],
       settings: {
         ...useStore.getState().settings,
@@ -34,12 +52,11 @@ describe('ScriptPreview 项目口播模式', () => {
     });
   });
 
-  test('人工保存先追加 Revision，再更新全局稿件和 URL 上下文', async () => {
+  test('人工保存先追加 Revision，再由页面创建新 URL 草稿', async () => {
     const savedRevision = { ...revision, id: 32, revision_number: 3, content: '\n新的口播稿\n' };
     const saveRevision = vi.fn().mockResolvedValue(savedRevision);
-    const updateScript = vi.fn((content: string) => useStore.setState({ script: content }));
-    const onRevisionSaved = vi.fn();
-    useStore.setState({ saveProjectArtifactRevision: saveRevision, updateScript });
+    const onRevisionSaved = vi.fn().mockResolvedValue(undefined);
+    useStore.setState({ saveProjectArtifactRevision: saveRevision });
 
     render(<ScriptPreview projectContext={context} onProjectRevisionSaved={onRevisionSaved} />);
     fireEvent.click(screen.getByRole('button', { name: '编辑' }));
@@ -51,9 +68,32 @@ describe('ScriptPreview 项目口播模式', () => {
       changeReason: '人工编辑口播稿',
       parentRevisionId: 31,
     }));
-    expect(updateScript).toHaveBeenCalledWith('\n新的口播稿\n');
     expect(onRevisionSaved).toHaveBeenCalledWith(savedRevision);
-    expect(saveRevision.mock.invocationCallOrder[0]).toBeLessThan(updateScript.mock.invocationCallOrder[0]);
+    expect(saveRevision.mock.invocationCallOrder[0]).toBeLessThan(onRevisionSaved.mock.invocationCallOrder[0]);
+  });
+
+  test('新 Revision 已落库但草稿创建失败时，重试不会重复新建 Revision', async () => {
+    const savedRevision = { ...revision, id: 35, revision_number: 3, content: '已落库但尚未跳转' };
+    const saveRevision = vi.fn().mockResolvedValue(savedRevision);
+    const onRevisionSaved = vi.fn()
+      .mockRejectedValueOnce(new Error('草稿创建失败'))
+      .mockResolvedValueOnce(undefined);
+    useStore.setState({ saveProjectArtifactRevision: saveRevision });
+
+    render(<ScriptPreview projectContext={context} onProjectRevisionSaved={onRevisionSaved} />);
+    fireEvent.click(screen.getByRole('button', { name: '编辑' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '口播稿正文' }), {
+      target: { value: savedRevision.content },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await screen.findByText('草稿创建失败');
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => expect(onRevisionSaved).toHaveBeenCalledTimes(2));
+    expect(onRevisionSaved).toHaveBeenNthCalledWith(1, savedRevision);
+    expect(onRevisionSaved).toHaveBeenNthCalledWith(2, savedRevision);
+    expect(saveRevision).toHaveBeenCalledTimes(1);
   });
 
   test('项目口播稿保存进行中锁定正文，避免吞掉请求期间的继续输入', async () => {
@@ -76,27 +116,57 @@ describe('ScriptPreview 项目口播模式', () => {
   ])('%s 也先持久化为新版本', async (buttonName, expectedContent, changeReason) => {
     const savedRevision = { ...revision, id: 33, revision_number: 3, content: expectedContent };
     const saveRevision = vi.fn().mockResolvedValue(savedRevision);
-    const updateScript = vi.fn((content: string) => useStore.setState({ script: content }));
-    useStore.setState({ saveProjectArtifactRevision: saveRevision, updateScript });
+    const onRevisionSaved = vi.fn().mockResolvedValue(undefined);
+    useStore.setState({ saveProjectArtifactRevision: saveRevision });
 
-    render(<ScriptPreview projectContext={context} onProjectRevisionSaved={vi.fn()} />);
+    render(<ScriptPreview projectContext={context} onProjectRevisionSaved={onRevisionSaved} />);
     fireEvent.click(screen.getByRole('button', { name: buttonName }));
 
     await waitFor(() => expect(saveRevision).toHaveBeenCalledWith(2, 8, { content: expectedContent, changeReason, parentRevisionId: 31 }));
-    expect(updateScript).toHaveBeenCalledWith(expectedContent);
+    expect(onRevisionSaved).toHaveBeenCalledWith(savedRevision);
   });
 
-  test('无项目上下文时保持原有内存保存行为', () => {
+  test('无项目上下文时把修改保存到 URL 对应的持久化草稿', async () => {
     const saveRevision = vi.fn();
-    const updateScript = vi.fn((content: string) => useStore.setState({ script: content }));
-    useStore.setState({ saveProjectArtifactRevision: saveRevision, updateScript });
+    const updated = { ...broadcast, content: '可刷新恢复的草稿' };
+    const updateEditorDraft = vi.fn(async () => {
+      useStore.setState({ currentBroadcast: updated, script: updated.content });
+      return updated;
+    });
+    useStore.setState({ saveProjectArtifactRevision: saveRevision, updateEditorDraft });
 
     render(<ScriptPreview />);
     fireEvent.click(screen.getByRole('button', { name: '编辑' }));
-    fireEvent.change(screen.getByRole('textbox', { name: '口播稿正文' }), { target: { value: '旧流程内存稿' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '口播稿正文' }), { target: { value: '可刷新恢复的草稿' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
+    await waitFor(() => expect(updateEditorDraft).toHaveBeenCalledWith(51, '可刷新恢复的草稿'));
     expect(saveRevision).not.toHaveBeenCalled();
-    expect(updateScript).toHaveBeenCalledWith('旧流程内存稿');
+  });
+
+  test('已切分副本隐藏整稿修改动作，引导到分段编辑器', () => {
+    useStore.setState({
+      currentBroadcast: { ...broadcast, status: 'pending' },
+      segments: [{
+        id: 1,
+        broadcast_id: broadcast.id,
+        index: 0,
+        text: '精修后分段',
+        audio_path: null,
+        status: 'pending',
+        style_tag: '克制',
+        playback_rate: 1.25,
+        error_message: '',
+        created_at: '2026-07-18T00:00:00.000Z',
+        updated_at: '2026-07-18T00:00:00.000Z',
+      }],
+    });
+
+    render(<ScriptPreview />);
+
+    expect(screen.getByText(/稿件已切分，请在下方分段编辑器中修改/)).not.toBeNull();
+    expect(screen.queryByRole('button', { name: '编辑' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ 添加开场白' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '✦ 切分口播稿' })).toBeNull();
   });
 });

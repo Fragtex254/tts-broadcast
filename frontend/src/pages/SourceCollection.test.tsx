@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import useStore, { type ContentArtifactRevision, type ContentProject, type ProjectEditorContext } from '../store';
+import useStore, { type Broadcast, type ContentArtifactRevision, type ContentProject, type ProjectEditorContext } from '../store';
 import { defaultSettings } from '../store/defaults';
 import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { SourceCollection } from './SourceCollection';
@@ -25,6 +25,24 @@ const projectEditorContext: ProjectEditorContext = {
   projectId: 21,
   artifactId: 17,
   revision: audioScriptRevision,
+};
+
+const editorDraft: Broadcast = {
+  id: 81,
+  title: '可追溯项目口播稿',
+  content: audioScriptRevision.content,
+  artifact_revision_id: audioScriptRevision.id,
+  source_artifact_revision_id: audioScriptRevision.id,
+  audio_path: null,
+  duration: null,
+  voice_type: null,
+  voice_config: '{}',
+  source_items: null,
+  status: 'draft',
+  saved: 0,
+  mode: 'segmented',
+  created_at: '2026-07-18T00:00:00.000Z',
+  updated_at: '2026-07-18T00:00:00.000Z',
 };
 
 const project: ContentProject = {
@@ -64,6 +82,10 @@ describe('SourceCollection', () => {
       isLoadingContentProjects: false,
       fetchContentProjects: vi.fn().mockResolvedValue([]),
       createContentProject: vi.fn().mockResolvedValue(project),
+      createEditorDraft: vi.fn().mockResolvedValue(editorDraft),
+      forkEditorDraft: vi.fn().mockResolvedValue({ ...editorDraft, id: 82 }),
+      cancelEditorDraftCreation: vi.fn(),
+      isCreatingEditorDraft: false,
     });
   });
 
@@ -115,7 +137,7 @@ describe('SourceCollection', () => {
     });
   });
 
-  test('项目口播稿在工作台保留版本身份，并通过完整上下文继续编辑', () => {
+  test('项目口播稿在工作台保留版本身份，并创建 ID 草稿继续编辑', async () => {
     useStore.setState({
       script: audioScriptRevision.content,
       projectEditorContext,
@@ -125,14 +147,40 @@ describe('SourceCollection', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route path="/" element={<SourceCollection />} />
-          <Route path="/editor" element={<LocationProbe />} />
+          <Route path="/editor/:broadcastId" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     );
 
     expect(screen.getByText('项目口播稿 · 第 4 版')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '继续项目口播稿' }));
-    expect(screen.getByText('/editor?projectId=21&artifactId=17&revisionId=31')).not.toBeNull();
+    await waitFor(() => expect(screen.getByText('/editor/81')).not.toBeNull());
+    expect(useStore.getState().createEditorDraft).toHaveBeenCalledWith({
+      text: audioScriptRevision.content,
+      artifactRevisionId: audioScriptRevision.id,
+    });
+  });
+
+  test('工作台遇到已保存 Render 时先派生副本，不复用历史 ID', async () => {
+    useStore.setState({
+      script: audioScriptRevision.content,
+      projectEditorContext,
+      currentBroadcast: { ...editorDraft, id: 41, saved: 1, status: 'generated' },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<SourceCollection />} />
+          <Route path="/editor/:broadcastId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '继续项目口播稿' }));
+    await waitFor(() => expect(screen.getByText('/editor/82')).not.toBeNull());
+    expect(useStore.getState().forkEditorDraft).toHaveBeenCalledWith(41);
+    expect(useStore.getState().createEditorDraft).not.toHaveBeenCalled();
   });
 
   test('首屏明确展示从来源、证据到带引用成稿的主线，空态给出第一步动作', () => {

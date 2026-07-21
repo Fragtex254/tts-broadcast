@@ -87,6 +87,21 @@ export const SegmentSchema = z.object({
   updated_at: z.string(),
 });
 
+export const EditorVoiceConfigSchema = z.object({
+  voice: z.string(),
+  voiceType: z.enum(['', 'preset', 'clone', 'design']),
+  voiceDesign: z.string(),
+  voiceClone: z.string(),
+  stylePrompt: z.string(),
+  optimizeTextPreview: z.boolean(),
+  speed: z.object({ speed_ratio: z.number(), style: z.string().optional() }).nullable(),
+  emotion: z.union([
+    z.string(),
+    z.array(z.object({ emotion: z.string(), weight: z.number() })),
+  ]).nullable(),
+  pitch: z.object({ pitch_ratio: z.number(), style: z.string().optional() }).nullable(),
+});
+
 export const TodayItemSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -315,6 +330,17 @@ export const ContentArtifactRevisionSchema = z.object({
   citations: z.array(ContentRevisionCitationSchema).default([]),
   citation_status: z.enum(['not_applicable', 'valid', 'stale']).default('not_applicable'),
   created_at: z.string(),
+});
+export const EditorBroadcastPayloadSchema = z.object({
+  broadcast: BroadcastSchema,
+  voiceConfig: EditorVoiceConfigSchema,
+  sourceRevisionContext: z.object({
+    projectId: z.number().int().positive(),
+    artifactId: z.number().int().positive(),
+    revision: ContentArtifactRevisionSchema,
+  }).nullable(),
+  segments: z.array(SegmentSchema),
+  splitInProgress: z.boolean(),
 });
 export const ContentArtifactSchema = z.object({
   id: z.number(), project_id: z.number(), kind: z.string(), title: z.string(), platform: z.string(), status: z.string(),

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { LiveTranscriptionPreview } from '../components/Transcribe/LiveTranscriptionPreview';
@@ -42,8 +42,9 @@ export const Transcribe: React.FC = () => {
   const transcriptDetail = useStore((state) => state.transcriptDetail);
   const fetchTranscriptDetail = useStore((state) => state.fetchTranscriptDetail);
   const correctTranscriptTurn = useStore((state) => state.correctTranscriptTurn);
-  const updateScript = useStore((state) => state.updateScript);
-  const setCurrentBroadcast = useStore((state) => state.setCurrentBroadcast);
+  const createEditorDraft = useStore((state) => state.createEditorDraft);
+  const cancelEditorDraftCreation = useStore((state) => state.cancelEditorDraftCreation);
+  const isCreatingEditorDraft = useStore((state) => state.isCreatingEditorDraft);
   const batchTranscriptionItems = useStore((state) => state.batchTranscriptionItems);
   const isBatchTranscribing = useStore((state) => state.isBatchTranscribing);
   const batchTranscribeProgress = useStore((state) => state.batchTranscribeProgress);
@@ -108,21 +109,32 @@ export const Transcribe: React.FC = () => {
     window.setTimeout(() => setCopied(false), 1200);
   }, [transcriptionText]);
 
+  const importIntoEditor = useCallback(async (text: string) => {
+    const content = text.trim();
+    if (!content || useStore.getState().isCreatingEditorDraft) return false;
+    setError(null);
+    try {
+      const draft = await createEditorDraft({ text: content });
+      navigate(`/editor/${draft.id}`);
+      return true;
+    } catch (importError) {
+      setError(getErrorMessage(importError));
+      return false;
+    }
+  }, [createEditorDraft, navigate]);
+
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
+
   const handleImportItem = useCallback((text: string) => {
-    if (!text.trim()) return;
-    setCurrentBroadcast(null);
-    updateScript(text.trim());
-    navigate('/editor');
-  }, [navigate, setCurrentBroadcast, updateScript]);
+    void importIntoEditor(text);
+  }, [importIntoEditor]);
 
   const handleMergeAll = useCallback(() => {
     const completed = batchTranscriptionItems.filter((item) => item.status === 'completed' && item.text.trim());
     if (completed.length === 0) return;
     const merged = completed.map((item) => `【${item.relativePath}】\n${item.text.trim()}`).join('\n\n');
-    setCurrentBroadcast(null);
-    updateScript(merged);
-    navigate('/editor');
-  }, [batchTranscriptionItems, navigate, setCurrentBroadcast, updateScript]);
+    void importIntoEditor(merged);
+  }, [batchTranscriptionItems, importIntoEditor]);
 
   const handleDownload = useCallback(() => {
     if (!transcriptionText.trim()) return;
@@ -186,11 +198,10 @@ export const Transcribe: React.FC = () => {
 
   const handleImportModalResult = useCallback(() => {
     if (!modalText.trim()) return;
-    setCurrentBroadcast(null);
-    updateScript(modalText.trim());
-    setPreviewModalTarget(null);
-    navigate('/editor');
-  }, [modalText, navigate, setCurrentBroadcast, updateScript]);
+    void importIntoEditor(modalText).then((opened) => {
+      if (opened) setPreviewModalTarget(null);
+    });
+  }, [importIntoEditor, modalText]);
 
   const handleCorrectTurn = useCallback(async (turnId: number, correctedText: string) => {
     if (!currentConversation) return;
@@ -303,7 +314,7 @@ export const Transcribe: React.FC = () => {
               {showBatchItems ? (
                 <TranscribeResultsPanel
                   items={batchTranscriptionItems}
-                  isTranscribing={isBatchTranscribing}
+                  isTranscribing={isBatchTranscribing || isCreatingEditorDraft}
                   onMergeAll={handleMergeAll}
                   onOpenItem={(index) => void handleOpenResult({ type: 'batch', index })}
                   onImportItem={handleImportItem}

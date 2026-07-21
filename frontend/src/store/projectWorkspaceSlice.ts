@@ -24,11 +24,8 @@ import { bindBackgroundTaskTransport } from './sseBackgroundTask';
 let workspaceRequestSequence = 0;
 let revisionsRequestSequence = 0;
 let outlineRevisionsRequestSequence = 0;
-let editorRevisionRequestSequence = 0;
 let activeProjectSseClient: ReturnType<typeof createSSEClient> | null = null;
 let activeProjectPollTimer: ReturnType<typeof setTimeout> | null = null;
-
-class ProjectEditorValidationError extends Error {}
 
 function createOperationId(prefix: string): string {
   const random = typeof globalThis.crypto?.randomUUID === 'function'
@@ -127,8 +124,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
   | 'isLoadingProjectOutlineRevisions'
   | 'projectOutlineRevisionsError'
   | 'projectEditorContext'
-  | 'isLoadingProjectEditorRevision'
-  | 'projectEditorRevisionError'
   | 'fetchProjectWorkspace'
   | 'clearProjectWorkspace'
   | 'addProjectWorkspaceSource'
@@ -142,9 +137,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
   | 'saveProjectArtifactRevision'
   | 'fetchProjectArtifactRevisions'
   | 'fetchProjectOutlineRevisions'
-  | 'loadProjectEditorRevision'
-  | 'adoptProjectEditorRevision'
-  | 'clearProjectEditorContext'
 > {
   const scheduleJobPoll = (projectId: number, jobId: number, taskId: string, attempt = 0): void => {
     clearActiveProjectPoll();
@@ -207,8 +199,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
     isLoadingProjectOutlineRevisions: false,
     projectOutlineRevisionsError: null,
     projectEditorContext: null,
-    isLoadingProjectEditorRevision: false,
-    projectEditorRevisionError: null,
 
     fetchProjectWorkspace: async (projectId) => {
       const requestSequence = ++workspaceRequestSequence;
@@ -701,78 +691,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
       }
     },
 
-    loadProjectEditorRevision: async (projectId, artifactId, revisionId) => {
-      const requestSequence = ++editorRevisionRequestSequence;
-      set({
-        projectEditorContext: null,
-        isLoadingProjectEditorRevision: true,
-        projectEditorRevisionError: null,
-      });
-      try {
-        const [workspaceResponse, revisionsResponse] = await Promise.all([
-          projectWorkspaceApi.getWorkspace(projectId),
-          projectWorkspaceApi.getRevisions(projectId, artifactId),
-        ]);
-        const workspace = safeParseStrict(ContentProjectWorkspaceSchema, workspaceResponse.data.workspace);
-        const revisions = safeParseStrict(ContentArtifactRevisionSchema.array(), revisionsResponse.data.revisions)
-          .sort((a, b) => b.revision_number - a.revision_number);
-        const artifact = workspace.artifacts.find((item) => item.id === artifactId);
-        if (!artifact || artifact.kind !== 'audio_script') {
-          throw new ProjectEditorValidationError('这个稿件不是项目口播稿，请返回内容项目重新选择。');
-        }
-        const revision = revisions.find((item) => item.id === revisionId && item.artifact_id === artifactId);
-        if (!revision) {
-          throw new ProjectEditorValidationError('找不到指定的口播稿版本，请返回内容项目重新选择。');
-        }
-        if (requestSequence === editorRevisionRequestSequence) {
-          set({
-            projectWorkspace: workspace,
-            projectArtifactRevisions: revisions,
-            projectEditorContext: { projectId, artifactId, revision },
-            isLoadingProjectEditorRevision: false,
-            projectEditorRevisionError: null,
-            script: revision.content,
-            currentBroadcast: null,
-            segments: [],
-          });
-        }
-        return revision;
-      } catch (error) {
-        const message = error instanceof ProjectEditorValidationError
-          ? error.message
-          : getApiErrorMessage(error, '加载项目口播稿失败，请稍后重试');
-        if (requestSequence === editorRevisionRequestSequence) {
-          set({
-            projectEditorContext: null,
-            isLoadingProjectEditorRevision: false,
-            projectEditorRevisionError: message,
-          });
-        }
-        throw new Error(message, { cause: error });
-      }
-    },
-
-    adoptProjectEditorRevision: (revision) => {
-      set((state) => {
-        const context = state.projectEditorContext;
-        if (!context || context.artifactId !== revision.artifact_id) return state;
-        return {
-          projectEditorContext: { ...context, revision },
-          script: revision.content,
-          currentBroadcast: null,
-          segments: [],
-        };
-      });
-    },
-
-    clearProjectEditorContext: () => {
-      editorRevisionRequestSequence += 1;
-      set({
-        projectEditorContext: null,
-        isLoadingProjectEditorRevision: false,
-        projectEditorRevisionError: null,
-      });
-    },
   };
 }
 

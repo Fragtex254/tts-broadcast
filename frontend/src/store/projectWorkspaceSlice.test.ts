@@ -110,8 +110,6 @@ describe('projectWorkspaceSlice', () => {
       projectWorkspaceSaveError: null,
       isSavingProjectWorkspace: false,
       projectEditorContext: null,
-      isLoadingProjectEditorRevision: false,
-      projectEditorRevisionError: null,
       projectMilestoneFeedback: null,
       consumedProjectMilestoneIds: [],
       activeProjectTaskId: null,
@@ -266,60 +264,6 @@ describe('projectWorkspaceSlice', () => {
     await useStore.getState().saveProjectArtifactRevision(12, 30, { content: firstRevision.content, changeReason: '', parentRevisionId: 42 });
 
     expect(apiMocks.createRevision.mock.calls[0][2].requestKey).not.toBe(apiMocks.createRevision.mock.calls[1][2].requestKey);
-  });
-
-  test('编辑器按 query 加载确切 Revision，并清空旧音频渲染上下文', async () => {
-    const requestedRevision = { ...firstRevision, id: 43, revision_number: 3, content: '\n确切口播版本\n' };
-    apiMocks.getRevisions.mockResolvedValue({ data: { revisions: [requestedRevision, firstRevision] } });
-    apiMocks.getWorkspace.mockResolvedValue({
-      data: { workspace: { ...workspace, artifacts: [{ ...artifact, kind: 'audio_script', current_revision: requestedRevision }] } },
-    });
-    useStore.setState({
-      script: '旧稿件',
-      currentBroadcast: {
-        id: 99,
-        title: '旧播报',
-        content: '旧稿件',
-        artifact_revision_id: null,
-        source_artifact_revision_id: null,
-        audio_path: null,
-        duration: null,
-        voice_type: null,
-        voice_config: null,
-        source_items: null,
-        status: 'draft',
-        saved: 0,
-        mode: 'segmented',
-        created_at: '2026-07-18T00:00:00.000Z',
-        updated_at: '2026-07-18T00:00:00.000Z',
-      },
-      segments: [{
-        id: 1,
-        broadcast_id: 99,
-        index: 0,
-        text: '旧段落',
-        audio_path: null,
-        status: 'pending',
-        style_tag: '',
-        playback_rate: 1,
-        error_message: '',
-        created_at: '2026-07-18T00:00:00.000Z',
-        updated_at: '2026-07-18T00:00:00.000Z',
-      }],
-    });
-
-    await useStore.getState().loadProjectEditorRevision(12, 30, 43);
-
-    expect(apiMocks.getRevisions).toHaveBeenCalledWith(12, 30);
-    expect(apiMocks.getWorkspace).toHaveBeenCalledWith(12);
-    expect(useStore.getState().projectEditorContext).toEqual({
-      projectId: 12,
-      artifactId: 30,
-      revision: expect.objectContaining(requestedRevision),
-    });
-    expect(useStore.getState().script).toBe('\n确切口播版本\n');
-    expect(useStore.getState().currentBroadcast).toBeNull();
-    expect(useStore.getState().segments).toEqual([]);
   });
 
   test('手工证据保存后合并工作区，并且重复 milestone event 只消费一次', async () => {

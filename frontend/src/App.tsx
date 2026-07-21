@@ -82,6 +82,7 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <SourceCollection /> },
+      { path: 'editor/:broadcastId', element: <ScriptEditor /> },
       { path: 'editor', element: <ScriptEditor /> },
       { path: 'voice-presets', element: <VoicePresets /> },
       { path: 'transcribe', element: <Transcribe /> },

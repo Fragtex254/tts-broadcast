@@ -5,6 +5,7 @@ import { buildVoicePayload } from './voiceConfigModel';
 import type { AppState, Segment } from './types';
 import type { StoreGet, StoreSet } from './storeTypes';
 import { bindBackgroundTaskTransport } from './sseBackgroundTask';
+import { markSegmentEntityChanged } from './segmentEntityVersion';
 
 const logger = createScopedLogger('segment-slice');
 
@@ -58,21 +59,27 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     splitScriptAction: async (text, artifactRevisionId) => {
       set({ isSplitting: true });
       try {
-        const genResponse = await broadcastApi.generate({
-          text,
-          ...buildVoicePayload(get().voiceConfig),
-          mode: 'segmented',
-          ...(artifactRevisionId === undefined ? {} : { artifactRevisionId }),
-        });
-        const { broadcast } = genResponse.data;
-        set((state) => ({
-          broadcasts: [broadcast, ...state.broadcasts],
-          currentBroadcast: broadcast,
-        }));
+        let broadcast = get().currentBroadcast;
+        if (!broadcast) throw new Error('当前编辑器没有可切分的持久化草稿，请重新打开口播稿');
+        if (artifactRevisionId !== undefined && broadcast.source_artifact_revision_id !== artifactRevisionId) {
+          throw new Error('当前编辑器绑定的口播稿版本已经变化，请重新打开后再切分');
+        }
+        if (broadcast.content !== text) {
+          broadcast = await get().updateEditorDraft(broadcast.id, text);
+        }
 
         const splitResponse = await broadcastApi.split(broadcast.id);
         const segments = splitResponse.data.segments;
-        set({ segments, isSplitting: false });
+        markSegmentEntityChanged(broadcast.id);
+        set((state) => ({
+          segments,
+          currentBroadcast: splitResponse.data.broadcast || (
+            state.currentBroadcast?.id === broadcast?.id
+              ? { ...state.currentBroadcast, status: 'pending', mode: 'segmented' as const }
+              : state.currentBroadcast
+          ),
+          isSplitting: false,
+        }));
       } catch (error) {
         set({ isSplitting: false });
         logger.error({ err: toLogError(error), textLength: text.length }, '切分口播稿失败');
@@ -85,7 +92,12 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.split(broadcastId);
         const segments = response.data.segments;
-        set({ segments, isSplitting: false });
+        markSegmentEntityChanged(broadcastId);
+        set((state) => ({
+          segments,
+          currentBroadcast: response.data.broadcast || state.currentBroadcast,
+          isSplitting: false,
+        }));
         return segments;
       } catch (error) {
         set({ isSplitting: false });
@@ -110,6 +122,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.updateSegment(broadcastId, segId, { text });
         const updated = response.data.segment;
+        markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments: state.segments.map((s) => (s.id === segId ? updated : s)),
           currentBroadcast: state.currentBroadcast?.id === broadcastId
@@ -137,6 +150,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
 
         const response = await broadcastApi.regenerateSegment(broadcastId, segId);
         const updated = response.data.segment;
+        markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments: state.segments.map((s) => (s.id === segId ? updated : s)),
         }));
@@ -167,7 +181,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         kind: 'segment-generation',
         entityId: broadcastId,
         title: `生成分段语音：${get().currentBroadcast?.title || `播报 ${broadcastId}`}`,
-        href: '/editor',
+        href: `/editor/${broadcastId}`,
         phase: 'preparing',
         percent: 0,
         message: '正在同步音色配置',
@@ -215,6 +229,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         });
         sseClient.on<SegmentCompleteEvent>('complete', (event) => {
           get().endBackgroundTask(taskId);
+          markSegmentEntityChanged(broadcastId);
           if (event.segments && get().currentBroadcast?.id === broadcastId) {
             set({ segments: event.segments });
           }
@@ -228,6 +243,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
 
         const response = await broadcastApi.batchGenerateSegments(broadcastId, taskId);
         const { segments, results } = response.data;
+        markSegmentEntityChanged(broadcastId);
         get().endBackgroundTask(taskId);
         if (get().currentBroadcast?.id === broadcastId) set({ segments });
         return { segments, results };
@@ -235,6 +251,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         get().endBackgroundTask(taskId);
         try {
           const response = await broadcastApi.getSegments(broadcastId);
+          markSegmentEntityChanged(broadcastId);
           if (get().currentBroadcast?.id === broadcastId) {
             set({ segments: response.data.segments });
           }
@@ -258,6 +275,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.deleteSegment(broadcastId, segId);
         const segments = response.data.segments;
+        markSegmentEntityChanged(broadcastId);
         set({ segments });
         return segments;
       } catch (error) {
@@ -270,6 +288,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.replaceSegments(broadcastId, segments);
         const updatedSegments = response.data.segments;
+        markSegmentEntityChanged(broadcastId);
         set({ segments: updatedSegments });
         return updatedSegments;
       } catch (error) {
@@ -283,6 +302,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.mergeSegments(broadcastId);
         const broadcast = response.data.broadcast;
+        markSegmentEntityChanged(broadcastId);
         set((state) => ({
           currentBroadcast: broadcast,
           broadcasts: state.broadcasts.map((b) => (b.id === broadcastId ? broadcast : b)),
@@ -300,6 +320,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.updateSegment(broadcastId, segId, { styleTag });
         const updated = response.data.segment;
+        markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments: state.segments.map((s) => (s.id === segId ? updated : s)),
           currentBroadcast: state.currentBroadcast?.id === broadcastId
@@ -319,6 +340,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.suggestSegmentAudioTags(broadcastId);
         const segments = response.data.segments;
+        markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments,
           isSuggestingTags: false,
@@ -339,6 +361,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.updateSegment(broadcastId, segId, { playbackRate });
         const updated = response.data.segment;
+        markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments: state.segments.map((s) => (s.id === segId ? updated : s)),
           currentBroadcast: state.currentBroadcast?.id === broadcastId
@@ -357,6 +380,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       try {
         const response = await broadcastApi.updateAllSegmentPlaybackRates(broadcastId, playbackRate);
         const segments = response.data.segments;
+        markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments,
           currentBroadcast: state.currentBroadcast?.id === broadcastId

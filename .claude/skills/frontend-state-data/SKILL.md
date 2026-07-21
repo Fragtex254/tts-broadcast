@@ -23,7 +23,7 @@ description: 修改前端状态管理、数据流、API 调用时使用。涵盖
 8. 转录 SSE 的阶段事件可能不带文字：必须保留已有累计文本；优先用 `chunks` 有序快照恢复轮询间隔内跨过的分片，旧服务只有 `chunkText` 时再按已完成 chunk 序号 upsert，不能因重复事件而重复追加。最终 `complete.text` 才替换临时结果。
 9. 观点研究状态放 `researchSlice.ts`；搜索结果区分 `embedding` / `keyword` 降级模式，关系分析只提交显式选中的 claim ID，内容项目详情始终以服务端返回为准。观点分析 SSE 与总结 SSE 分开维护 loading/error，刷新后以 `claims_status` 收敛。
 10. 内容项目工作区通过独立领域 slice 管理 Source、Artifact 与 Revision；服务器聚合响应是唯一真实来源。详情响应必须严格解析，mutation 后使用服务端返回对象合并或重新读取工作区，不在页面自行推导 revision number、项目归属或当前版本。
-11. 项目口播编辑器必须用完整 `projectId + artifactId + revisionId` 上下文加载并核验 `audio_script` Revision；参数残缺时不得降级为旧内存稿。项目正文编辑、添加开场/结尾必须先成功 INSERT 新 Revision，再更新全局 `script` 与 URL；只有 `script` 与当前 Revision 逐字一致时才允许把 `artifactRevisionId` 传给 TTS。旧 `/editor` 无参数流程继续不传该字段。
+11. 口播编辑器只以 `/editor/:broadcastId` 中的正整数 Broadcast ID 为可恢复上下文。页面进入先清旧编辑状态，再严格校验后端在同一读事务中返回的 `{ broadcast, voiceConfig, sourceRevisionContext, segments, splitInProgress }` 聚合快照，一次原子落入 store，并用请求序号防止旧响应覆盖新 ID。`splitInProgress=true` 时持续重读整份聚合直到提交/失败；缺失、非法或 404 必须显式报错，不得降级使用内存旧稿。所有入口先创建或选择持久化编辑副本再按返回 ID 导航；已保存历史 Render 不得复用原 ID，已分段时副本必须保留 Segment 文字、顺序、标签与倍速并清空音频。项目稿创建 draft 时只可传正文逐字一致的 `audio_script` `artifactRevisionId`，来源上下文由后端派生。项目稿修改先 INSERT 新 Revision，再新建 draft 并 replace URL。
 12. 内容项目聚合响应同时承载 Evidence、Revision Citation 与持久化 Creation Job；Evidence 的用户 `decision_state` 与技术 `lifecycle_status` 不得在 slice 中合并，生成筛选要求 selected + active，历史 Citation 的快照状态与当前 `reuse_eligible/source_linked` 分开保存。SSE 只做即时进度，`complete.workspace` 或随后重新读取的聚合才负责收敛。事件到达时先核验当前 project / job / request key，离开项目后的旧事件不得污染新页面。
 13. 创作里程碑只接收服务端事务成功后返回的 `{id, kind, title, description}`；slice 按 event ID 去重并在用户关闭后清除当前展示。刷新、列表数量变化、重复 complete 和已完成幂等响应不得在前端合成或重播 milestone。
 14. AI 创作提交前必须把相关局部 dirty 状态提升到工作区协调层：未保存 Brief、Evidence 用户备注或目标 Outline/Master 草稿时禁用对应任务并解释原因；任务完成不得用服务端 workspace 静默覆盖本地草稿。异步失败不能因 `activeOperation` 清空而消失。SSE 健康或持久 Job 仍有 progress/heartbeat 时不得用固定短墙钟超时关闭任务，轮询持续到 terminal 状态或应用根卸载。Outline 与 Master 历史分别维护，保存任一类型不得污染另一类型的 Revision 列表。
@@ -155,7 +155,7 @@ const handleFetch = async () => {
 
 - Zod schema 命名为 `{Domain}Schema`，例如 `SettingsSchema`、`BroadcastSchema`。
 - schema 与 `store/types.ts` 的共享类型保持同一字段语义；新增后端字段时先更新类型，再更新 schema。
-- `safeParseArray()` 会过滤不符合 schema 的条目，只适合列表接口；详情/设置类接口解析失败时应保留旧 state 或显式报错，避免静默写入半可信数据。
+- `safeParseArray()` 对整个列表做严格校验，任一条不符合 schema 都会失败；详情用 `safeParseStrict()`。页面需要多个响应时，必须全部校验成功后再原子写入 state，失败时显式报错，避免静默写入半可信数据。
 - 不要在组件里直接写 schema 校验，组件只消费 store 给出的数据。
 
 ### 高频状态防抖
