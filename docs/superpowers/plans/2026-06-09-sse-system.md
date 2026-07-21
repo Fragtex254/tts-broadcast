@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为 TTS Broadcast 项目构建系统层级的 SSE (Server-Sent Events) 实时通信基础设施，支持所有长时间运行任务的实时状态更新
+**Goal:** 为 HCDS Studio 项目构建系统层级的 SSE (Server-Sent Events) 实时通信基础设施，支持所有长时间运行任务的实时状态更新
 
 **Architecture:** 
 - 后端：创建通用 SSE 服务模块，管理客户端连接和事件推送

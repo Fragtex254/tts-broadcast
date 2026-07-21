@@ -1,12 +1,12 @@
 # Transcript Conversation View — Design QA
 
 - Source visual truth: `/Users/jinghao/.codex/generated_images/019f63f4-bb6f-7853-89cf-c0fcdc842d00/exec-a5e7373a-44e8-4152-905f-a2e6d1620ca3.png`
-- Implementation screenshot: `/private/tmp/tts-broadcast-design-qa/.codex-transcript-modal-final-latest.png`
+- Implementation screenshot: `/private/tmp/hcds-studio-design-qa/.codex-transcript-modal-final-latest.png`
 - Desktop viewport: `1440 × 1024`
-- Mobile evidence: `/private/tmp/tts-broadcast-design-qa/.codex-transcript-modal-mobile-latest.png` at `390 × 844`
+- Mobile evidence: `/private/tmp/hcds-studio-design-qa/.codex-transcript-modal-mobile-latest.png` at `390 × 844`
 - State: transcript secondary dialog open; turn 4 (`说话人 2`, `0:29–1:07`) active; speaker rail and current-location panel synchronized.
-- Full-view comparison: `/private/tmp/tts-broadcast-design-qa/.codex-transcript-design-comparison-latest.png`
-- Focused active-turn comparison: `/private/tmp/tts-broadcast-design-qa/.codex-transcript-design-focus-comparison-latest.png`
+- Full-view comparison: `/private/tmp/hcds-studio-design-qa/.codex-transcript-design-comparison-latest.png`
+- Focused active-turn comparison: `/private/tmp/hcds-studio-design-qa/.codex-transcript-design-focus-comparison-latest.png`
 
 ## Findings
 
@@ -39,7 +39,7 @@
 
 - P2, mobile header: desktop search consumed the mobile header and truncated the title to a few characters.
   - Fix: moved search into the mobile content rail while keeping the desktop field in the header.
-  - Post-fix evidence: `/private/tmp/tts-broadcast-design-qa/.codex-transcript-modal-mobile-latest.png` shows the full title, close control, search field, and speaker rail without collision.
+  - Post-fix evidence: `/private/tmp/hcds-studio-design-qa/.codex-transcript-modal-mobile-latest.png` shows the full title, close control, search field, and speaker rail without collision.
 - P2, transcript density: row monograms made the central reading stream busier than the selected editorial mock.
   - Fix: retained monograms in the stable speaker rail and removed them from individual turns, leaving speaker label, timestamp, and color rail close to the text.
   - Post-fix evidence: focused comparison shows the selected turn following the mock's magazine-interview hierarchy.

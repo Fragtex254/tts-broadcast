@@ -1,8 +1,8 @@
-# TTS Broadcast Soft Editorial 前端重构实施计划
+# HCDS Studio Soft Editorial 前端重构实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 TTS Broadcast 前端从 Tailwind dark-mode admin 模板升级为 Soft Editorial 设计风格，含全套动效。
+**Goal:** 将 HCDS Studio 前端从 Tailwind dark-mode admin 模板升级为 Soft Editorial 设计风格，含全套动效。
 
 **Architecture:** 先建立 CSS 变量设计系统 + Tailwind 主题 + 字体加载（阶段一），再逐组件完成视觉重做 + 动效（阶段二）。每个组件独立可验证，改完后 `npm run dev` 目视检查即可。
 
@@ -38,7 +38,7 @@ rm -f frontend/src/assets/hero.png frontend/src/assets/react.svg frontend/src/as
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI 简讯播报</title>
+    <title>HCDS Studio</title>
     <!-- Google Fonts: Cormorant Garamond (标题) + Work Sans (正文) + ZCOOL XiaoWei (中文衬线) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -321,7 +321,7 @@ export const Sidebar: React.FC = () => {
     <aside className="w-64 bg-paper-2/70 border-r border-card-border flex flex-col flex-shrink-0">
       <div className="p-6 pb-5 border-b border-card-border">
         <h1 className="font-display text-[22px] font-medium text-ink leading-tight tracking-tight">
-          AI 简讯播报
+          HCDS Studio
         </h1>
         <p className="font-body text-[10px] uppercase tracking-[0.1em] text-ink-soft mt-1.5">
           每日资讯语音播报

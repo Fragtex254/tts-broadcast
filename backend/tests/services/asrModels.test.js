@@ -47,7 +47,7 @@ describe('ASR 模型发现服务', () => {
     expect(axios.get).toHaveBeenCalledWith(
       'http://192.168.31.137:18080/v1/models',
       expect.objectContaining({
-        headers: { 'User-Agent': 'tts-broadcast' },
+        headers: { 'User-Agent': 'hcds-studio' },
         proxy: false,
         timeout: 15000
       })

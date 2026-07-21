@@ -54,7 +54,7 @@
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 3 个新测试 FAIL（当前没有校验逻辑）
@@ -79,7 +79,7 @@ Expected: 3 个新测试 FAIL（当前没有校验逻辑）
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 全部 PASS
@@ -115,7 +115,7 @@ git commit -m "fix(tts): 添加 generateSpeech 输入校验"
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: `timeout` 测试 FAIL（当前 timeout 为 0）
@@ -131,7 +131,7 @@ Expected: `timeout` 测试 FAIL（当前 timeout 为 0）
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 全部 PASS
@@ -182,7 +182,7 @@ git commit -m "fix(tts): 设置 120 秒请求超时替代无超时"
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 重试相关测试 FAIL（当前无重试逻辑）
@@ -236,7 +236,7 @@ Expected: 重试相关测试 FAIL（当前无重试逻辑）
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 全部 PASS
@@ -244,7 +244,7 @@ Expected: 全部 PASS
 - [ ] **Step 5: 运行全部测试确认无回归**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test
 ```
 
 Expected: 全部 PASS
@@ -353,7 +353,7 @@ git commit -m "fix(tts): 429 限流自动重试（指数退避，最多 3 次）
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 6 个新测试 FAIL
@@ -401,7 +401,7 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 全部 PASS
@@ -470,7 +470,7 @@ git commit -m "feat(tts): 支持 speed/emotion/pitch 精细控制参数"
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: format 测试 FAIL
@@ -492,7 +492,7 @@ async function generateSpeech({ text, voice = '冰糖', voiceType = 'preset', vo
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=tts.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=tts.test
 ```
 
 Expected: 全部 PASS
@@ -543,7 +543,7 @@ describe('resolveVoiceClone', () => {
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=audio.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=audio.test
 ```
 
 Expected: 新测试 FAIL（当前 resolveVoiceClone 对无效输入直接 passthrough）
@@ -568,7 +568,7 @@ async function resolveVoiceClone(voiceClone) {
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test -- --testPathPattern=audio.test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test -- --testPathPattern=audio.test
 ```
 
 Expected: 全部 PASS
@@ -576,7 +576,7 @@ Expected: 全部 PASS
 - [ ] **Step 5: 运行全部测试确认无回归**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test
 ```
 
 Expected: 全部 PASS
@@ -618,7 +618,7 @@ const tts = require('../services/tts');
 - [ ] **Step 2: 运行全部测试确认无回归**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test
 ```
 
 Expected: 全部 PASS
@@ -637,7 +637,7 @@ git commit -m "fix(voicePresets): 改用 tts.generateSpeech 替代 mimo.generate
 - [ ] **Step 1: 运行全部测试**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/backend && npm test
+cd /Users/jinghao/Desktop/workBase/hcds-studio/backend && npm test
 ```
 
 Expected: 全部 PASS

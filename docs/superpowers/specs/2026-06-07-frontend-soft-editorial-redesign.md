@@ -1,8 +1,8 @@
-# TTS Broadcast 前端重构设计方案
+# HCDS Studio 前端重构设计方案
 
 ## 概述
 
-将 TTS Broadcast 前端从通用 Tailwind dark-mode admin 模板升级为 **Soft Editorial** 设计风格——温暖杂志感、文学衬线标题、柔和粉彩色系、毛玻璃半透明卡片。采用 A+B 策略：先建设计系统地基，再逐组件完整重做（含全套动效）。
+将 HCDS Studio 前端从通用 Tailwind dark-mode admin 模板升级为 **Soft Editorial** 设计风格——温暖杂志感、文学衬线标题、柔和粉彩色系、毛玻璃半透明卡片。采用 A+B 策略：先建设计系统地基，再逐组件完整重做（含全套动效）。
 
 ## 设计方向
 

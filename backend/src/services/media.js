@@ -182,7 +182,7 @@ async function getMediaDuration(file) {
     return roundSeconds(parseDuration(stderr));
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-media-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hcds-studio-media-'));
   const ext = getExtension(file) || 'bin';
   const inputPath = path.join(tmpDir, `input.${ext}`);
 
@@ -213,7 +213,7 @@ async function writeMp3Slice({ inputPath, outputPath, start, duration }) {
 }
 
 async function convertToWavDataUrl(file, ext) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-asr-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hcds-studio-asr-'));
   const inputPath = path.join(tmpDir, `input.${ext}`);
   const outputPath = path.join(tmpDir, 'output.wav');
 
@@ -307,7 +307,7 @@ async function appendMp3SliceDataUrls({
 }
 
 async function convertToMp3DataUrl(file, ext) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-asr-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hcds-studio-asr-'));
   const inputPath = path.join(tmpDir, `input.${ext}`);
   const outputPath = path.join(tmpDir, 'output.mp3');
 
@@ -326,7 +326,7 @@ async function convertToMp3DataUrl(file, ext) {
 }
 
 async function convertToChunkedDataUrls({ file, ext, maxDataUrlSize, chunkOptions = {} }) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-asr-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hcds-studio-asr-'));
   const inputPath = path.join(tmpDir, `input.${ext}`);
   const options = { ...DEFAULT_CHUNK_OPTIONS, ...chunkOptions };
 

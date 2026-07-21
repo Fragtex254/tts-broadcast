@@ -138,7 +138,7 @@ router.post('/test-key', async (req, res) => {
 - [ ] **Step 7: 验证构建通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：TypeScript 编译通过，无错误。
@@ -234,7 +234,7 @@ const handleRewrite = async () => {
 - [ ] **Step 3: 验证构建通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：TypeScript 编译通过，SourceCollection 页面和 QuickGenerate 新增 prop 无类型错误。
@@ -435,7 +435,7 @@ export default VoiceGenerator;
 - [ ] **Step 2: 验证构建通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：TypeScript 编译通过。
@@ -544,7 +544,7 @@ export default ScriptEditor;
 - [ ] **Step 2: 验证构建通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：TypeScript 编译通过，ScriptEditor 中所有导入和 props 使用正确。
@@ -657,7 +657,7 @@ const handleReEdit = async (broadcast: Broadcast, e: React.MouseEvent) => {
 - [ ] **Step 4: 验证构建通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：TypeScript 编译通过。
@@ -767,7 +767,7 @@ const handleTestKey = async (type: 'llm' | 'tts') => {
 - [ ] **Step 3: 验证构建通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：TypeScript 编译通过，Settings 页面中 `formData.mimo_tts_api_key` 和 `handleTestKey('llm')` 类型正确。
@@ -853,7 +853,7 @@ const navItems = [
 - [ ] **Step 3: 验证构建通过**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：TypeScript 编译通过，所有路由和导航正确。
@@ -877,7 +877,7 @@ git commit -m "feat: update routing to 4-page navigation structure"
 运行 grep 确认没有其他文件引用 Dashboard：
 
 ```bash
-grep -r "Dashboard" /Users/jinghao/Desktop/workBase/tts-broadcast/frontend/src/ --include="*.tsx" --include="*.ts" | grep -v "node_modules"
+grep -r "Dashboard" /Users/jinghao/Desktop/workBase/hcds-studio/frontend/src/ --include="*.tsx" --include="*.ts" | grep -v "node_modules"
 ```
 
 预期：只有 `Dashboard.tsx` 文件本身被列出，无其他文件引用。
@@ -885,7 +885,7 @@ grep -r "Dashboard" /Users/jinghao/Desktop/workBase/tts-broadcast/frontend/src/ 
 - [ ] **Step 2: 删除 Dashboard.tsx**
 
 ```bash
-rm /Users/jinghao/Desktop/workBase/tts-broadcast/frontend/src/pages/Dashboard.tsx
+rm /Users/jinghao/Desktop/workBase/hcds-studio/frontend/src/pages/Dashboard.tsx
 ```
 
 - [ ] **Step 3: 更新 FRONTEND_CONVENTIONS.md 中的路由表格**
@@ -916,7 +916,7 @@ rm /Users/jinghao/Desktop/workBase/tts-broadcast/frontend/src/pages/Dashboard.ts
 - [ ] **Step 4: 最终构建验证**
 
 ```bash
-cd /Users/jinghao/Desktop/workBase/tts-broadcast/frontend && npm run build
+cd /Users/jinghao/Desktop/workBase/hcds-studio/frontend && npm run build
 ```
 
 预期：构建成功，无 TypeScript 错误，无 ESLint 错误。

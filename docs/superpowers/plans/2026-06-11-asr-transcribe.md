@@ -364,7 +364,7 @@ function runFfmpeg(inputPath, outputPath) {
 }
 
 async function convertToWavDataUrl(file, ext) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-asr-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hcds-studio-asr-'));
   const inputPath = path.join(tmpDir, `input.${ext}`);
   const outputPath = path.join(tmpDir, 'output.wav');
 

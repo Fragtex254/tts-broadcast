@@ -166,7 +166,7 @@ describe('设置 API', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer model-key',
           'api-key': 'model-key',
-          'User-Agent': 'tts-broadcast',
+          'User-Agent': 'hcds-studio',
         }),
         timeout: 15000,
       })

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# TTS Broadcast 一键关闭脚本
+# HCDS Studio 一键关闭脚本
 
 set -euo pipefail
 
@@ -69,11 +69,11 @@ terminate_pids() {
 pids=($(collect_all_pids))
 
 if [ "${#pids[@]}" -eq 0 ]; then
-    log "${GREEN}没有发现需要关闭的 TTS Broadcast 服务${NC}"
+    log "${GREEN}没有发现需要关闭的 HCDS Studio 服务${NC}"
     exit 0
 fi
 
-log "${YELLOW}正在关闭 TTS Broadcast 相关服务...${NC}"
+log "${YELLOW}正在关闭 HCDS Studio 相关服务...${NC}"
 terminate_pids TERM "${pids[@]}"
 sleep 2
 
@@ -89,4 +89,4 @@ if print_listeners; then
     exit 1
 fi
 
-log "${GREEN}已关闭所有 TTS Broadcast 相关服务${NC}"
+log "${GREEN}已关闭所有 HCDS Studio 相关服务${NC}"

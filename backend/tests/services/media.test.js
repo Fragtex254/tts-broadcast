@@ -29,7 +29,7 @@ describe('媒体转 ASR data URL 服务', () => {
   });
 
   test('mp3 临时文件路径可直接编码为 audio/mpeg data URL', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tts-broadcast-media-test-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hcds-studio-media-test-'));
     const inputPath = path.join(tmpDir, 'upload.mp3');
 
     try {

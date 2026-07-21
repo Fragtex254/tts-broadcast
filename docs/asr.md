@@ -279,7 +279,7 @@ mlx-qwen3-asr --doctor
 mlx-qwen3-asr serve --api-key your-local-key --model Qwen/Qwen3-ASR-1.7B
 ```
 
-> 实测留痕：`mlx-qwen3-asr 0.3.5` 官方 `serve` 在当前 Mac/MLX 组合下，转录请求可能报 `There is no Stream(gpu, 1) in current thread.`。原因是 server 端通过 `asyncio.to_thread()` 跑推理，MLX 的 GPU stream 与线程绑定。临时规避方案是启动一个同步兼容服务：仍暴露 `/v1/audio/transcriptions`，但在主线程调用 `Session.transcribe()`。本次本地验证使用的同步服务位于 `~/Library/Caches/tts-broadcast/qwen_asr_sync_server.py`，API Key 为 `local-qwen-asr`。如果后续升级 `mlx-qwen3-asr` 后官方 server 修复该问题，可切回官方 `serve`。
+> 实测留痕：`mlx-qwen3-asr 0.3.5` 官方 `serve` 在当前 Mac/MLX 组合下，转录请求可能报 `There is no Stream(gpu, 1) in current thread.`。原因是 server 端通过 `asyncio.to_thread()` 跑推理，MLX 的 GPU stream 与线程绑定。临时规避方案是启动一个同步兼容服务：仍暴露 `/v1/audio/transcriptions`，但在主线程调用 `Session.transcribe()`。本次本地验证使用的同步服务位于 `~/Library/Caches/hcds-studio/qwen_asr_sync_server.py`，API Key 为 `local-qwen-asr`。如果后续升级 `mlx-qwen3-asr` 后官方 server 修复该问题，可切回官方 `serve`。
 
 对应设置：
 

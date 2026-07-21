@@ -17,7 +17,7 @@ const router = express.Router();
 const logger = createScopedLogger('transcribe-route');
 const TRANSCRIBE_UPLOAD_LIMIT_BYTES = Number(process.env.TRANSCRIBE_UPLOAD_LIMIT_BYTES || 500 * 1024 * 1024);
 const BATCH_MAX_FILES = Number(process.env.TRANSCRIBE_BATCH_MAX_FILES || 50);
-const uploadDir = path.join(os.tmpdir(), 'tts-broadcast-transcribe');
+const uploadDir = path.join(os.tmpdir(), 'hcds-studio-transcribe');
 const resolvedUploadDir = path.resolve(uploadDir);
 
 fs.mkdirSync(uploadDir, { recursive: true });
