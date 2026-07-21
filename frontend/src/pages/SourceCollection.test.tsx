@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import useStore, { type ContentArtifactRevision, type ContentProject, type ProjectEditorContext } from '../store';
+import { defaultSettings } from '../store/defaults';
 import { CONTENT_REVISION_DEFAULTS } from '../test/contentProjectFixtures';
 import { SourceCollection } from './SourceCollection';
 
@@ -54,6 +55,11 @@ describe('SourceCollection', () => {
       currentBroadcast: null,
       isRewriting: false,
       projectEditorContext: null,
+      settings: {
+        ...defaultSettings,
+        mimo_api_key: { masked: '', is_set: false },
+        mimo_tts_api_key: { masked: '', is_set: false },
+      },
       contentProjects: [],
       isLoadingContentProjects: false,
       fetchContentProjects: vi.fn().mockResolvedValue([]),
@@ -86,7 +92,7 @@ describe('SourceCollection', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /新建内容项目/ }));
+    fireEvent.click(screen.getByRole('button', { name: '新建内容项目并填写 Brief' }));
     expect(useStore.getState().createContentProject).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByRole('textbox', { name: '项目名称' }), {
@@ -127,5 +133,53 @@ describe('SourceCollection', () => {
     expect(screen.getByText('项目口播稿 · 第 4 版')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '继续项目口播稿' }));
     expect(screen.getByText('/editor?projectId=21&artifactId=17&revisionId=31')).not.toBeNull();
+  });
+
+  test('首屏明确展示从来源、证据到带引用成稿的主线，空态给出第一步动作', () => {
+    render(
+      <MemoryRouter>
+        <SourceCollection />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('从来源到带引用成稿')).not.toBeNull();
+    expect(screen.getByText('2 核验并选择证据')).not.toBeNull();
+    expect(screen.getByText(/第一步：新建内容项目并填写最小 Brief/)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '新建内容项目' }));
+    expect(screen.getByRole('textbox', { name: '项目名称' })).not.toBeNull();
+  });
+
+  test('LLM 或 TTS 未配置时显示持久设置引导并可跳转', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<SourceCollection />} />
+          <Route path="/settings" element={<div>设置页面</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('完成 LLM/TTS 配置后解锁全部能力')).not.toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: '前往设置 →' }));
+    expect(screen.getByText('设置页面')).not.toBeNull();
+  });
+
+  test('LLM 与 TTS 均已配置时隐藏设置引导', () => {
+    useStore.setState({
+      settings: {
+        ...defaultSettings,
+        mimo_api_key: { masked: '••••••••1234', is_set: true },
+        mimo_tts_api_key: { masked: '••••••••5678', is_set: true },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <SourceCollection />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByText('完成 LLM/TTS 配置后解锁全部能力')).toBeNull();
   });
 });
