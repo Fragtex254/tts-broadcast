@@ -498,14 +498,18 @@ router.post('/batch', (req, res) => {
 
 /**
  * GET /api/transcribe/results
- * 获取最近保存的转录结果
+ * 获取最近保存的转录结果（统一分页协议）
  */
 router.get('/results', (req, res) => {
   try {
+    const rawPage = Number(req.query.page || 1);
     const rawLimit = Number(req.query.limit || 50);
+    const page = Number.isInteger(rawPage) ? Math.max(rawPage, 1) : 1;
     const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
-    const results = transcriptionResultStore.getRecent({ limit });
-    res.json({ results });
+    const offset = (page - 1) * limit;
+    const results = transcriptionResultStore.getRecent({ limit, offset });
+    const total = transcriptionResultStore.countAll();
+    res.json({ results, pagination: { page, limit, total } });
   } catch (error) {
     logger.error({ err: error }, '获取转录结果失败');
     sendInternalError(res);

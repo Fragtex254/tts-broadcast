@@ -68,6 +68,7 @@ function updateBatchItemRecord(
 type TranscribeResultsSlice = Pick<
   AppState,
   | 'transcriptionHistory'
+  | 'transcriptionHistoryPagination'
   | 'transcriptionStats'
   | 'isLoadingTranscriptionHistory'
   | 'isLoadingTranscriptionStats'
@@ -95,6 +96,7 @@ type TranscribeResultsSlice = Pick<
 export function createTranscribeResultsSlice(set: StoreSet, get: StoreGet): TranscribeResultsSlice {
   return {
     transcriptionHistory: [],
+    transcriptionHistoryPagination: null,
     transcriptionStats: EMPTY_TRANSCRIPTION_STATS,
     isLoadingTranscriptionHistory: false,
     isLoadingTranscriptionStats: false,
@@ -576,7 +578,7 @@ export function createTranscribeResultsSlice(set: StoreSet, get: StoreGet): Tran
       try {
         const response = await transcribeApi.getResults(params);
         const data = safeParseStrict(TranscriptionResultsResponseSchema, response.data);
-        set({ transcriptionHistory: data.results, isLoadingTranscriptionHistory: false });
+        set({ transcriptionHistory: data.results, transcriptionHistoryPagination: data.pagination, isLoadingTranscriptionHistory: false });
         return data.results;
       } catch (error) {
         set({ isLoadingTranscriptionHistory: false });

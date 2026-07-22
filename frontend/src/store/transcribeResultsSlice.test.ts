@@ -4,6 +4,7 @@ const apiMocks = vi.hoisted(() => ({
   deleteResult: vi.fn(),
   formatResult: vi.fn(),
   summarize: vi.fn(),
+  getResults: vi.fn(),
 }));
 
 const sseMocks = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ vi.mock('../services/api', async (importOriginal) => {
       deleteResult: apiMocks.deleteResult,
       formatResult: apiMocks.formatResult,
       summarize: apiMocks.summarize,
+      getResults: apiMocks.getResults,
     },
   };
 });
@@ -66,6 +68,21 @@ describe('transcribeResultsSlice', () => {
         },
       ],
     });
+  });
+
+  test('获取转录历史时同步保存分页信息', async () => {
+    apiMocks.getResults.mockResolvedValue({
+      data: {
+        results: [TRANSCRIPTION_RECORD_FIXTURE],
+        pagination: { page: 2, limit: 1, total: 3 },
+      },
+    });
+
+    await useStore.getState().fetchTranscriptionHistory({ page: 2, limit: 1 });
+
+    expect(apiMocks.getResults).toHaveBeenCalledWith({ page: 2, limit: 1 });
+    expect(useStore.getState().transcriptionHistory).toEqual([TRANSCRIPTION_RECORD_FIXTURE]);
+    expect(useStore.getState().transcriptionHistoryPagination).toEqual({ page: 2, limit: 1, total: 3 });
   });
 
   test('删除结果时同步清除单任务与批任务中的持久记录引用', async () => {

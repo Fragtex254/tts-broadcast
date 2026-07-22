@@ -21,17 +21,18 @@ function keywordScore(query, claim) {
   return tokens.reduce((score, token) => score + (haystack.includes(token) ? token.length : 0), 0) / tokens.reduce((sum, token) => sum + token.length, 0);
 }
 
-async function searchClaims({ query, limit = 20, embedText = embeddingService.embedText }) {
+async function searchClaims({ query, limit = 20, offset = 0, embedText = embeddingService.embedText }) {
   const claims = researchStore.listClaims({ status: 'active' });
   let queryEmbedding = null;
   try { queryEmbedding = await embedText({ text: query }); } catch { queryEmbedding = null; }
-  return claims.map((claim) => ({
+  const matched = claims.map((claim) => ({
     claim,
     similarity: queryEmbedding && Array.isArray(claim.embedding)
       ? cosineSimilarity(queryEmbedding, claim.embedding)
       : keywordScore(query, claim),
     search_mode: queryEmbedding && Array.isArray(claim.embedding) ? 'embedding' : 'keyword',
-  })).filter((item) => item.similarity > 0).sort((a, b) => b.similarity - a.similarity || b.claim.content_value - a.claim.content_value).slice(0, limit);
+  })).filter((item) => item.similarity > 0).sort((a, b) => b.similarity - a.similarity || b.claim.content_value - a.claim.content_value);
+  return { items: matched.slice(offset, offset + limit), total: matched.length };
 }
 
 function parseJson(raw) {

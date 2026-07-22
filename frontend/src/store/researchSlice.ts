@@ -1,6 +1,6 @@
 import { contentProjectApi, researchApi, transcribeApi } from '../services/api';
 import { getApiErrorMessage } from '../services/apiError';
-import { ClaimRelationAnalysisSchema, ClaimSearchResultSchema, ContentProjectSchema, safeParseStrict, TranscriptClaimSchema } from '../services/schemas';
+import { ClaimRelationAnalysisSchema, ClaimSearchResponseSchema, ContentProjectSchema, safeParseStrict, TranscriptClaimSchema } from '../services/schemas';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
 
@@ -25,7 +25,7 @@ const enqueueContentProjectMutation = async <T>(projectId: number, action: () =>
 
 export function createResearchSlice(set: StoreSet): Pick<
   AppState,
-  | 'claimSearchResults' | 'isSearchingClaims' | 'claimDetail' | 'isLoadingClaimDetail' | 'claimRelationAnalysis' | 'isAnalyzingRelations'
+  | 'claimSearchResults' | 'claimSearchPagination' | 'isSearchingClaims' | 'claimDetail' | 'isLoadingClaimDetail' | 'claimRelationAnalysis' | 'isAnalyzingRelations'
   | 'contentProjects' | 'currentContentProject' | 'isLoadingContentProjects'
   | 'searchClaims' | 'clearResearchContext' | 'fetchClaimDetail' | 'clearClaimDetail' | 'updateClaimDetail' | 'deleteClaimDetail'
   | 'analyzeClaimRelations' | 'fetchContentProjects' | 'createContentProject'
@@ -34,6 +34,7 @@ export function createResearchSlice(set: StoreSet): Pick<
 > {
   return {
     claimSearchResults: [],
+    claimSearchPagination: null,
     isSearchingClaims: false,
     claimDetail: null,
     isLoadingClaimDetail: false,
@@ -48,10 +49,10 @@ export function createResearchSlice(set: StoreSet): Pick<
       set({ isSearchingClaims: true, claimRelationAnalysis: null });
       try {
         const response = await researchApi.searchClaims(query);
-        const results = safeParseStrict(ClaimSearchResultSchema.array(), response.data.results);
+        const data = safeParseStrict(ClaimSearchResponseSchema, response.data);
         if (requestSequence !== claimSearchRequestSequence) return [];
-        set({ claimSearchResults: results, isSearchingClaims: false });
-        return results;
+        set({ claimSearchResults: data.results, claimSearchPagination: data.pagination, isSearchingClaims: false });
+        return data.results;
       } catch (error) {
         if (requestSequence === claimSearchRequestSequence) set({ isSearchingClaims: false });
         throw new Error(getApiErrorMessage(error, '搜索观点失败'), { cause: error });
@@ -61,7 +62,7 @@ export function createResearchSlice(set: StoreSet): Pick<
     clearResearchContext: () => {
       claimSearchRequestSequence += 1;
       claimRelationRequestSequence += 1;
-      set({ claimSearchResults: [], isSearchingClaims: false, claimRelationAnalysis: null, isAnalyzingRelations: false });
+      set({ claimSearchResults: [], claimSearchPagination: null, isSearchingClaims: false, claimRelationAnalysis: null, isAnalyzingRelations: false });
     },
 
     fetchClaimDetail: async (claimId) => {

@@ -180,10 +180,18 @@ function getById(id) {
  * @param {number} params.limit - 返回数量
  * @returns {Object[]} 转录结果列表
  */
-function getRecent({ limit }) {
-  return db.prepare('SELECT * FROM transcription_results ORDER BY created_at DESC, id DESC LIMIT ?')
-    .all(limit)
+function getRecent({ limit, offset = 0 }) {
+  return db.prepare('SELECT * FROM transcription_results ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
+    .all(limit, offset)
     .map(normalize);
+}
+
+/**
+ * 统计已保存转录结果总数（分页 total）
+ * @returns {number} 结果总数
+ */
+function countAll() {
+  return db.prepare('SELECT COUNT(*) AS count FROM transcription_results').get().count;
 }
 
 /**
@@ -248,6 +256,7 @@ module.exports = {
   REFERENCED_RESULT_DELETE_MESSAGE,
   TranscriptionResultInUseError,
   create,
+  countAll,
   getById,
   getRecent,
   getStats,

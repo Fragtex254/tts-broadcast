@@ -191,8 +191,15 @@ export const TranscriptionResultSchema = z.object({
   transcriptionResult: TranscriptionRecordSchema.optional(),
 });
 
+export const PaginationSchema = z.object({
+  page: z.number(),
+  limit: z.number(),
+  total: z.number(),
+});
+
 export const TranscriptionResultsResponseSchema = z.object({
   results: z.array(TranscriptionRecordSchema),
+  pagination: PaginationSchema,
 });
 
 export const TranscriptionStatsSchema = z.object({
@@ -259,6 +266,7 @@ export const TranscriptDetailSchema = z.object({
 export const TranscriptDetailResponseSchema = z.object({ transcript: TranscriptDetailSchema });
 
 export const ClaimSearchResultSchema = z.object({ claim: TranscriptClaimSchema, similarity: z.number(), search_mode: z.enum(['embedding', 'keyword']) });
+export const ClaimSearchResponseSchema = z.object({ results: z.array(ClaimSearchResultSchema), pagination: PaginationSchema });
 export const ClaimRelationAnalysisSchema = z.object({
   relations: z.array(z.object({ id: z.number(), claim_a_id: z.number(), claim_b_id: z.number(), relation_type: z.enum(['support', 'oppose', 'complement', 'different_scope', 'similar_example', 'unrelated']), explanation: z.string(), confidence: z.number(), analysis_model: z.string(), created_at: z.string(), updated_at: z.string() })),
   synthesis: z.object({ consensus: z.array(z.string()), disagreements: z.array(z.string()), different_conditions: z.array(z.string()), practical_suggestions: z.array(z.string()), open_questions: z.array(z.string()) }),

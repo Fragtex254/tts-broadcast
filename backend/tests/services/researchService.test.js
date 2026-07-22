@@ -27,10 +27,29 @@ describe('跨播客观点研究服务', () => {
     seedClaim({ transcriptionId: first.id, question: 'AI 会减少程序员岗位吗', claim: '初级招聘会先减少' });
     seedClaim({ transcriptionId: second.id, question: '设计如何进步', claim: '多看作品', topicTags: ['设计'] });
 
-    const results = await researchService.searchClaims({ query: 'AI 程序员岗位', embedText: async () => null });
+    const { items, total } = await researchService.searchClaims({ query: 'AI 程序员岗位', embedText: async () => null });
 
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ search_mode: 'keyword', claim: { transcription_id: first.id } });
+    expect(items).toHaveLength(1);
+    expect(total).toBe(1);
+    expect(items[0]).toMatchObject({ search_mode: 'keyword', claim: { transcription_id: first.id } });
+  });
+
+  test('搜索分页按 offset 截取且 total 为全量匹配数', async () => {
+    const first = createRecord('一期.wav', 'AI 会减少初级招聘');
+    const second = createRecord('二期.wav', 'AI 辅助设计师');
+    const third = createRecord('三期.wav', 'AI 辅助教学');
+    seedClaim({ transcriptionId: first.id, question: 'AI 会减少程序员岗位吗', claim: '初级招聘会先减少' });
+    seedClaim({ transcriptionId: second.id, question: 'AI 对设计影响', claim: 'AI 辅助设计师' });
+    seedClaim({ transcriptionId: third.id, question: 'AI 对教育影响', claim: 'AI 辅助教学' });
+
+    const page1 = await researchService.searchClaims({ query: 'AI', limit: 2, offset: 0, embedText: async () => null });
+    const page2 = await researchService.searchClaims({ query: 'AI', limit: 2, offset: 2, embedText: async () => null });
+
+    expect(page1.items).toHaveLength(2);
+    expect(page1.total).toBe(3);
+    expect(page2.items).toHaveLength(1);
+    expect(page2.total).toBe(3);
+    expect(page1.items.map((item) => item.claim.id)).not.toContain(page2.items[0].claim.id);
   });
 
   test('关系分析拒绝 LLM 引用未选择的观点', async () => {

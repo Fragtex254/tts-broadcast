@@ -1,3 +1,10 @@
+/** 统一分页协议 */
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+}
+
 /** 资讯条目 */
 export interface NewsItem {
   id: string;
@@ -791,6 +798,7 @@ export interface AppState {
   transcriptionChunks: TranscriptionChunkPreview[];
   transcriptionRecord: TranscriptionRecord | null;
   transcriptionHistory: TranscriptionRecord[];
+  transcriptionHistoryPagination: Pagination | null;
   transcriptionStats: TranscriptionStats;
   isTranscribing: boolean;
   isLoadingTranscriptionHistory: boolean;
@@ -880,7 +888,7 @@ export interface AppState {
     provider?: AsrProvider,
     options?: TranscribeOptions
   ) => Promise<TranscriptionResult>;
-  fetchTranscriptionHistory: (params?: { limit?: number }) => Promise<TranscriptionRecord[]>;
+  fetchTranscriptionHistory: (params?: { page?: number; limit?: number }) => Promise<TranscriptionRecord[]>;
   fetchTranscriptionStats: () => Promise<TranscriptionStats>;
   deleteTranscriptionHistoryResult: (id: number) => Promise<void>;
   formatTranscriptionResult: (id: number, text: string) => Promise<TranscriptionRecord>;
@@ -902,6 +910,7 @@ export interface AppState {
   clearBatchTranscription: () => void;
 
   claimSearchResults: ClaimSearchResult[];
+  claimSearchPagination: Pagination | null;
   isSearchingClaims: boolean;
   claimDetail: TranscriptClaim | null;
   isLoadingClaimDetail: boolean;

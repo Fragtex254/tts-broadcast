@@ -248,7 +248,7 @@ export const transcribeApi = {
     }),
   formatResult: (id: number, data: { text?: string }) =>
     api.post(`/transcribe/results/${id}/format`, data),
-  getResults: (params?: { limit?: number }) =>
+  getResults: (params?: { page?: number; limit?: number }) =>
     api.get('/transcribe/results', { params }),
   getStats: () =>
     api.get('/transcribe/stats'),
@@ -274,7 +274,8 @@ export const transcribeApi = {
 };
 
 export const researchApi = {
-  searchClaims: (query: string, limit = 20) => api.get('/research/claims/search', { params: { q: query, limit } }),
+  searchClaims: (query: string, options?: { page?: number; limit?: number }) =>
+    api.get('/research/claims/search', { params: { q: query, page: options?.page, limit: options?.limit } }),
   getClaim: (id: number) => api.get(`/research/claims/${id}`),
   analyzeRelations: (claimIds: number[]) => api.post('/research/claims/relations', { claimIds }),
 };

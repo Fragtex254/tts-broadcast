@@ -342,6 +342,28 @@ describe('转录 API', () => {
     expect(mimo.formatTranscriptionText).toHaveBeenCalledWith('大家好今天聊 AI 首先是新模型发布');
   });
 
+  test('GET /api/transcribe/results 返回统一分页协议', async () => {
+    for (const name of ['a.wav', 'b.wav', 'c.wav']) {
+      db.prepare(`
+        INSERT INTO transcription_results (file_name, relative_path, text, language, provider, model)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(name, name, '转录文本', 'zh', 'mimo', 'mimo-v2.5-asr');
+    }
+
+    const firstPage = await request(app).get('/api/transcribe/results').query({ page: 1, limit: 2 });
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.results).toHaveLength(2);
+    expect(firstPage.body.pagination).toEqual({ page: 1, limit: 2, total: 3 });
+
+    const secondPage = await request(app).get('/api/transcribe/results').query({ page: 2, limit: 2 });
+    expect(secondPage.status).toBe(200);
+    expect(secondPage.body.results).toHaveLength(1);
+    expect(secondPage.body.pagination).toEqual({ page: 2, limit: 2, total: 3 });
+
+    const firstIds = firstPage.body.results.map((item) => item.id);
+    expect(firstIds).not.toContain(secondPage.body.results[0].id);
+  });
+
   test('GET /api/transcribe/stats 返回转录累计统计', async () => {
     db.prepare(`
       INSERT INTO transcription_results (
