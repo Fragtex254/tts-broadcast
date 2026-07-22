@@ -6,6 +6,7 @@ import {
   ACTION_BUTTON_IMPORT,
   ACTION_BUTTON_NEUTRAL,
   BATCH_STATUS_DOTS,
+  BATCH_STATUS_ICONS,
   BATCH_STATUS_LABELS,
   downloadTextFile,
   formatTimestamp,
@@ -122,12 +123,21 @@ export const TranscribeResultsPanel: React.FC<TranscribeResultsPanelProps> = ({
         {items.map((item, index) => (
           <div key={`${item.relativePath}-${index}`} className="bg-white/60 rounded-2xl p-4 border border-card-border">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`w-2 h-2 rounded-full ${BATCH_STATUS_DOTS[item.status]}`} />
               <p className="font-body text-[12px] text-ink truncate flex-1" title={item.relativePath}>
                 {item.relativePath}
               </p>
-              <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70 shrink-0">
-                {BATCH_STATUS_LABELS[item.status]}
+              <span
+                className="inline-flex shrink-0 items-center gap-1.5"
+                role="status"
+                aria-label={`转录状态：${BATCH_STATUS_LABELS[item.status]}`}
+              >
+                <span aria-hidden="true" className={`w-2 h-2 rounded-full ${BATCH_STATUS_DOTS[item.status]}`} />
+                <span aria-hidden="true" className="font-body text-[11px] leading-none text-ink-soft">
+                  {BATCH_STATUS_ICONS[item.status]}
+                </span>
+                <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">
+                  {BATCH_STATUS_LABELS[item.status]}
+                </span>
               </span>
             </div>
 
