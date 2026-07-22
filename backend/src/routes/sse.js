@@ -23,17 +23,25 @@ router.get('/:taskId', (req, res) => {
 
   // 添加到连接管理器
   sseManager.addClient(taskId, res);
+  sseManager.replayTerminal(taskId, res);
 
   // 心跳保活（每 30 秒）
   const heartbeat = setInterval(() => {
     res.write(': heartbeat\n\n');
   }, 30000);
 
-  // 客户端断开时清理
-  req.on('close', () => {
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
     clearInterval(heartbeat);
     sseManager.removeClient(taskId, res);
-  });
+  };
+
+  // 客户端断开或服务端主动结束时清理
+  req.on('close', cleanup);
+  res.on('close', cleanup);
+  res.on('finish', cleanup);
 });
 
 module.exports = router;

@@ -6,7 +6,7 @@ const logger = createScopedLogger('quick-generate');
 
 interface QuickGenerateProps {
   onItemsLoaded?: () => void;
-  onRewriteComplete?: () => void;
+  onRewriteComplete?: (script: string) => Promise<void> | void;
 }
 
 const CATEGORIES = [
@@ -61,8 +61,8 @@ export const QuickGenerate: React.FC<QuickGenerateProps> = ({ onItemsLoaded, onR
     }
     setError(null);
     try {
-      await rewriteScript({ items: todayItems });
-      onRewriteComplete?.();
+      const script = await rewriteScript({ items: todayItems });
+      await onRewriteComplete?.(script);
     } catch (err) {
       setError('生成临时内容草稿失败，请稍后重试');
       logger.error({ err: toLogError(err), itemCount: todayItems.length }, '生成临时内容草稿失败');

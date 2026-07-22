@@ -143,7 +143,7 @@ export default MyComponent;
 | 路径 | 组件 | 说明 |
 |------|------|------|
 | `/` | `SourceCollection` | 内容工作台（默认页） |
-| `/editor` | `ScriptEditor` | 口播稿编辑；可通过完整 query 绑定内容项目的确切 `audio_script` Revision |
+| `/editor/:broadcastId` | `ScriptEditor` | 按 URL Broadcast ID 恢复口播稿、音色、分段和来源 Revision；裸 `/editor` 只显示缺失 ID 错误 |
 | `/transcribe` | `Transcribe` | 音视频上传转录 |
 | `/history` | `ContentLibrary` | 内容库（播报 / 转录稿） |
 | `/history/transcriptions/:id` | `TranscriptWorkspace` | 播客阅读、校对与一键总结上下文页 |
@@ -155,15 +155,18 @@ export default MyComponent;
 
 **规则：**
 
-1. 路由定义在 `App.tsx` 的 `<Routes>` 内。
-2. `Sidebar` 在 `<Routes>` 外部，跨页面持久渲染。
+1. 路由通过 `App.tsx` 的 `createBrowserRouter()` 定义。
+2. `Sidebar` 与 `GlobalTaskProgressBar` 在 `AppLayout` 中位于 `<Outlet>` 外，跨页面持久渲染。
 3. 首屏路由 `SourceCollection` 直接导入；非首屏页面使用 `React.lazy()` + `Suspense` 懒加载。
 4. 所有路由页面位于 `<ErrorBoundary>` 内；新增可能独立崩溃的功能区可再加局部 Error Boundary。
 5. 新增页面：在 `pages/` 创建组件 → 在 `App.tsx` 添加 `<Route>` → 在 `Sidebar` 添加导航项。
 6. 新增用户可访问路径时，确认 `NotFound` 兜底仍存在。
 7. 导航使用 `<NavLink>`（不是 `<Link>`），以支持 `isActive` 高亮。
-8. 顶级导航只展示工作台、内容库、音色库、自动化和设置；编辑器与转录页由任务入口进入，不在 Sidebar 重复展示。
+8. 顶级导航只展示工作台、内容库、音色库和设置；编辑器与转录页由任务入口进入，不在 Sidebar 重复展示。自动化在真实执行器接入前属于 backlog，只保留 `/automation` 兼容直达路由，不展示导航入口。
 9. 播客不持久化上传源音频，也不为普通链接伪造“回到现场”。仅当 `source_url` 经严格域名与 BV/av ID 解析为 Bilibili 视频时，可使用 `BilibiliTranscriptPlayer` 嵌入官方外链播放器；Turn 定位只采用持久化 `start_seconds`，通过官方 `t` 参数重载播放器。双击之外必须同时提供键盘与显式按钮入口；第三方 iframe 不得冒充本地 `AudioPlaybackBar`。`2xl` 宽屏全屏阅读采用“说话人 / 逐字稿 / 上下文”三栏，右栏上部只展示与当前 Turn 时间范围相交的 `speaker_viewpoint`、下部固定播放器；当前 Turn 以仍在视口内的 hover/focus 为先，否则取视口中心。不得用最近观点强行补齐无交集语块；必须标注 AI 与 stale 状态。低于 `2xl` 时收回右栏并把播放器降级到阅读器下方。
+10. 跨路由后台任务统一由 Layout 的 `GlobalTaskProgressBar` 展示，位于主内容区顶部、`Outlet` 外；必须同时显示任务名称、阶段/百分比和可点击的任务上下文入口。连接中断用文字说明恢复路径并提供按原 taskId 重新连接动作，不能只改色点；组件只消费可序列化 store 快照，不持有 `EventSource`。
+11. 口播编辑器入口不得使用 query 或 Zustand 做跨路由稿件交接；必须先持久化或选择 Broadcast，再导航到 `/editor/${id}`。缺失、非法或不存在的 ID 必须显示 alert 及工作台/内容库返回入口。
+12. `ScriptPreview` 的整稿编辑、开场/结尾和初次切分只在当前 Broadcast 为无 Segment 的 `draft` 时展示；已切分副本必须引导用户在 `SegmentEditor` 中修改，不展示必然返回 409 的整稿动作。
 
 ### TypeScript
 
@@ -278,6 +281,7 @@ npm run test
 - [ ] 二级界面使用 `ModalShell`，未手写固定遮罩/对话框基础逻辑
 - [ ] 音频播放条使用 `AudioPlaybackBar` / `AudioPlayer` / `MiniAudioPlayer`，未手写 `<audio>` 播放控制逻辑
 - [ ] Store 读取使用 selector，不写无 selector 的 `useStore()`
+- [ ] 跨路由长任务使用 `GlobalTaskProgressBar`，状态含文字且可返回任务上下文
 - [ ] 新增 API 响应字段时同步 `store/types.ts` 与 `services/schemas.ts`
 - [ ] 运行 `npm run lint`
 - [ ] 运行 `npm run build` 确认无 TypeScript 错误

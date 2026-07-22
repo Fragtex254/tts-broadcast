@@ -6,7 +6,6 @@ const navItems = [
   { path: '/', label: '工作台', shortLabel: '工' },
   { path: '/history', label: '内容库', shortLabel: '库' },
   { path: '/voice-presets', label: '音色库', shortLabel: '音' },
-  { path: '/automation', label: '自动化', shortLabel: '自' },
   { path: '/settings', label: '设置', shortLabel: '设' },
 ];
 

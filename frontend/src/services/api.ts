@@ -12,6 +12,7 @@ import type {
   CreateContentProjectInput,
   NewsItem,
   Settings,
+  SettingsUpdate,
   VoiceConfig,
 } from '../store/types';
 import { createScopedLogger, toLogError } from './logger';
@@ -92,6 +93,15 @@ export const broadcastApi = {
   getDetail: (id: number) =>
     api.get(`/broadcast/${id}`),
 
+  createDraft: (data: { text: string; artifactRevisionId?: number }) =>
+    api.post('/broadcast/drafts', data),
+
+  forkDraft: (id: number) =>
+    api.post(`/broadcast/${id}/drafts`),
+
+  updateDraft: (id: number, data: { text: string }) =>
+    api.patch(`/broadcast/${id}/draft`, data),
+
   save: (id: number) =>
     api.post(`/broadcast/${id}/save`),
 
@@ -111,8 +121,8 @@ export const broadcastApi = {
   regenerateSegment: (broadcastId: number, segId: number) =>
     api.post(`/broadcast/${broadcastId}/segments/${segId}/regenerate`),
 
-  batchGenerateSegments: (broadcastId: number) =>
-    api.post(`/broadcast/${broadcastId}/segments/batch-generate`),
+  batchGenerateSegments: (broadcastId: number, taskId?: string) =>
+    api.post(`/broadcast/${broadcastId}/segments/batch-generate`, taskId ? { taskId } : {}),
 
   mergeSegments: (broadcastId: number) =>
     api.post(`/broadcast/${broadcastId}/segments/merge`),
@@ -153,7 +163,7 @@ export const broadcastApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
 
-  update: (data: Partial<Settings>) =>
+  update: (data: SettingsUpdate) =>
     api.put('/settings', data),
 
   testKey: (
@@ -238,7 +248,7 @@ export const transcribeApi = {
     }),
   formatResult: (id: number, data: { text?: string }) =>
     api.post(`/transcribe/results/${id}/format`, data),
-  getResults: (params?: { limit?: number }) =>
+  getResults: (params?: { page?: number; limit?: number }) =>
     api.get('/transcribe/results', { params }),
   getStats: () =>
     api.get('/transcribe/stats'),
@@ -264,7 +274,8 @@ export const transcribeApi = {
 };
 
 export const researchApi = {
-  searchClaims: (query: string, limit = 20) => api.get('/research/claims/search', { params: { q: query, limit } }),
+  searchClaims: (query: string, options?: { page?: number; limit?: number }) =>
+    api.get('/research/claims/search', { params: { q: query, page: options?.page, limit: options?.limit } }),
   getClaim: (id: number) => api.get(`/research/claims/${id}`),
   analyzeRelations: (claimIds: number[]) => api.post('/research/claims/relations', { claimIds }),
 };

@@ -52,6 +52,31 @@ function getClaim(id) {
   return normalizeClaim(db.prepare(`${CLAIM_SELECT} WHERE c.id = ?`).get(id));
 }
 
+/**
+ * 批量按 ID 获取观点，避免 N+1 查询。
+ * @param {number[]} ids - 观点 ID 列表
+ * @returns {Object[]} 命中的观点（不保证顺序）
+ */
+function listClaimsByIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`${CLAIM_SELECT} WHERE c.id IN (${placeholders})`).all(...ids).map(normalizeClaim);
+}
+
+/**
+ * 一次查询取回一组观点两两之间已缓存的关系，内存中再配对。
+ * @param {number[]} ids - 观点 ID 列表
+ * @returns {Object[]} 命中的关系记录
+ */
+function listRelationsAmong(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`
+    SELECT * FROM claim_relations
+    WHERE claim_a_id IN (${placeholders}) AND claim_b_id IN (${placeholders})
+  `).all(...ids, ...ids);
+}
+
 function updateClaim(id, { userNote, isStarred, isHidden, status } = {}) {
   const current = getClaim(id);
   if (!current) return undefined;
@@ -160,6 +185,7 @@ function upsertRelation({ claimAId, claimBId, relationType, explanation, confide
 
 module.exports = {
   REFERENCED_CLAIM_DELETE_MESSAGE, TranscriptionClaimInUseError,
-  getClaim, getRelation, listClaims, markClaimsStale, removeClaim, replaceClaims,
+  getClaim, getRelation, listClaims, listClaimsByIds, listRelationsAmong,
+  markClaimsStale, removeClaim, replaceClaims,
   setClaimEmbedding, updateClaim, updateClaimsStatus, upsertRelation,
 };

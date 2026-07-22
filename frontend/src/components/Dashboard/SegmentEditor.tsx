@@ -1,9 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import useStore from '../../store';
 import type { Segment } from '../../store';
 import { getApiErrorMessage } from '../../services/apiError';
 import { hasSelectedVoice, VOICE_REQUIRED_MESSAGE } from '../../store/voiceConfigModel';
-import { useBatchGenerateSSE } from '../../hooks/useSSE';
 import { TagPicker } from './TagPicker';
 import { SegmentRefineModal } from './SegmentRefineModal';
 import { AudioPlaybackBar } from './AudioPlaybackBar';
@@ -70,34 +69,6 @@ export const SegmentEditor: React.FC<SegmentEditorProps> = ({ broadcastId, onMer
   const [updatingPlaybackRateId, setUpdatingPlaybackRateId] = useState<number | 'all' | null>(null);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [regeneratingSegmentIds, setRegeneratingSegmentIds] = useState<Set<number>>(() => new Set());
-
-  // SSE 监听批量生成进度（始终启用）
-  useBatchGenerateSSE(broadcastId, {
-    onSegmentProgress: useCallback((segmentId: number, status: string, audioPath?: string, errorMessage?: string) => {
-      // 实时更新单个 segment 状态
-      useStore.setState((state) => ({
-        segments: state.segments.map((s) => {
-          if (s.id === segmentId) {
-            return {
-              ...s,
-              status: status as Segment['status'],
-              audio_path: audioPath || s.audio_path,
-              error_message: status === 'failed' ? (errorMessage || s.error_message || '语音生成失败') : '',
-            };
-          }
-          return s;
-        }),
-      }));
-    }, []),
-    onSegmentComplete: useCallback((newSegments: Segment[]) => {
-      // 所有 segment 生成完成
-      useStore.setState({ segments: newSegments });
-    }, []),
-    onError: useCallback((errorMsg: string) => {
-      setError(errorMsg);
-    }, []),
-    enabled: true, // 始终启用
-  });
 
   useEffect(() => {
     fetchSegments(broadcastId).catch(() => setError('加载文段列表失败'));

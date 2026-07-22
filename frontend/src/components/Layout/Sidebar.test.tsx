@@ -16,5 +16,7 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: '工作台' })).not.toBeNull();
     expect(screen.getByRole('link', { name: '内容库' })).not.toBeNull();
     expect(screen.getByRole('link', { name: '音色库' })).not.toBeNull();
+    expect(screen.queryByRole('link', { name: '自动化' })).toBeNull();
+    expect(screen.getByRole('link', { name: '设置' })).not.toBeNull();
   });
 });

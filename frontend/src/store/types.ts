@@ -1,3 +1,10 @@
+/** 统一分页协议 */
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+}
+
 /** 资讯条目 */
 export interface NewsItem {
   id: string;
@@ -28,6 +35,8 @@ export interface Broadcast {
   mode: 'whole' | 'segmented';
   created_at: string;
   updated_at: string;
+  /** 列表接口返回的 content 长度；详情查询才有完整 content */
+  content_length?: number;
 }
 
 /** 逐句 segment */
@@ -87,9 +96,21 @@ export interface AsrModelOption extends ModelOption {
   capabilities?: AsrModelCapabilities;
 }
 
+export interface MaskedSecret {
+  masked: string;
+  is_set: boolean;
+}
+
+export type SecretSettingKey =
+  | 'mimo_api_key'
+  | 'mimo_tts_api_key'
+  | 'embedding_api_key'
+  | 'qwen_asr_api_key'
+  | 'wsl_asr_api_key';
+
 export interface Settings {
-  mimo_api_key: string;
-  mimo_tts_api_key: string;
+  mimo_api_key: MaskedSecret;
+  mimo_tts_api_key: MaskedSecret;
   llm_api_format: LlmApiFormat;
   llm_base_url: string;
   llm_model: string;
@@ -99,16 +120,16 @@ export interface Settings {
   llm_split_thinking_enabled: boolean;
   embedding_enabled: boolean;
   embedding_base_url: string;
-  embedding_api_key: string;
+  embedding_api_key: MaskedSecret;
   embedding_model: string;
   asr_provider: AsrProvider;
   qwen_asr_base_url: string;
   qwen_asr_model: string;
-  qwen_asr_api_key: string;
+  qwen_asr_api_key: MaskedSecret;
   wsl_asr_base_url: string;
   wsl_asr_engine: AsrEngine;
   wsl_asr_model: string;
-  wsl_asr_api_key: string;
+  wsl_asr_api_key: MaskedSecret;
   default_voice: string;
   ui_font_preset: UiFontPreset;
   ui_font_scale: UiFontScale;
@@ -116,6 +137,9 @@ export interface Settings {
   closing_script: string;
   content_categories: string;
 }
+
+export type SettingsFormData = Omit<Settings, SecretSettingKey> & Record<SecretSettingKey, string>;
+export type SettingsUpdate = Partial<SettingsFormData>;
 
 /** 定时任务 */
 export interface Schedule {
@@ -699,6 +723,50 @@ export interface BatchTranscriptionProgress {
   message: string;
 }
 
+export type BackgroundTaskStatus = 'connecting' | 'running' | 'reconnecting' | 'connection_lost';
+
+export interface BackgroundTaskSnapshot {
+  taskId: string;
+  kind: string;
+  entityId?: string | number;
+  title: string;
+  href: string;
+  status: BackgroundTaskStatus;
+  phase: string;
+  percent: number;
+  message: string;
+  retryAttempt: number;
+  startedAt: number;
+  updatedAt: number;
+}
+
+export interface StartBackgroundTaskInput {
+  taskId: string;
+  kind: string;
+  entityId?: string | number;
+  title: string;
+  href: string;
+  status?: BackgroundTaskStatus;
+  phase?: string;
+  percent?: number;
+  message?: string;
+  retryAttempt?: number;
+  startedAt?: number;
+  updatedAt?: number;
+}
+
+export interface BackgroundTaskUpdate {
+  kind?: string;
+  entityId?: string | number;
+  title?: string;
+  href?: string;
+  status?: BackgroundTaskStatus;
+  phase?: string;
+  percent?: number;
+  message?: string;
+  retryAttempt?: number;
+}
+
 /** 确认对话框 */
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -720,6 +788,9 @@ export interface AppState {
   script: string;
   isGenerating: boolean;
   isRewriting: boolean;
+  isLoadingEditorBroadcast: boolean;
+  isCreatingEditorDraft: boolean;
+  editorBroadcastError: string | null;
 
   segments: Segment[];
   isSplitting: boolean;
@@ -729,6 +800,7 @@ export interface AppState {
   transcriptionChunks: TranscriptionChunkPreview[];
   transcriptionRecord: TranscriptionRecord | null;
   transcriptionHistory: TranscriptionRecord[];
+  transcriptionHistoryPagination: Pagination | null;
   transcriptionStats: TranscriptionStats;
   isTranscribing: boolean;
   isLoadingTranscriptionHistory: boolean;
@@ -745,6 +817,12 @@ export interface AppState {
   batchTranscriptionItems: BatchTranscriptionItem[];
   isBatchTranscribing: boolean;
   batchTranscribeProgress: BatchTranscriptionProgress;
+
+  backgroundTasks: BackgroundTaskSnapshot[];
+  startBackgroundTask: (input: StartBackgroundTaskInput) => void;
+  updateBackgroundTask: (taskId: string, update: BackgroundTaskUpdate) => void;
+  markBackgroundTaskConnectionLost: (taskId: string, message: string) => void;
+  endBackgroundTask: (taskId: string) => void;
 
   voiceConfig: VoiceConfig;
   updateVoiceConfig: (config: Partial<VoiceConfig>) => void;
@@ -780,6 +858,13 @@ export interface AppState {
     pagination: { page: number; limit: number; total: number };
   }>;
   setCurrentBroadcast: (broadcast: Broadcast | null) => void;
+  createEditorDraft: (data: { text: string; artifactRevisionId?: number }) => Promise<Broadcast>;
+  forkEditorDraft: (broadcastId: number) => Promise<Broadcast>;
+  loadEditorBroadcast: (broadcastId: number) => Promise<Broadcast>;
+  updateEditorDraft: (broadcastId: number, text: string) => Promise<Broadcast>;
+  cancelEditorDraftCreation: () => void;
+  cancelEditorBroadcastLoad: () => void;
+  clearEditorBroadcast: () => void;
   saveBroadcast: (id: number) => Promise<Broadcast>;
   updateScript: (script: string) => void;
 
@@ -805,7 +890,7 @@ export interface AppState {
     provider?: AsrProvider,
     options?: TranscribeOptions
   ) => Promise<TranscriptionResult>;
-  fetchTranscriptionHistory: (params?: { limit?: number }) => Promise<TranscriptionRecord[]>;
+  fetchTranscriptionHistory: (params?: { page?: number; limit?: number }) => Promise<TranscriptionRecord[]>;
   fetchTranscriptionStats: () => Promise<TranscriptionStats>;
   deleteTranscriptionHistoryResult: (id: number) => Promise<void>;
   formatTranscriptionResult: (id: number, text: string) => Promise<TranscriptionRecord>;
@@ -827,6 +912,7 @@ export interface AppState {
   clearBatchTranscription: () => void;
 
   claimSearchResults: ClaimSearchResult[];
+  claimSearchPagination: Pagination | null;
   isSearchingClaims: boolean;
   claimDetail: TranscriptClaim | null;
   isLoadingClaimDetail: boolean;
@@ -856,8 +942,6 @@ export interface AppState {
   isLoadingProjectOutlineRevisions: boolean;
   projectOutlineRevisionsError: string | null;
   projectEditorContext: ProjectEditorContext | null;
-  isLoadingProjectEditorRevision: boolean;
-  projectEditorRevisionError: string | null;
   searchClaims: (query: string) => Promise<ClaimSearchResult[]>;
   clearResearchContext: () => void;
   fetchClaimDetail: (claimId: number) => Promise<TranscriptClaim>;
@@ -887,12 +971,9 @@ export interface AppState {
   saveProjectArtifactRevision: (projectId: number, artifactId: number, data: ContentArtifactRevisionInput) => Promise<ContentArtifactRevision>;
   fetchProjectArtifactRevisions: (projectId: number, artifactId: number) => Promise<ContentArtifactRevision[]>;
   fetchProjectOutlineRevisions: (projectId: number, artifactId: number) => Promise<ContentArtifactRevision[]>;
-  loadProjectEditorRevision: (projectId: number, artifactId: number, revisionId: number) => Promise<ContentArtifactRevision>;
-  adoptProjectEditorRevision: (revision: ContentArtifactRevision) => void;
-  clearProjectEditorContext: () => void;
 
   fetchSettings: () => Promise<void>;
-  updateSettings: (data: Partial<Settings>) => Promise<void>;
+  updateSettings: (data: SettingsUpdate) => Promise<void>;
   testApiKey: (
     type?: 'llm' | 'tts',
     apiKey?: string,

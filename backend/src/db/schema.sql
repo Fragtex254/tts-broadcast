@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS segments (
 
 CREATE INDEX IF NOT EXISTS idx_broadcasts_created_at ON broadcasts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_broadcasts_artifact_revision_id ON broadcasts(artifact_revision_id);
+CREATE INDEX IF NOT EXISTS idx_broadcasts_saved ON broadcasts(saved);
 CREATE INDEX IF NOT EXISTS idx_schedules_is_active ON schedules(is_active);
 CREATE INDEX IF NOT EXISTS idx_segments_broadcast_id ON segments(broadcast_id);
 

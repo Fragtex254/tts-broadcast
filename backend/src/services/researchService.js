@@ -21,17 +21,18 @@ function keywordScore(query, claim) {
   return tokens.reduce((score, token) => score + (haystack.includes(token) ? token.length : 0), 0) / tokens.reduce((sum, token) => sum + token.length, 0);
 }
 
-async function searchClaims({ query, limit = 20, embedText = embeddingService.embedText }) {
+async function searchClaims({ query, limit = 20, offset = 0, embedText = embeddingService.embedText }) {
   const claims = researchStore.listClaims({ status: 'active' });
   let queryEmbedding = null;
   try { queryEmbedding = await embedText({ text: query }); } catch { queryEmbedding = null; }
-  return claims.map((claim) => ({
+  const matched = claims.map((claim) => ({
     claim,
     similarity: queryEmbedding && Array.isArray(claim.embedding)
       ? cosineSimilarity(queryEmbedding, claim.embedding)
       : keywordScore(query, claim),
     search_mode: queryEmbedding && Array.isArray(claim.embedding) ? 'embedding' : 'keyword',
-  })).filter((item) => item.similarity > 0).sort((a, b) => b.similarity - a.similarity || b.claim.content_value - a.claim.content_value).slice(0, limit);
+  })).filter((item) => item.similarity > 0).sort((a, b) => b.similarity - a.similarity || b.claim.content_value - a.claim.content_value);
+  return { items: matched.slice(offset, offset + limit), total: matched.length };
 }
 
 function parseJson(raw) {
@@ -44,15 +45,11 @@ function parseJson(raw) {
 async function analyzeRelations({ claimIds, generateText = mimo.createLlmMessage, model = mimo.getLlmConfig().model }) {
   const uniqueIds = [...new Set(claimIds)];
   if (uniqueIds.length < 2 || uniqueIds.length > 10) throw new Error('请选择 2–10 条候选观点');
-  const claims = uniqueIds.map((id) => researchStore.getClaim(id));
+  // 批量查询替代逐条 getClaim / 逐对 getRelation，查询次数与候选数量解耦
+  const claimsById = new Map(researchStore.listClaimsByIds(uniqueIds).map((claim) => [claim.id, claim]));
+  const claims = uniqueIds.map((id) => claimsById.get(id));
   if (claims.some((claim) => !claim || claim.status !== 'active')) throw new Error('包含不存在或待更新的观点');
-  const cached = [];
-  for (let left = 0; left < uniqueIds.length; left++) {
-    for (let right = left + 1; right < uniqueIds.length; right++) {
-      const relation = researchStore.getRelation(uniqueIds[left], uniqueIds[right]);
-      if (relation) cached.push(relation);
-    }
-  }
+  const cached = researchStore.listRelationsAmong(uniqueIds);
   const coveredIds = new Set(cached.flatMap((relation) => [relation.claim_a_id, relation.claim_b_id]));
   if (cached.length > 0 && uniqueIds.every((id) => coveredIds.has(id))) {
     const explanations = (types) => cached.filter((relation) => types.includes(relation.relation_type)).map((relation) => relation.explanation);

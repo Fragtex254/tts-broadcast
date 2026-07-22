@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AudioPlayer } from '../components/Dashboard/AudioPlayer';
 import { ScriptPreview } from '../components/Dashboard/ScriptPreview';
 import { SegmentEditor } from '../components/Dashboard/SegmentEditor';
@@ -7,133 +7,137 @@ import { VoiceGenerator } from '../components/Dashboard/VoiceGenerator';
 import { Header } from '../components/Layout/Header';
 import { ActionButton } from '../components/ui/ActionButton';
 import useStore, { type ContentArtifactRevision } from '../store';
-import { getProjectEditorUrl, parseProjectEditorContext } from './projectEditorContext';
+
+function parseBroadcastId(value: string | undefined): number | null {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
 
 export const ScriptEditor: React.FC = () => {
-  const location = useLocation();
+  const { broadcastId: broadcastIdParam } = useParams<{ broadcastId: string }>();
   const navigate = useNavigate();
-  const parsedContext = useMemo(
-    () => parseProjectEditorContext(new URLSearchParams(location.search)),
-    [location.search]
-  );
+  const broadcastId = useMemo(() => parseBroadcastId(broadcastIdParam), [broadcastIdParam]);
   const currentBroadcast = useStore((state) => state.currentBroadcast);
-  const script = useStore((state) => state.script);
   const segments = useStore((state) => state.segments);
   const saveBroadcast = useStore((state) => state.saveBroadcast);
   const projectEditorContext = useStore((state) => state.projectEditorContext);
-  const isLoadingProjectRevision = useStore((state) => state.isLoadingProjectEditorRevision);
-  const projectRevisionError = useStore((state) => state.projectEditorRevisionError);
-  const loadProjectEditorRevision = useStore((state) => state.loadProjectEditorRevision);
-  const adoptProjectEditorRevision = useStore((state) => state.adoptProjectEditorRevision);
-  const clearProjectEditorContext = useStore((state) => state.clearProjectEditorContext);
-
-  const hasExactProjectContext = parsedContext.kind === 'project'
-    && projectEditorContext?.projectId === parsedContext.projectId
-    && projectEditorContext.artifactId === parsedContext.artifactId
-    && projectEditorContext.revision.id === parsedContext.revisionId;
-  const recoverableProjectContext = parsedContext.kind === 'legacy'
-    && projectEditorContext
-    && script === projectEditorContext.revision.content
-    ? projectEditorContext
-    : null;
+  const isLoading = useStore((state) => state.isLoadingEditorBroadcast);
+  const loadError = useStore((state) => state.editorBroadcastError);
+  const loadEditorBroadcast = useStore((state) => state.loadEditorBroadcast);
+  const cancelEditorBroadcastLoad = useStore((state) => state.cancelEditorBroadcastLoad);
+  const clearEditorBroadcast = useStore((state) => state.clearEditorBroadcast);
+  const createEditorDraft = useStore((state) => state.createEditorDraft);
+  const cancelEditorDraftCreation = useStore((state) => state.cancelEditorDraftCreation);
+  const [loadedBroadcastId, setLoadedBroadcastId] = useState<number | null>(null);
+  const loadCompletionSequence = useRef(0);
 
   useEffect(() => {
-    if (recoverableProjectContext) {
-      navigate(getProjectEditorUrl(recoverableProjectContext), { replace: true });
-      return;
+    const completionSequence = ++loadCompletionSequence.current;
+    if (!broadcastId) {
+      clearEditorBroadcast();
+      return undefined;
     }
-    if (parsedContext.kind !== 'project') {
-      clearProjectEditorContext();
-      return;
-    }
-    if (hasExactProjectContext) return;
-    void loadProjectEditorRevision(
-      parsedContext.projectId,
-      parsedContext.artifactId,
-      parsedContext.revisionId
-    ).catch(() => undefined);
-  }, [clearProjectEditorContext, hasExactProjectContext, loadProjectEditorRevision, navigate, parsedContext, recoverableProjectContext]);
+    let isCurrent = true;
+    void loadEditorBroadcast(broadcastId)
+      .then(() => {
+        if (isCurrent && completionSequence === loadCompletionSequence.current) {
+          setLoadedBroadcastId(broadcastId);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      isCurrent = false;
+      loadCompletionSequence.current += 1;
+      cancelEditorBroadcastLoad();
+    };
+  }, [broadcastId, cancelEditorBroadcastLoad, clearEditorBroadcast, loadEditorBroadcast]);
 
-  const retryProjectRevision = () => {
-    if (parsedContext.kind !== 'project') return;
-    void loadProjectEditorRevision(
-      parsedContext.projectId,
-      parsedContext.artifactId,
-      parsedContext.revisionId
-    ).catch(() => undefined);
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
+
+  const isCurrentBroadcast = Boolean(
+    broadcastId
+    && loadedBroadcastId === broadcastId
+    && currentBroadcast?.id === broadcastId
+  );
+  const projectContext = isCurrentBroadcast ? projectEditorContext : null;
+  const retry = () => {
+    if (!broadcastId) return;
+    const completionSequence = ++loadCompletionSequence.current;
+    void loadEditorBroadcast(broadcastId)
+      .then(() => {
+        if (completionSequence === loadCompletionSequence.current) {
+          setLoadedBroadcastId(broadcastId);
+        }
+      })
+      .catch(() => undefined);
+  };
+  const handleProjectRevisionSaved = async (revision: ContentArtifactRevision) => {
+    if (!projectContext) return;
+    const draft = await createEditorDraft({
+      text: revision.content,
+      artifactRevisionId: revision.id,
+    });
+    navigate(`/editor/${draft.id}`, { replace: true });
   };
 
-  const handleProjectRevisionSaved = (revision: ContentArtifactRevision) => {
-    if (parsedContext.kind !== 'project') return;
-    adoptProjectEditorRevision(revision);
-    navigate(getProjectEditorUrl({
-      projectId: parsedContext.projectId,
-      artifactId: parsedContext.artifactId,
-      revision,
-    }), { replace: true });
-  };
-
-  const audioUrl = currentBroadcast && (
+  const audioUrl = isCurrentBroadcast && currentBroadcast && (
     currentBroadcast.audio_path || (currentBroadcast.mode === 'segmented' && currentBroadcast.status === 'generated')
   )
     ? `/api/broadcast/${currentBroadcast.id}/audio?t=${encodeURIComponent(currentBroadcast.updated_at)}`
     : null;
-  const isSegmented = currentBroadcast?.mode === 'segmented';
-  const showProjectLoading = Boolean(recoverableProjectContext) || (
-    parsedContext.kind === 'project'
-      && !hasExactProjectContext
-      && (isLoadingProjectRevision || !projectRevisionError)
-  );
+  const isSegmented = isCurrentBroadcast && currentBroadcast?.mode === 'segmented';
+  const invalidAddress = !broadcastId;
+  const showLoading = !invalidAddress && (isLoading || (!isCurrentBroadcast && !loadError));
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden bg-paper">
       <div className="flex min-h-0 flex-1 flex-col">
         <Header
           title="口播稿编辑"
-          subtitle={hasExactProjectContext ? '编辑会保存为独立版本，再以确切版本进入分段与 TTS' : '先完成内容，再选择音色并生成语音'}
+          subtitle={projectContext ? '编辑会保存为独立版本，再以确切版本进入分段与 TTS' : '当前草稿已持久化，可刷新或通过地址继续编辑'}
         />
 
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-5xl space-y-4">
-            {parsedContext.kind === 'invalid' ? (
+            {invalidAddress ? (
               <div role="alert" className="rounded-card border border-pink/30 bg-pink/10 p-6 shadow-card">
-                <h2 className="ui-section-title text-ink">口播稿地址不完整</h2>
+                <h2 className="ui-section-title text-ink">口播稿地址无效</h2>
                 <p className="ui-body mt-2 text-ink-soft/80">
-                  项目、稿件或版本参数缺失，已停止加载，避免误用旧编辑器里的内存稿件。
+                  {broadcastIdParam ? '地址中的播报 ID 不是有效正整数。' : '地址缺少播报 ID，请从工作台或内容库重新打开。'}
                 </p>
-                <ActionButton className="mt-4" tone="secondary" onClick={() => navigate('/')}>
-                  返回工作台
-                </ActionButton>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <ActionButton tone="secondary" onClick={() => navigate('/')}>返回工作台</ActionButton>
+                  <ActionButton tone="ghost" onClick={() => navigate('/history')}>打开内容库</ActionButton>
+                </div>
               </div>
-            ) : showProjectLoading ? (
-              <div aria-label="正在加载项目口播稿" className="space-y-4 animate-pulse">
+            ) : showLoading ? (
+              <div aria-label="正在加载口播稿" className="space-y-4 animate-pulse">
                 <div className="h-8 w-44 rounded-xl bg-blush/25" />
                 <div className="h-72 rounded-card border border-card-border bg-white/55" />
                 <div className="h-40 rounded-card border border-card-border bg-white/45" />
               </div>
-            ) : parsedContext.kind === 'project' && !hasExactProjectContext ? (
+            ) : !isCurrentBroadcast ? (
               <div role="alert" className="rounded-card border border-pink/30 bg-pink/10 p-6 shadow-card">
-                <h2 className="ui-section-title text-ink">无法确认口播稿版本</h2>
+                <h2 className="ui-section-title text-ink">无法打开口播稿</h2>
                 <p className="ui-body mt-2 text-ink-soft/80">
-                  {projectRevisionError || '指定版本暂时无法读取，请重试。'}
+                  {loadError || '指定播报不存在或暂时无法读取。'}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <ActionButton tone="secondary" onClick={retryProjectRevision}>重新加载</ActionButton>
-                  <ActionButton tone="ghost" onClick={() => navigate(`/projects/${parsedContext.projectId}`)}>
-                    返回内容项目
-                  </ActionButton>
+                  <ActionButton tone="secondary" onClick={retry}>重新加载</ActionButton>
+                  <ActionButton tone="ghost" onClick={() => navigate('/history')}>返回内容库</ActionButton>
                 </div>
               </div>
-            ) : (
-              <>
-                {hasExactProjectContext && projectEditorContext && (
+            ) : currentBroadcast ? (
+              <React.Fragment key={currentBroadcast.id}>
+                {projectContext && (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-white/55 px-4 py-3">
                     <span className="font-body text-[12px] font-medium text-ink">
-                      内容项目口播稿 · 第 {projectEditorContext.revision.revision_number} 版
+                      内容项目口播稿 · 第 {projectContext.revision.revision_number} 版
                     </span>
                     <button
                       type="button"
-                      onClick={() => navigate(`/projects/${projectEditorContext.projectId}`)}
+                      onClick={() => navigate(`/projects/${projectContext.projectId}`)}
                       className="font-body text-[11px] text-ink-soft transition-colors hover:text-ink"
                     >
                       返回内容项目
@@ -142,25 +146,25 @@ export const ScriptEditor: React.FC = () => {
                 )}
 
                 <ScriptPreview
-                  projectContext={hasExactProjectContext ? projectEditorContext : null}
+                  projectContext={projectContext}
                   onProjectRevisionSaved={handleProjectRevisionSaved}
                 />
                 <VoiceGenerator onManagePresets={() => navigate('/voice-presets')} />
 
-                {isSegmented && segments.length > 0 && currentBroadcast && (
+                {isSegmented && segments.length > 0 && (
                   <SegmentEditor broadcastId={currentBroadcast.id} />
                 )}
 
                 <AudioPlayer
                   audioUrl={audioUrl}
-                  title={currentBroadcast?.title}
-                  broadcastId={currentBroadcast?.id}
-                  isSaved={currentBroadcast?.saved === 1}
+                  title={currentBroadcast.title}
+                  broadcastId={currentBroadcast.id}
+                  isSaved={currentBroadcast.saved === 1}
                   onSave={saveBroadcast}
-                  mode={currentBroadcast?.mode}
+                  mode={currentBroadcast.mode}
                 />
-              </>
-            )}
+              </React.Fragment>
+            ) : null}
           </div>
         </main>
       </div>

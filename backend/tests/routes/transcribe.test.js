@@ -342,6 +342,28 @@ describe('转录 API', () => {
     expect(mimo.formatTranscriptionText).toHaveBeenCalledWith('大家好今天聊 AI 首先是新模型发布');
   });
 
+  test('GET /api/transcribe/results 返回统一分页协议', async () => {
+    for (const name of ['a.wav', 'b.wav', 'c.wav']) {
+      db.prepare(`
+        INSERT INTO transcription_results (file_name, relative_path, text, language, provider, model)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(name, name, '转录文本', 'zh', 'mimo', 'mimo-v2.5-asr');
+    }
+
+    const firstPage = await request(app).get('/api/transcribe/results').query({ page: 1, limit: 2 });
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.results).toHaveLength(2);
+    expect(firstPage.body.pagination).toEqual({ page: 1, limit: 2, total: 3 });
+
+    const secondPage = await request(app).get('/api/transcribe/results').query({ page: 2, limit: 2 });
+    expect(secondPage.status).toBe(200);
+    expect(secondPage.body.results).toHaveLength(1);
+    expect(secondPage.body.pagination).toEqual({ page: 2, limit: 2, total: 3 });
+
+    const firstIds = firstPage.body.results.map((item) => item.id);
+    expect(firstIds).not.toContain(secondPage.body.results[0].id);
+  });
+
   test('GET /api/transcribe/stats 返回转录累计统计', async () => {
     db.prepare(`
       INSERT INTO transcription_results (
@@ -436,7 +458,7 @@ describe('转录 API', () => {
     expect(res.body.error).toBe('请上传需要转录的音频或视频文件');
   });
 
-  test('service 抛出的业务错误返回 500 和中文消息', async () => {
+  test('service 抛出的未预期错误统一返回 500 固定文案，详情只进日志', async () => {
     asr.transcribeMedia.mockRejectedValue(new Error('MiMo ASR API 请求超时，请稍后再试'));
 
     const res = await request(app)
@@ -445,7 +467,8 @@ describe('转录 API', () => {
       .attach('media', Buffer.from('fake-wav'), 'sample.wav');
 
     expect(res.status).toBe(500);
-    expect(res.body.error).toBe('MiMo ASR API 请求超时，请稍后再试');
+    expect(res.body.error).toBe('服务器内部错误，请稍后重试');
+    expect(res.body.error).not.toContain('MiMo');
     expect(mockLogger.error).toHaveBeenCalledWith(
       expect.objectContaining({
         err: expect.any(Error),

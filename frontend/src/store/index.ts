@@ -5,7 +5,10 @@ import { createScheduleSlice } from './scheduleSlice';
 import { createSegmentSlice } from './segmentSlice';
 import { createSettingsSlice } from './settingsSlice';
 import { createVoiceConfigSlice } from './voiceConfigSlice';
-import { createTranscribeSlice } from './transcribeSlice';
+import { createBackgroundTaskSlice } from './backgroundTaskSlice';
+import { createTranscribeTaskSlice } from './transcribeTaskSlice';
+import { createTranscribeBatchSlice } from './transcribeBatchSlice';
+import { createTranscribeResultsSlice } from './transcribeResultsSlice';
 import { createResearchSlice } from './researchSlice';
 import { createProjectWorkspaceSlice } from './projectWorkspaceSlice';
 import type { AppState } from './types';
@@ -23,6 +26,9 @@ export type {
   BatchTranscriptionItemStatus,
   BatchTranscriptionPhase,
   BatchTranscriptionProgress,
+  BackgroundTaskSnapshot,
+  BackgroundTaskStatus,
+  BackgroundTaskUpdate,
   Broadcast,
   ClaimRelationAnalysis,
   ClaimSearchResult,
@@ -50,6 +56,7 @@ export type {
   ContentRevisionProvenance,
   ContentSourceFragment,
   StartContentCreationJobInput,
+  StartBackgroundTaskInput,
   ConfirmDialogProps,
   ContentProjectSource,
   ContentProjectSourceInput,
@@ -61,10 +68,14 @@ export type {
   CreateContentProjectInput,
   LlmApiFormat,
   LlmModelOption,
+  MaskedSecret,
   Schedule,
   Segment,
   SegmentDraftInput,
   Settings,
+  SettingsFormData,
+  SettingsUpdate,
+  SecretSettingKey,
   TodayItem,
   TranscriptionResult,
   TranscriptionRecord,
@@ -86,8 +97,11 @@ export type {
 export const useStore = create<AppState>((set, get) => ({
   ...createBroadcastSlice(set),
   ...createVoiceConfigSlice(set),
+  ...createBackgroundTaskSlice(set),
   ...createSegmentSlice(set, get),
-  ...createTranscribeSlice(set),
+  ...createTranscribeTaskSlice(set, get),
+  ...createTranscribeBatchSlice(set, get),
+  ...createTranscribeResultsSlice(set, get),
   ...createResearchSlice(set),
   ...createProjectWorkspaceSlice(set, get),
   ...createSettingsSlice(set),

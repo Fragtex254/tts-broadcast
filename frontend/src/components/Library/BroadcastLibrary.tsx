@@ -5,6 +5,9 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { ActionButton } from '../ui/ActionButton';
 import { WorkbenchCard } from '../ui/WorkbenchCard';
 import { createScopedLogger, toLogError } from '../../services/logger';
+import { broadcastApi } from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
+import { EditorBroadcastPayloadSchema, safeParseStrict } from '../../services/schemas';
 import useStore from '../../store';
 import type { Broadcast } from '../../store';
 
@@ -31,12 +34,14 @@ const formatDate = (dateStr: string): string => {
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
+    draft: 'bg-lemon/25 text-ink',
     pending: 'bg-paper-2 text-ink-soft',
     generated: 'bg-sage/30 text-ink',
     generating: 'bg-lilac/30 text-ink',
     failed: 'bg-pink/20 text-ink',
   };
   const labels: Record<string, string> = {
+    draft: '编辑草稿',
     pending: '文字草稿',
     generated: '音频就绪',
     generating: '正在生成音频',
@@ -55,8 +60,9 @@ export const BroadcastLibrary: React.FC = () => {
   const currentBroadcast = useStore((s) => s.currentBroadcast);
   const setCurrentBroadcast = useStore((s) => s.setCurrentBroadcast);
   const saveBroadcast = useStore((s) => s.saveBroadcast);
-  const fetchSegments = useStore((s) => s.fetchSegments);
   const batchDeleteBroadcasts = useStore((s) => s.batchDeleteBroadcasts);
+  const forkEditorDraft = useStore((s) => s.forkEditorDraft);
+  const cancelEditorDraftCreation = useStore((s) => s.cancelEditorDraftCreation);
   const isBatchDeleting = useStore((s) => s.isBatchDeleting);
 
   const navigate = useNavigate();
@@ -71,6 +77,9 @@ export const BroadcastLibrary: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [reopeningBroadcastId, setReopeningBroadcastId] = useState<number | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   // 进入多选模式
   const handleEnterMultiSelect = useCallback(() => {
@@ -155,6 +164,8 @@ export const BroadcastLibrary: React.FC = () => {
     }
   }, [deleteError]);
 
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
+
   // 确认删除
   const handleConfirmDelete = useCallback(async () => {
     try {
@@ -171,17 +182,36 @@ export const BroadcastLibrary: React.FC = () => {
     }
   }, [selectedIds, batchDeleteBroadcasts, handleExitMultiSelect, loadBroadcasts, page]);
 
-  const handleSelectBroadcast = useCallback((broadcast: Broadcast) => setCurrentBroadcast(broadcast), [setCurrentBroadcast]);
+  const handleSelectBroadcast = useCallback(async (broadcast: Broadcast) => {
+    // 列表项不携带 content，选中时按 ID 拉详情补全预览全文
+    setIsLoadingPreview(true);
+    setEditError(null);
+    try {
+      const response = await broadcastApi.getDetail(broadcast.id);
+      const payload = safeParseStrict(EditorBroadcastPayloadSchema, response.data);
+      setCurrentBroadcast(payload.broadcast);
+    } catch (error) {
+      logger.error({ err: toLogError(error), broadcastId: broadcast.id }, '加载播报详情失败');
+      setEditError(getApiErrorMessage(error, '加载成稿预览失败，请稍后重试'));
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  }, [setCurrentBroadcast]);
   const handleReEdit = useCallback(async (broadcast: Broadcast, e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurrentBroadcast(broadcast);
+    setEditError(null);
+    setReopeningBroadcastId(broadcast.id);
     try {
-      await fetchSegments(broadcast.id);
-    } catch {
-      // Even if segments fail to load, still navigate
+      const draft = broadcast.status === 'draft'
+        ? broadcast
+        : await forkEditorDraft(broadcast.id);
+      navigate(`/editor/${draft.id}`);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : '创建可编辑副本失败，请重试。');
+    } finally {
+      setReopeningBroadcastId(null);
     }
-    navigate('/editor');
-  }, [setCurrentBroadcast, fetchSegments, navigate]);
+  }, [forkEditorDraft, navigate]);
   const getAudioUrl = useCallback((broadcast: Broadcast): string | null => (
     broadcast.audio_path || (broadcast.mode === 'segmented' && broadcast.status === 'generated')
       ? `/api/broadcast/${broadcast.id}/audio?t=${encodeURIComponent(broadcast.updated_at)}`
@@ -189,6 +219,10 @@ export const BroadcastLibrary: React.FC = () => {
   ), []);
   const totalPages = Math.ceil(total / limit);
   const selectedBroadcast = broadcasts.find((broadcast) => broadcast.id === currentBroadcast?.id) || null;
+  // 预览全文来自按 ID 拉取的详情（列表项不含 content）
+  const previewContent = selectedBroadcast && currentBroadcast?.id === selectedBroadcast.id
+    ? currentBroadcast.content
+    : '';
 
   return (
     <div className="space-y-4">
@@ -302,7 +336,7 @@ export const BroadcastLibrary: React.FC = () => {
                     <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
                       <button
                         type="button"
-                        onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast) : handleSelectBroadcast(broadcast)}
+                        onClick={() => isMultiSelectMode ? handleToggleSelect(broadcast) : void handleSelectBroadcast(broadcast)}
                         aria-pressed={isMultiSelectMode ? undefined : isSelected}
                         className="ui-pressable min-w-0 flex-1 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lilac/80"
                       >
@@ -322,7 +356,7 @@ export const BroadcastLibrary: React.FC = () => {
                           {getStatusBadge(broadcast.status)}
                           <span>{broadcast.mode === 'segmented' ? '分段成稿' : '整篇成稿'}</span>
                           <span>更新于 {formatDate(broadcast.updated_at)}</span>
-                          <span>{broadcast.content.length} 字</span>
+                          <span>{broadcast.content_length ?? broadcast.content.length} 字</span>
                           {broadcast.duration !== null && <span>音频 {formatDuration(broadcast.duration)}</span>}
                         </span>
                       </button>
@@ -331,6 +365,9 @@ export const BroadcastLibrary: React.FC = () => {
                           tone="edit"
                           size="sm"
                           onClick={(e) => handleReEdit(broadcast, e)}
+                          isLoading={reopeningBroadcastId === broadcast.id}
+                          loadingLabel="正在创建副本…"
+                          disabled={reopeningBroadcastId !== null}
                           className="w-full shrink-0 sm:w-auto"
                         >
                           继续编辑
@@ -353,18 +390,28 @@ export const BroadcastLibrary: React.FC = () => {
             </div>
           )}
 
-          {selectedBroadcast?.content && (
+          {selectedBroadcast && isLoadingPreview && (
+            <WorkbenchCard className="p-5">
+              <div className="animate-pulse space-y-3">
+                <div className="h-4 w-32 rounded bg-ink/5" />
+                <div className="h-4 w-full rounded bg-ink/5" />
+                <div className="h-4 w-2/3 rounded bg-ink/5" />
+              </div>
+            </WorkbenchCard>
+          )}
+
+          {selectedBroadcast && !isLoadingPreview && previewContent && (
             <WorkbenchCard className="p-5">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-pink" />
                 <h3 className="font-display text-[17px] font-medium text-ink">成稿预览</h3>
                 <span className="ml-auto font-body text-[11px] text-ink-soft/70">
-                  {selectedBroadcast.content.length} 字 · 预计口播 {Math.ceil(selectedBroadcast.content.length / 4)} 秒
+                  {previewContent.length} 字 · 预计口播 {Math.ceil(previewContent.length / 4)} 秒
                 </span>
               </div>
               <div className="rounded-2xl border border-card-border bg-white/60 p-4 sm:p-5">
                 <p className="ui-reading-body mx-auto max-w-3xl whitespace-pre-wrap break-words text-ink">
-                  {selectedBroadcast.content}
+                  {previewContent}
                 </p>
               </div>
             </WorkbenchCard>
@@ -395,6 +442,11 @@ export const BroadcastLibrary: React.FC = () => {
       {deleteError && (
         <div className="fixed bottom-4 right-4 z-50 bg-pink/10 border border-pink/30 text-pink px-4 py-3 rounded-lg animate-shake">
           {deleteError}
+        </div>
+      )}
+      {editError && (
+        <div role="alert" className="fixed bottom-4 right-4 z-50 rounded-lg border border-pink/30 bg-pink/10 px-4 py-3 text-pink animate-shake">
+          {editError}
         </div>
       )}
     </div>

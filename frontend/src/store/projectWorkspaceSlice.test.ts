@@ -110,13 +110,12 @@ describe('projectWorkspaceSlice', () => {
       projectWorkspaceSaveError: null,
       isSavingProjectWorkspace: false,
       projectEditorContext: null,
-      isLoadingProjectEditorRevision: false,
-      projectEditorRevisionError: null,
       projectMilestoneFeedback: null,
       consumedProjectMilestoneIds: [],
       activeProjectTaskId: null,
       activeProjectJobOperation: null,
       projectWorkspaceJobError: null,
+      backgroundTasks: [],
     });
   });
 
@@ -267,60 +266,6 @@ describe('projectWorkspaceSlice', () => {
     expect(apiMocks.createRevision.mock.calls[0][2].requestKey).not.toBe(apiMocks.createRevision.mock.calls[1][2].requestKey);
   });
 
-  test('编辑器按 query 加载确切 Revision，并清空旧音频渲染上下文', async () => {
-    const requestedRevision = { ...firstRevision, id: 43, revision_number: 3, content: '\n确切口播版本\n' };
-    apiMocks.getRevisions.mockResolvedValue({ data: { revisions: [requestedRevision, firstRevision] } });
-    apiMocks.getWorkspace.mockResolvedValue({
-      data: { workspace: { ...workspace, artifacts: [{ ...artifact, kind: 'audio_script', current_revision: requestedRevision }] } },
-    });
-    useStore.setState({
-      script: '旧稿件',
-      currentBroadcast: {
-        id: 99,
-        title: '旧播报',
-        content: '旧稿件',
-        artifact_revision_id: null,
-        source_artifact_revision_id: null,
-        audio_path: null,
-        duration: null,
-        voice_type: null,
-        voice_config: null,
-        source_items: null,
-        status: 'draft',
-        saved: 0,
-        mode: 'segmented',
-        created_at: '2026-07-18T00:00:00.000Z',
-        updated_at: '2026-07-18T00:00:00.000Z',
-      },
-      segments: [{
-        id: 1,
-        broadcast_id: 99,
-        index: 0,
-        text: '旧段落',
-        audio_path: null,
-        status: 'pending',
-        style_tag: '',
-        playback_rate: 1,
-        error_message: '',
-        created_at: '2026-07-18T00:00:00.000Z',
-        updated_at: '2026-07-18T00:00:00.000Z',
-      }],
-    });
-
-    await useStore.getState().loadProjectEditorRevision(12, 30, 43);
-
-    expect(apiMocks.getRevisions).toHaveBeenCalledWith(12, 30);
-    expect(apiMocks.getWorkspace).toHaveBeenCalledWith(12);
-    expect(useStore.getState().projectEditorContext).toEqual({
-      projectId: 12,
-      artifactId: 30,
-      revision: expect.objectContaining(requestedRevision),
-    });
-    expect(useStore.getState().script).toBe('\n确切口播版本\n');
-    expect(useStore.getState().currentBroadcast).toBeNull();
-    expect(useStore.getState().segments).toEqual([]);
-  });
-
   test('手工证据保存后合并工作区，并且重复 milestone event 只消费一次', async () => {
     const evidence = {
       id: 5, project_id: 12, source_id: 3, source_title: '原文', origin: 'user' as const, state: 'selected' as const,
@@ -388,6 +333,52 @@ describe('projectWorkspaceSlice', () => {
     expect(useStore.getState().projectWorkspace?.artifacts).toEqual([artifact]);
     expect(useStore.getState().projectWorkspace?.generation_jobs[0].status).toBe('failed');
     expect(useStore.getState().projectWorkspaceJobError).toBe('模型不可用');
+  });
+
+  test('离开项目页只清视图，后台 SSE 继续并在完成后收口全局任务', async () => {
+    const runningJob = {
+      id: 75, project_id: 12, operation: 'generate_outline' as const, request_key: 'server-key', status: 'running' as const,
+      phase: 'outlining', progress: 20, error: '', result_artifact_id: null, result_revision_id: null, created_at: '', updated_at: '',
+    };
+    const completedJob = {
+      ...runningJob,
+      status: 'completed' as const,
+      phase: 'completed',
+      progress: 100,
+      result_artifact_id: 30,
+      result_revision_id: 41,
+    };
+    apiMocks.createJob.mockResolvedValue({ status: 202, data: { job: runningJob } });
+
+    await useStore.getState().startProjectCreationJob(12, {
+      operation: 'generate_outline', evidenceIds: [5],
+    });
+    const taskId = useStore.getState().activeProjectTaskId;
+    expect(taskId).not.toBeNull();
+
+    useStore.getState().clearProjectWorkspace();
+
+    expect(useStore.getState().projectWorkspace).toBeNull();
+    expect(useStore.getState().activeProjectTaskId).toBe(taskId);
+    expect(useStore.getState().backgroundTasks).toHaveLength(1);
+    expect(sseMocks.close).not.toHaveBeenCalled();
+
+    sseMocks.handlers.get('progress')?.({ job: { ...runningJob, progress: 55 } });
+    expect(useStore.getState().backgroundTasks[0]).toMatchObject({
+      taskId,
+      status: 'running',
+      percent: 55,
+    });
+
+    sseMocks.handlers.get('complete')?.({
+      job: completedJob,
+      workspace: { ...workspace, generation_jobs: [completedJob] },
+    });
+
+    expect(useStore.getState().projectWorkspace).toBeNull();
+    expect(useStore.getState().activeProjectTaskId).toBeNull();
+    expect(useStore.getState().backgroundTasks).toEqual([]);
+    expect(sseMocks.close).toHaveBeenCalledOnce();
   });
 
   test('相同上下文重试复用 requestKey，Brief 事实变化后生成新 key', async () => {

@@ -6,11 +6,17 @@
 const { createScopedLogger } = require('./logger');
 
 const logger = createScopedLogger('sse-manager');
+const TERMINAL_REPLAY_TTL_MS = 5 * 60 * 1000;
+const MAX_TERMINAL_REPLAYS = 256;
+const MAX_TERMINAL_REPLAY_BYTES = 64 * 1024 * 1024;
 
 class SSEManager {
   constructor() {
     // Map<taskId, Set<res>>
     this.connections = new Map();
+    // Map<taskId, { message, bytes, expiresAt }>；仅短期保留 complete/error，供断线重连收口。
+    this.terminalReplays = new Map();
+    this.terminalReplayBytes = 0;
   }
 
   /**
@@ -52,10 +58,13 @@ class SSEManager {
    * @param {object} data - 事件数据
    */
   send(taskId, eventType, data) {
+    const message = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+    if (eventType === 'complete' || eventType === 'error') {
+      this.rememberTerminal(taskId, message);
+    }
+
     const clients = this.connections.get(taskId);
     if (!clients || clients.size === 0) return;
-
-    const message = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
 
     for (const res of clients) {
       try {
@@ -119,6 +128,95 @@ class SSEManager {
   getTaskConnectionCount(taskId) {
     const clients = this.connections.get(taskId);
     return clients ? clients.size : 0;
+  }
+
+  /**
+   * 清除任务的旧 terminal 快照。新任务首次订阅时调用，避免复用 taskId 回放旧结果。
+   * @param {string} taskId - 任务 ID
+   */
+  clearReplay(taskId) {
+    this.deleteReplay(taskId);
+  }
+
+  /**
+   * 向重连响应回放断线窗口内错过的 terminal 事件。
+   * @param {string} taskId - 任务 ID
+   * @param {object} res - Express response 对象
+   * @returns {boolean} 是否完成回放
+   */
+  replayTerminal(taskId, res) {
+    const replay = this.terminalReplays.get(taskId);
+    if (!replay) return false;
+    if (replay.expiresAt <= Date.now()) {
+      this.deleteReplay(taskId);
+      return false;
+    }
+    try {
+      res.write(replay.message);
+      return true;
+    } catch (error) {
+      logger.warn({ err: error, hasTaskId: Boolean(taskId) }, 'SSE terminal 事件回放失败');
+      return false;
+    }
+  }
+
+  rememberTerminal(taskId, message) {
+    const now = Date.now();
+    for (const [storedTaskId, replay] of this.terminalReplays) {
+      if (replay.expiresAt <= now) this.deleteReplay(storedTaskId);
+    }
+    this.deleteReplay(taskId);
+    const bytes = Buffer.byteLength(message);
+    if (bytes > MAX_TERMINAL_REPLAY_BYTES) {
+      logger.warn({ bytes }, 'SSE terminal 事件超过回放内存上限');
+      return;
+    }
+    this.terminalReplays.set(taskId, {
+      message,
+      bytes,
+      expiresAt: now + TERMINAL_REPLAY_TTL_MS,
+    });
+    this.terminalReplayBytes += bytes;
+    while (
+      this.terminalReplays.size > MAX_TERMINAL_REPLAYS
+      || this.terminalReplayBytes > MAX_TERMINAL_REPLAY_BYTES
+    ) {
+      const oldestTaskId = this.terminalReplays.keys().next().value;
+      if (oldestTaskId === undefined) break;
+      this.deleteReplay(oldestTaskId);
+    }
+  }
+
+  deleteReplay(taskId) {
+    const replay = this.terminalReplays.get(taskId);
+    if (!replay) return;
+    this.terminalReplayBytes = Math.max(0, this.terminalReplayBytes - replay.bytes);
+    this.terminalReplays.delete(taskId);
+  }
+
+  /**
+   * 关闭全部 SSE 连接。
+   * @returns {number} 已关闭的连接数
+   */
+  closeAll() {
+    const clients = [];
+    for (const taskClients of this.connections.values()) {
+      clients.push(...taskClients);
+    }
+    this.connections.clear();
+    this.terminalReplays.clear();
+    this.terminalReplayBytes = 0;
+
+    for (const res of clients) {
+      try {
+        res.end();
+      } catch (error) {
+        logger.warn({ err: error }, '关闭 SSE 连接失败');
+      }
+    }
+
+    logger.info({ count: clients.length }, '已关闭全部 SSE 连接');
+    return clients.length;
   }
 }
 

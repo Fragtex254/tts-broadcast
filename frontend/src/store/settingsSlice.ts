@@ -1,7 +1,7 @@
 import { settingsApi, transcribeApi } from '../services/api';
 import { getApiErrorMessage } from '../services/apiError';
 import { createScopedLogger, toLogError } from '../services/logger';
-import { safeParse, SettingsSchema } from '../services/schemas';
+import { safeParseStrict, SettingsSchema } from '../services/schemas';
 import { defaultSettings } from './defaults';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
@@ -20,7 +20,7 @@ export function createSettingsSlice(set: StoreSet): Pick<
       set({ isLoadingSettings: true });
       try {
         const response = await settingsApi.get();
-        const settings = safeParse(SettingsSchema, response.data.settings) || response.data.settings;
+        const settings = safeParseStrict(SettingsSchema, response.data.settings);
         set({ settings, isLoadingSettings: false });
       } catch (error) {
         set({ isLoadingSettings: false });
@@ -32,7 +32,7 @@ export function createSettingsSlice(set: StoreSet): Pick<
     updateSettings: async (data) => {
       try {
         const response = await settingsApi.update(data);
-        const settings = safeParse(SettingsSchema, response.data.settings) || response.data.settings;
+        const settings = safeParseStrict(SettingsSchema, response.data.settings);
         set({ settings });
       } catch (error) {
         logger.error({ err: toLogError(error), fieldCount: Object.keys(data).length }, '更新设置失败');
@@ -46,7 +46,7 @@ export function createSettingsSlice(set: StoreSet): Pick<
         return response.data;
       } catch (error) {
         logger.error({ err: toLogError(error), type, hasApiKey: Boolean(apiKey), hasLlmConfig: Boolean(llmConfig) }, '测试 API Key 失败');
-        return { valid: false, error: (error as Error).message };
+        return { valid: false, error: getApiErrorMessage(error, '验证失败，请检查 API Key 是否正确') };
       }
     },
 

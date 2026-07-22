@@ -47,6 +47,17 @@ export const BATCH_STATUS_DOTS: Record<BatchTranscriptionItem['status'], string>
   failed: 'bg-pink',
 };
 
+/**
+ * 批量转录状态的非颜色线索（DESIGN.md §3/§16：状态不得只用颜色表达）。
+ * 与 BATCH_STATUS_DOTS / BATCH_STATUS_LABELS 一起渲染。
+ */
+export const BATCH_STATUS_ICONS: Record<BatchTranscriptionItem['status'], string> = {
+  pending: '○',
+  transcribing: '▶',
+  completed: '✓',
+  failed: '✕',
+};
+
 export const ACTION_BUTTON_NEUTRAL = 'px-3.5 py-2 font-body text-[12px] text-ink-soft hover:text-ink bg-white/70 hover:bg-white/90 disabled:opacity-40 rounded-xl border border-card-border ui-transition duration-fast';
 export const ACTION_BUTTON_FORMAT = 'px-3.5 py-2 font-body text-[12px] bg-lilac hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn ui-transition duration-fast';
 export const ACTION_BUTTON_IMPORT = 'px-3.5 py-2 font-body text-[12px] bg-lemon hover:brightness-105 disabled:opacity-40 text-ink rounded-xl shadow-btn ui-transition duration-fast';

@@ -11,10 +11,98 @@ const broadcastRenderService = require('../services/broadcastRenderService');
 const contentArtifactStore = require('../services/contentArtifactStore');
 const segmentStore = require('../services/segmentStore');
 const voiceConfigService = require('../services/voiceConfig');
+const editorSplitCoordinator = require('../services/editorSplitCoordinator');
 const { createScopedLogger } = require('../services/logger');
+const { sendInternalError } = require('../utils/httpResponse');
 const { validateId, cleanAudioFile, resolveAudioFilePath } = require('../utils/validation');
 
 const logger = createScopedLogger('broadcast-route');
+
+function titleFromContent(content) {
+  return content.length > 50 ? `${content.substring(0, 50)}...` : content;
+}
+
+function resolveSourceRevision({ artifactRevisionId, text, purpose = '生成音频' }) {
+  if (artifactRevisionId === undefined || artifactRevisionId === null) return null;
+
+  const revisionCheck = validateId(String(artifactRevisionId), '稿件版本 ID');
+  if (!revisionCheck.valid || Number(artifactRevisionId) !== revisionCheck.id) {
+    const error = new Error('无效的稿件版本 ID');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const revisionContext = contentArtifactStore.getRevisionContext({ revisionId: revisionCheck.id });
+  if (!revisionContext) {
+    const error = new Error('稿件版本不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (revisionContext.artifact.kind !== 'audio_script') {
+    const error = new Error(`只能从口播稿版本${purpose}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  if (text !== revisionContext.revision.content) {
+    const error = new Error(`口播稿已修改，请先保存为新版本再${purpose}`);
+    error.statusCode = 409;
+    throw error;
+  }
+  return revisionContext;
+}
+
+function toProjectEditorContext(revisionContext) {
+  if (!revisionContext) return null;
+  return {
+    projectId: revisionContext.artifact.project_id,
+    artifactId: revisionContext.artifact.id,
+    revision: revisionContext.revision,
+  };
+}
+
+function resolveStoredSourceRevision(broadcast) {
+  if (!broadcast?.source_artifact_revision_id) return null;
+  const revisionContext = contentArtifactStore.getRevisionContext({
+    revisionId: broadcast.source_artifact_revision_id,
+  });
+  return revisionContext?.artifact.kind === 'audio_script'
+    && revisionContext.revision.content === broadcast.content
+    ? revisionContext
+    : null;
+}
+
+function buildEditorPayload({ broadcast, segments, revisionContext, splitInProgress }) {
+  const parsedVoice = voiceConfigService.parseBroadcastVoiceConfig(broadcast);
+  return {
+    broadcast,
+    voiceConfig: {
+      voiceType: parsedVoice.voiceType,
+      voice: parsedVoice.voiceConfig.voice || '',
+      voiceDesign: parsedVoice.voiceConfig.voiceDesign || '',
+      voiceClone: parsedVoice.voiceConfig.voiceClone || '',
+      stylePrompt: parsedVoice.voiceConfig.stylePrompt || '',
+      optimizeTextPreview: parsedVoice.voiceConfig.optimizeTextPreview === true,
+      speed: parsedVoice.voiceConfig.speed || null,
+      emotion: parsedVoice.voiceConfig.emotion || null,
+      pitch: parsedVoice.voiceConfig.pitch || null,
+    },
+    sourceRevisionContext: toProjectEditorContext(revisionContext),
+    segments,
+    splitInProgress,
+  };
+}
+
+function getEditorPayload(broadcastId) {
+  while (true) {
+    const stateBeforeRead = editorSplitCoordinator.getState(broadcastId);
+    const snapshot = broadcastStore.getEditorSnapshot(broadcastId);
+    const stateAfterRead = editorSplitCoordinator.getState(broadcastId);
+    if (stateBeforeRead.version !== stateAfterRead.version) continue;
+    return snapshot
+      ? buildEditorPayload({ ...snapshot, splitInProgress: stateAfterRead.active })
+      : null;
+  }
+}
 
 function parseByteRange(rangeHeader, totalLength) {
   if (typeof rangeHeader !== 'string') return null;
@@ -135,6 +223,56 @@ router.post('/rewrite', async (req, res) => {
 });
 
 /**
+ * POST /api/broadcast/drafts
+ * 创建可由 URL 恢复、但尚未进入 TTS 的编辑器草稿。
+ */
+router.post('/drafts', (req, res) => {
+  try {
+    const { text, artifactRevisionId } = req.body;
+    if (typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: '请提供口播稿内容' });
+    }
+
+    const revisionContext = resolveSourceRevision({ artifactRevisionId, text, purpose: '进入编辑器' });
+    const broadcast = broadcastStore.create({
+      title: titleFromContent(text),
+      content: text,
+      status: 'draft',
+      mode: 'segmented',
+      artifactRevisionId: revisionContext?.revision.id ?? null,
+    });
+    res.status(201).json(getEditorPayload(broadcast.id));
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    logger.error({ err: error }, '创建编辑器草稿失败');
+    res.status(500).json({ error: '创建编辑器草稿失败' });
+  }
+});
+
+/**
+ * POST /api/broadcast/:id/drafts
+ * 从历史 Render 派生独立编辑草稿，不修改原音频与分段。
+ */
+router.post('/:id/drafts', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+    const source = broadcastStore.getById(idCheck.id);
+    if (!source) return res.status(404).json({ error: '播报记录不存在' });
+
+    const revisionContext = resolveStoredSourceRevision(source);
+    const draft = broadcastStore.forkEditorDraft(
+      source,
+      revisionContext?.revision.id ?? null
+    );
+    res.status(201).json(getEditorPayload(draft.id));
+  } catch (error) {
+    logger.error({ err: error, broadcastId: req.params.id }, '派生编辑器草稿失败');
+    res.status(500).json({ error: '派生编辑器草稿失败' });
+  }
+});
+
+/**
  * POST /api/broadcast/generate
  * 生成 TTS 语音（支持 whole 和 segmented 模式）
  */
@@ -161,23 +299,10 @@ router.post('/generate', async (req, res) => {
     }
 
     let linkedArtifactRevisionId = null;
-    if (artifactRevisionId !== undefined && artifactRevisionId !== null) {
-      const revisionCheck = validateId(String(artifactRevisionId), '稿件版本 ID');
-      if (!revisionCheck.valid || Number(artifactRevisionId) !== revisionCheck.id) {
-        return res.status(400).json({ error: '无效的稿件版本 ID' });
-      }
-
-      const revisionContext = contentArtifactStore.getRevisionContext({ revisionId: revisionCheck.id });
-      if (!revisionContext) {
-        return res.status(404).json({ error: '稿件版本不存在' });
-      }
-      if (revisionContext.artifact.kind !== 'audio_script') {
-        return res.status(400).json({ error: '只能从口播稿版本生成音频' });
-      }
-      if (text !== revisionContext.revision.content) {
-        return res.status(409).json({ error: '口播稿已修改，请先保存为新版本再生成音频' });
-      }
-      linkedArtifactRevisionId = revisionCheck.id;
+    try {
+      linkedArtifactRevisionId = resolveSourceRevision({ artifactRevisionId, text })?.revision.id ?? null;
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ error: error.message });
     }
 
     const voiceSelection = voiceConfigService.validateVoiceSelection({
@@ -324,7 +449,7 @@ router.post('/batch-delete', (req, res) => {
     res.json(result);
   } catch (error) {
     logger.error({ err: error }, '批量删除失败');
-    res.status(500).json({ error: error.message || '批量删除失败' });
+    sendInternalError(res);
   }
 });
 
@@ -337,10 +462,10 @@ router.get('/:id', (req, res) => {
     const idCheck = validateId(req.params.id, '播报 ID');
     if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
 
-    const broadcast = broadcastStore.getById(idCheck.id);
-    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+    const payload = getEditorPayload(idCheck.id);
+    if (!payload) return res.status(404).json({ error: '播报记录不存在' });
 
-    res.json({ broadcast });
+    res.json(payload);
   } catch (error) {
     logger.error({
       err: error,
@@ -348,6 +473,47 @@ router.get('/:id', (req, res) => {
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '获取播报详情失败');
     res.status(500).json({ error: '获取播报详情失败' });
+  }
+});
+
+/**
+ * PATCH /api/broadcast/:id/draft
+ * 保存未切分编辑器草稿；有来源 Revision 的草稿不允许改写来源快照。
+ */
+router.patch('/:id/draft', (req, res) => {
+  try {
+    const idCheck = validateId(req.params.id, '播报 ID');
+    if (!idCheck.valid) return res.status(400).json({ error: idCheck.error });
+    const { text } = req.body;
+    if (typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: '请提供口播稿内容' });
+    }
+
+    const broadcast = broadcastStore.getById(idCheck.id);
+    if (!broadcast) return res.status(404).json({ error: '播报记录不存在' });
+    if (broadcast.source_artifact_revision_id) {
+      const revisionContext = contentArtifactStore.getRevisionContext({
+        revisionId: broadcast.source_artifact_revision_id,
+      });
+      if (!revisionContext || text !== revisionContext.revision.content) {
+        return res.status(409).json({ error: '项目口播稿已变化，请保存新版本并创建新的编辑器草稿' });
+      }
+    }
+    if (segmentStore.getByBroadcastId(idCheck.id).length > 0) {
+      return res.status(409).json({ error: '口播稿已经切分，请在分段编辑器中继续修改' });
+    }
+
+    const updated = broadcastStore.updateEditorDraft(idCheck.id, {
+      title: titleFromContent(text),
+      content: text,
+    });
+    if (!updated) {
+      return res.status(409).json({ error: '当前播报已进入生成流程，不能再修改原始草稿' });
+    }
+    res.json({ broadcast: updated });
+  } catch (error) {
+    logger.error({ err: error, broadcastId: req.params.id }, '保存编辑器草稿失败');
+    res.status(500).json({ error: '保存编辑器草稿失败' });
   }
 });
 
@@ -488,7 +654,7 @@ router.get('/:id/download', async (req, res) => {
       hasBroadcastId: Boolean(req.params.id),
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '下载音频失败');
-    res.status(500).json({ error: error.message || '下载音频失败' });
+    sendInternalError(res);
   }
 });
 
@@ -534,7 +700,7 @@ router.get('/:id/audio', async (req, res) => {
       hasBroadcastId: Boolean(req.params.id),
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '获取音频失败');
-    res.status(500).json({ error: error.message || '获取音频失败' });
+    sendInternalError(res);
   }
 });
 

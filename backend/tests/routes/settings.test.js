@@ -15,10 +15,19 @@ jest.mock('axios', () => ({
 
 describe('设置 API', () => {
   const originalSettings = {};
+  const upsertSetting = db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `);
+
+  function setSetting(key, value) {
+    upsertSetting.run(key, JSON.stringify(value));
+  }
 
   beforeEach(() => {
     axios.get.mockReset();
     axios.post.mockReset();
+    Object.keys(originalSettings).forEach((key) => delete originalSettings[key]);
     // 保存原始设置
     const rows = db.prepare('SELECT * FROM settings').all();
     rows.forEach(row => {
@@ -43,6 +52,52 @@ describe('设置 API', () => {
     const res = await request(app).get('/api/settings');
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('settings');
+  });
+
+  test('GET /api/settings - 所有 API Key 只返回脱敏状态', async () => {
+    setSetting('mimo_api_key', 'llm-secret-1234');
+    setSetting('mimo_tts_api_key', 'tts-secret-5678');
+    setSetting('embedding_api_key', '');
+
+    const res = await request(app).get('/api/settings');
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain('llm-secret-1234');
+    expect(JSON.stringify(res.body)).not.toContain('tts-secret-5678');
+    expect(res.body.settings.mimo_api_key).toEqual({ masked: '••••••••1234', is_set: true });
+    expect(res.body.settings.mimo_tts_api_key).toEqual({ masked: '••••••••5678', is_set: true });
+    expect(res.body.settings.embedding_api_key).toEqual({ masked: '', is_set: false });
+  });
+
+  test('PUT /api/settings - 脱敏占位值或空值不会覆盖已保存密钥', async () => {
+    setSetting('mimo_api_key', 'keep-llm-secret-1234');
+    setSetting('mimo_tts_api_key', 'keep-tts-secret-5678');
+
+    const res = await request(app)
+      .put('/api/settings')
+      .send({
+        mimo_api_key: { masked: '••••••••1234', is_set: true },
+        mimo_tts_api_key: '',
+        default_voice: '清风',
+      });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(db.prepare("SELECT value FROM settings WHERE key = 'mimo_api_key'").get().value)).toBe('keep-llm-secret-1234');
+    expect(JSON.parse(db.prepare("SELECT value FROM settings WHERE key = 'mimo_tts_api_key'").get().value)).toBe('keep-tts-secret-5678');
+    expect(res.body.settings.mimo_api_key).toEqual({ masked: '••••••••1234', is_set: true });
+  });
+
+  test('PUT /api/settings - 提交新密钥会更新但响应仍不含明文', async () => {
+    setSetting('mimo_api_key', 'old-secret');
+
+    const res = await request(app)
+      .put('/api/settings')
+      .send({ mimo_api_key: 'new-secret-9876' });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(db.prepare("SELECT value FROM settings WHERE key = 'mimo_api_key'").get().value)).toBe('new-secret-9876');
+    expect(JSON.stringify(res.body)).not.toContain('new-secret-9876');
+    expect(res.body.settings.mimo_api_key).toEqual({ masked: '••••••••9876', is_set: true });
   });
 
   test('PUT /api/settings - 空 body 应返回 400', async () => {
@@ -90,6 +145,40 @@ describe('设置 API', () => {
     expect(res.body.error).toBe('WSL ASR 引擎无效');
   });
 
+  test('POST /api/settings/test-key - 验证失败统一返回 400 与 valid:false', async () => {
+    jest.spyOn(mimo, 'testApiKey').mockResolvedValue(false);
+
+    const res = await request(app)
+      .post('/api/settings/test-key')
+      .send({ type: 'llm', apiKey: 'bad-key' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.valid).toBe(false);
+    expect(typeof res.body.error).toBe('string');
+  });
+
+  test('POST /api/settings/test-key - 连接异常统一返回 400 与用户可读原因', async () => {
+    jest.spyOn(mimo, 'testApiKey').mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const res = await request(app)
+      .post('/api/settings/test-key')
+      .send({ type: 'tts', apiKey: 'bad-key' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.valid).toBe(false);
+    expect(res.body.error).toContain('ECONNREFUSED');
+  });
+
+  test('POST /api/settings/llm-models - 缺少 baseUrl 返回 400 与 valid:false', async () => {
+    const res = await request(app)
+      .post('/api/settings/llm-models')
+      .send({ apiKey: 'model-key' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.valid).toBe(false);
+    expect(res.body.error).toBe('请提供 LLM Base URL');
+  });
+
   test('POST /api/settings/test-key - 测试 API Key', async () => {
     jest.spyOn(mimo, 'testApiKey').mockResolvedValue(true);
 
@@ -110,6 +199,26 @@ describe('设置 API', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ valid: true });
     expect(spy).toHaveBeenCalledWith('anthropic', 'current-input-key', {
+      apiFormat: undefined,
+      baseUrl: undefined,
+      model: undefined,
+    });
+  });
+
+  test('POST /api/settings/test-key - 脱敏占位值继续使用服务端真实密钥', async () => {
+    setSetting('mimo_api_key', 'saved-server-key');
+    const spy = jest.spyOn(mimo, 'testApiKey').mockResolvedValue(true);
+
+    const res = await request(app)
+      .post('/api/settings/test-key')
+      .send({
+        type: 'llm',
+        apiKey: { masked: '••••••••-key', is_set: true },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ valid: true });
+    expect(spy).toHaveBeenCalledWith('anthropic', undefined, {
       apiFormat: undefined,
       baseUrl: undefined,
       model: undefined,

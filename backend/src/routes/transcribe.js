@@ -11,6 +11,7 @@ const transcriptionResultStore = require('../services/transcriptionResultStore')
 const podcastTranscriptStore = require('../services/podcastTranscriptStore');
 const transcriptProcessor = require('../services/transcriptProcessor');
 const { createScopedLogger } = require('../services/logger');
+const { sendInternalError } = require('../utils/httpResponse');
 const { validateId } = require('../utils/validation');
 
 const router = express.Router();
@@ -86,7 +87,7 @@ function handleUploadError(error, res) {
   }
 
   logger.error({ err: error }, '转录上传失败');
-  return res.status(500).json({ error: error.message || '上传失败' });
+  return sendInternalError(res);
 }
 
 function buildTaskId(req) {
@@ -269,7 +270,7 @@ router.post('/', (req, res) => {
       if (taskId) {
         sseManager.sendError(taskId, error.message || '转录失败');
       }
-      res.status(500).json({ error: error.message || '转录失败' });
+      sendInternalError(res);
     } finally {
       cleanUploadedFile(req.file);
     }
@@ -286,7 +287,8 @@ router.post('/models', async (req, res) => {
     const result = await asr.fetchAsrModels({ provider, engine, baseUrl, apiKey });
     res.json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || '获取 ASR 模型列表失败' });
+    logger.warn({ err: error }, '获取 ASR 模型列表失败');
+    res.status(400).json({ valid: false, error: error.message || '获取 ASR 模型列表失败' });
   }
 });
 
@@ -496,17 +498,21 @@ router.post('/batch', (req, res) => {
 
 /**
  * GET /api/transcribe/results
- * 获取最近保存的转录结果
+ * 获取最近保存的转录结果（统一分页协议）
  */
 router.get('/results', (req, res) => {
   try {
+    const rawPage = Number(req.query.page || 1);
     const rawLimit = Number(req.query.limit || 50);
+    const page = Number.isInteger(rawPage) ? Math.max(rawPage, 1) : 1;
     const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
-    const results = transcriptionResultStore.getRecent({ limit });
-    res.json({ results });
+    const offset = (page - 1) * limit;
+    const results = transcriptionResultStore.getRecent({ limit, offset });
+    const total = transcriptionResultStore.countAll();
+    res.json({ results, pagination: { page, limit, total } });
   } catch (error) {
     logger.error({ err: error }, '获取转录结果失败');
-    res.status(500).json({ error: error.message || '获取转录结果失败' });
+    sendInternalError(res);
   }
 });
 
@@ -520,7 +526,7 @@ router.get('/stats', (req, res) => {
     res.json({ stats });
   } catch (error) {
     logger.error({ err: error }, '获取转录统计失败');
-    res.status(500).json({ error: error.message || '获取转录统计失败' });
+    sendInternalError(res);
   }
 });
 
@@ -548,7 +554,7 @@ router.post('/results/:id/format', async (req, res) => {
       hasResultId: Boolean(req.params.id),
       resultIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '转录结果 AI 排版失败');
-    res.status(500).json({ error: error.message || '转录结果 AI 排版失败' });
+    sendInternalError(res);
   }
 });
 
@@ -578,7 +584,7 @@ router.delete('/results/:id', (req, res) => {
       hasResultId: Boolean(req.params.id),
       resultIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '删除转录结果失败');
-    res.status(500).json({ error: error.message || '删除转录结果失败' });
+    sendInternalError(res);
   }
 });
 

@@ -24,8 +24,8 @@ export const TranscriptionLibrary: React.FC = () => {
   const fetchStats = useStore((state) => state.fetchTranscriptionStats);
   const deleteRecord = useStore((state) => state.deleteTranscriptionHistoryResult);
   const formatRecord = useStore((state) => state.formatTranscriptionResult);
-  const updateScript = useStore((state) => state.updateScript);
-  const setCurrentBroadcast = useStore((state) => state.setCurrentBroadcast);
+  const createEditorDraft = useStore((state) => state.createEditorDraft);
+  const cancelEditorDraftCreation = useStore((state) => state.cancelEditorDraftCreation);
 
   const [error, setError] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<TranscriptionRecord | null>(null);
@@ -50,12 +50,23 @@ export const TranscriptionLibrary: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [loadLibrary]);
 
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
+
+  const openEditorDraft = useCallback(async (text: string) => {
+    if (!text.trim() || useStore.getState().isCreatingEditorDraft) return;
+    setError(null);
+    try {
+      const draft = await createEditorDraft({ text: text.trim() });
+      navigate(`/editor/${draft.id}`);
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : '导入编辑器失败，请重试');
+    }
+  }, [createEditorDraft, navigate]);
+
   const handleImport = (record: TranscriptionRecord) => {
     const text = preferredTranscriptionText(record);
     if (!text) return;
-    setCurrentBroadcast(null);
-    updateScript(text);
-    navigate('/editor');
+    void openEditorDraft(text);
   };
 
   const handleOpen = (record: TranscriptionRecord) => {
@@ -136,9 +147,7 @@ export const TranscriptionLibrary: React.FC = () => {
           }}
           onImport={(text) => {
             if (!text.trim()) return;
-            setCurrentBroadcast(null);
-            updateScript(text.trim());
-            navigate('/editor');
+            void openEditorDraft(text);
           }}
           onFormat={handleFormat}
         />

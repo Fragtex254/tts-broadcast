@@ -52,7 +52,8 @@ export const ProjectWorkspace: React.FC = () => {
   const fetchRevisions = useStore((state) => state.fetchProjectArtifactRevisions);
   const fetchFragments = useStore((state) => state.fetchProjectSourceFragments);
   const activeCreationOperation = useStore((state) => state.activeProjectJobOperation);
-  const updateScript = useStore((state) => state.updateScript);
+  const createEditorDraft = useStore((state) => state.createEditorDraft);
+  const cancelEditorDraftCreation = useStore((state) => state.cancelEditorDraftCreation);
   const [isPreparingAudioScript, setIsPreparingAudioScript] = useState(false);
   const [audioScriptError, setAudioScriptError] = useState<string | null>(null);
   const [isSavingSource, setIsSavingSource] = useState(false);
@@ -71,6 +72,8 @@ export const ProjectWorkspace: React.FC = () => {
     void fetchWorkspace(projectId).catch(() => undefined);
     return () => clearWorkspace();
   }, [clearWorkspace, fetchWorkspace, projectId]);
+
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) return undefined;
@@ -161,7 +164,6 @@ export const ProjectWorkspace: React.FC = () => {
     setAudioScriptError(null);
     try {
       const plan = getAudioScriptPreparationPlan(masterRevision, audioScriptArtifact, intent);
-      let artifactId: number;
       let revision: ContentArtifactRevision;
       if (plan.action === 'create') {
         const artifact = await createArtifact(projectId, {
@@ -173,27 +175,27 @@ export const ProjectWorkspace: React.FC = () => {
           changeReason: plan.changeReason,
         });
         if (!artifact.current_revision) throw new Error('口播稿已经创建，但首个版本尚未返回，请重试。');
-        artifactId = artifact.id;
         revision = artifact.current_revision;
       } else if (plan.action === 'reuse') {
-        artifactId = plan.artifactId;
         revision = plan.revision;
       } else {
-        artifactId = plan.artifactId;
         revision = await saveRevision(projectId, plan.artifactId, {
           content: plan.content,
           changeReason: plan.changeReason,
           parentRevisionId: audioScriptArtifact?.current_revision?.id ?? null,
         });
       }
-      updateScript(revision.content);
-      navigate(`/editor?projectId=${projectId}&artifactId=${artifactId}&revisionId=${revision.id}`);
+      const draft = await createEditorDraft({
+        text: revision.content,
+        artifactRevisionId: revision.id,
+      });
+      navigate(`/editor/${draft.id}`);
     } catch (error) {
       setAudioScriptError(error instanceof Error ? error.message : '准备口播稿失败，请稍后重试。');
     } finally {
       setIsPreparingAudioScript(false);
     }
-  }, [audioScriptArtifact, createArtifact, hasUnsavedChanges, masterArtifact, navigate, projectId, saveRevision, updateScript]);
+  }, [audioScriptArtifact, createArtifact, createEditorDraft, hasUnsavedChanges, masterArtifact, navigate, projectId, saveRevision]);
 
   const retry = useCallback(() => {
     if (projectId) void fetchWorkspace(projectId).catch(() => undefined);

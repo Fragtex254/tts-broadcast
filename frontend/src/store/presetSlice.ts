@@ -1,5 +1,6 @@
 import { voicePresetApi } from '../services/api';
 import { createScopedLogger, toLogError } from '../services/logger';
+import { safeParseArray, safeParseStrict, VoicePresetSchema } from '../services/schemas';
 import type { AppState } from './types';
 import type { StoreSet } from './storeTypes';
 
@@ -15,7 +16,8 @@ export function createPresetSlice(set: StoreSet): Pick<AppState, 'presets' | 'is
       set({ isLoadingPresets: true, presetError: null });
       try {
         const response = await voicePresetApi.getAll();
-        set({ presets: response.data.presets, isLoadingPresets: false });
+        const presets = safeParseArray(VoicePresetSchema, response.data.presets || []);
+        set({ presets, isLoadingPresets: false });
       } catch (error) {
         logger.error({ err: toLogError(error) }, '获取预设列表失败');
         set({ isLoadingPresets: false, presetError: '音色预设加载失败，请确认后端服务已启动' });
@@ -25,9 +27,10 @@ export function createPresetSlice(set: StoreSet): Pick<AppState, 'presets' | 'is
     updatePreset: async (id, formData) => {
       try {
         const response = await voicePresetApi.update(id, formData);
+        const updated = safeParseStrict(VoicePresetSchema, response.data.preset);
         set((state) => ({
           presets: state.presets.map((preset) => (
-            preset.id === id ? response.data.preset : preset
+            preset.id === id ? updated : preset
           )),
           presetError: null,
         }));

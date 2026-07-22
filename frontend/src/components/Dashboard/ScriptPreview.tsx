@@ -4,7 +4,7 @@ import { hasSelectedVoice, VOICE_REQUIRED_MESSAGE } from '../../store/voiceConfi
 
 interface ScriptPreviewProps {
   projectContext?: ProjectEditorContext | null;
-  onProjectRevisionSaved?: (revision: ContentArtifactRevision) => void;
+  onProjectRevisionSaved?: (revision: ContentArtifactRevision) => Promise<void> | void;
 }
 
 export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
@@ -12,9 +12,9 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
   onProjectRevisionSaved,
 }) => {
   const script = useStore((state) => state.script);
-  const updateScript = useStore((state) => state.updateScript);
   const settings = useStore((state) => state.settings);
   const splitScriptAction = useStore((state) => state.splitScriptAction);
+  const updateEditorDraft = useStore((state) => state.updateEditorDraft);
   const saveProjectArtifactRevision = useStore((state) => state.saveProjectArtifactRevision);
   const isSplitting = useStore((state) => state.isSplitting);
   const currentBroadcast = useStore((state) => state.currentBroadcast);
@@ -27,28 +27,37 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
   const [isPersisting, setIsPersisting] = useState(false);
   const [persistError, setPersistError] = useState<string | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
+  const [pendingProjectRevision, setPendingProjectRevision] = useState<ContentArtifactRevision | null>(null);
 
   const persistContent = async (content: string, changeReason: string): Promise<boolean> => {
     setPersistError(null);
-    if (!projectContext) {
-      updateScript(content);
-      setLocalScript(content);
-      return true;
-    }
-
     setIsPersisting(true);
     try {
-      const revision = await saveProjectArtifactRevision(
-        projectContext.projectId,
-        projectContext.artifactId,
-        { content, changeReason, parentRevisionId: projectContext.revision.id }
-      );
-      updateScript(revision.content);
+      if (!projectContext) {
+        if (!currentBroadcast) throw new Error('当前编辑器草稿尚未就绪，请重新打开后再保存。');
+        const draft = await updateEditorDraft(currentBroadcast.id, content);
+        setLocalScript(draft.content);
+        return true;
+      }
+
+      const revision = pendingProjectRevision?.content === content
+        ? pendingProjectRevision
+        : await saveProjectArtifactRevision(
+          projectContext.projectId,
+          projectContext.artifactId,
+          {
+            content,
+            changeReason,
+            parentRevisionId: pendingProjectRevision?.id ?? projectContext.revision.id,
+          }
+        );
+      setPendingProjectRevision(revision);
       setLocalScript(revision.content);
-      onProjectRevisionSaved?.(revision);
+      await onProjectRevisionSaved?.(revision);
+      setPendingProjectRevision(null);
       return true;
     } catch (error) {
-      setPersistError(error instanceof Error ? error.message : '保存口播稿版本失败，请重试。');
+      setPersistError(error instanceof Error ? error.message : '保存口播稿失败，请重试。');
       return false;
     } finally {
       setIsPersisting(false);
@@ -78,7 +87,10 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
   };
 
   const hasResolvedProjectRevision = !projectContext || script === projectContext.revision.content;
-  const canSplit = hasSelectedVoice(voiceConfig)
+  const isAlreadySplit = currentBroadcast?.mode === 'segmented' && segments.length > 0;
+  const canEditWholeScript = currentBroadcast?.status === 'draft' && !isAlreadySplit;
+  const canSplit = canEditWholeScript
+    && hasSelectedVoice(voiceConfig)
     && hasResolvedProjectRevision
     && !isPersisting
     && !persistError;
@@ -97,7 +109,6 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
     }
   };
 
-  const isAlreadySplit = currentBroadcast?.mode === 'segmented' && segments.length > 0;
   const wordCount = script.length;
   const estimatedDuration = Math.ceil(wordCount / 4);
 
@@ -108,7 +119,7 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
           <span className={`h-2 w-2 rounded-full bg-pink transition-transform duration-slow ${showSaved ? 'animate-scale-bounce' : ''}`} />
           <h3 className="font-display text-[14px] font-medium italic text-ink-soft">口播稿预览</h3>
         </div>
-        {!isEditing && script && (
+        {!isEditing && script && canEditWholeScript && (
           <div className="flex items-center gap-2">
             <span className="font-body text-[11px] uppercase tracking-wider text-ink-soft/70">
               {wordCount} 字 · ≈ {estimatedDuration} 秒
@@ -167,7 +178,7 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
         </div>
       )}
 
-      {script && !isEditing && (
+      {script && !isEditing && canEditWholeScript && (
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-card-border pt-4">
           <button
             type="button"
@@ -196,7 +207,15 @@ export const ScriptPreview: React.FC<ScriptPreviewProps> = ({
         </div>
       )}
 
-      {script && !isEditing && !hasSelectedVoice(voiceConfig) && (
+      {script && !isEditing && !canEditWholeScript && (
+        <div className="mt-4 rounded-xl border border-lilac/35 bg-lilac/10 p-3 font-body text-[11px] text-ink-soft">
+          {isAlreadySplit
+            ? '稿件已切分，请在下方分段编辑器中修改文字、顺序和标签。'
+            : '当前记录已进入生成流程，原始稿件不再可覆盖。'}
+        </div>
+      )}
+
+      {script && !isEditing && canEditWholeScript && !hasSelectedVoice(voiceConfig) && (
         <div className="mt-2 rounded-xl border border-lemon/45 bg-lemon/15 p-2.5 font-body text-[11px] text-ink-soft">
           选择音色后才能切分并生成口播稿音频。
         </div>

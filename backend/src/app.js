@@ -2,24 +2,46 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { createScopedLogger } = require('./services/logger');
+const { createProcessLifecycle } = require('./services/processLifecycle');
+const { sendInternalError } = require('./utils/httpResponse');
 const { audioDir, assetDir } = require('./utils/validation');
 
 const app = express();
 const logger = createScopedLogger('app');
 const PORT = process.env.PORT || 3001;
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const HOST = process.env.HOST || '127.0.0.1';
+
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
+function getAllowedCorsOrigins(value = process.env.CORS_ORIGINS) {
+  const configuredOrigins = typeof value === 'string'
+    ? value.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : [];
+  return new Set([...DEFAULT_CORS_ORIGINS, ...configuredOrigins]);
+}
 
 // CORS 配置
+const allowedCorsOrigins = getAllowedCorsOrigins();
 const corsOptions = {
-  origin: NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL || 'http://localhost:5173'  // 生产环境限制来源
-    : true,  // 开发环境允许所有来源
+  origin(origin, callback) {
+    callback(null, !origin || allowedCorsOrigins.has(origin));
+  },
   credentials: true,
 };
 
 const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || '20mb';
 
 // 中间件
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  if (origin && !allowedCorsOrigins.has(origin)) {
+    return res.status(403).json({ error: '不允许的跨域来源' });
+  }
+  next();
+});
 app.use(cors(corsOptions));
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
@@ -41,6 +63,7 @@ app.use('/api/content-projects', require('./routes/contentProjects'));
 app.use('/api/content-projects', require('./routes/contentWorkspace'));
 app.use('/api/content-projects', require('./routes/contentCreation'));
 app.use('/api/sse', require('./routes/sse'));
+app.use('/api/health', require('./routes/health'));
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
@@ -54,20 +77,38 @@ app.use((err, req, res, next) => {
   }
 
   logger.error({ err }, '服务器内部错误');
-  res.status(500).json({ error: '服务器内部错误' });
+  sendInternalError(res);
 });
 
 /**
  * 启动 HTTP 服务和调度器
+ * @param {Object} [options]
+ * @param {boolean} [options.manageProcess=true] - 是否注册进程生命周期监听
  * @returns {import('http').Server} HTTP server 实例
  */
-function start() {
+function start({ manageProcess = true } = {}) {
   const scheduler = require('./services/scheduler');
   scheduler.init();
 
-  return app.listen(PORT, () => {
-    logger.info({ port: PORT }, `服务器运行在 http://localhost:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    logger.info({ host: HOST, port: PORT }, `服务器运行在 http://${HOST}:${PORT}`);
   });
+
+  if (manageProcess) {
+    const db = require('./db');
+    const sseManager = require('./services/sseManager');
+    const lifecycle = createProcessLifecycle({
+      processRef: process,
+      scheduler,
+      sseManager,
+      server,
+      db,
+      logger,
+    });
+    lifecycle.register();
+  }
+
+  return server;
 }
 
 if (require.main === module) {
@@ -76,3 +117,4 @@ if (require.main === module) {
 
 module.exports = app;
 module.exports.start = start;
+module.exports.getAllowedCorsOrigins = getAllowedCorsOrigins;

@@ -1,9 +1,12 @@
 import { useEffect, Suspense, lazy } from 'react'
 import { createBrowserRouter, Outlet, RouterProvider } from 'react-router-dom'
 import { Sidebar } from './components/Layout/Sidebar'
+import { GlobalTaskProgressBar } from './components/Layout/GlobalTaskProgressBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { SourceCollection } from './pages/SourceCollection'
+import { sseRegistry } from './services/sseRegistry'
 import useStore from './store'
+import { disposeProjectWorkspaceRuntime } from './store/projectWorkspaceSlice'
 
 // 代码分割：非首屏路由懒加载
 const ScriptEditor = lazy(() => import('./pages/ScriptEditor').then(m => ({ default: m.ScriptEditor })))
@@ -46,6 +49,11 @@ function AppLayout() {
     fetchSettings()
   }, [fetchSettings])
 
+  useEffect(() => () => {
+    disposeProjectWorkspaceRuntime()
+    sseRegistry.closeAll()
+  }, [])
+
   useEffect(() => {
     document.documentElement.dataset.uiFontPreset = uiFontPreset
     document.documentElement.dataset.uiFontScale = uiFontScale
@@ -57,11 +65,14 @@ function AppLayout() {
       <Sidebar />
 
       {/* 主内容区域 */}
-      <ErrorBoundary>
-        <Suspense fallback={<PageLoader />}>
-          <Outlet />
-        </Suspense>
-      </ErrorBoundary>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <GlobalTaskProgressBar />
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
     </div>
   )
 }
@@ -70,10 +81,11 @@ const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { index: true, element: <SourceCollection /> },
-      { path: 'editor', element: <ScriptEditor /> },
+      { index: true, element: <ErrorBoundary section="工作台"><SourceCollection /></ErrorBoundary> },
+      { path: 'editor/:broadcastId', element: <ErrorBoundary section="口播编辑器"><ScriptEditor /></ErrorBoundary> },
+      { path: 'editor', element: <ErrorBoundary section="口播编辑器"><ScriptEditor /></ErrorBoundary> },
       { path: 'voice-presets', element: <VoicePresets /> },
-      { path: 'transcribe', element: <Transcribe /> },
+      { path: 'transcribe', element: <ErrorBoundary section="转录"><Transcribe /></ErrorBoundary> },
       { path: 'history', element: <ContentLibrary /> },
       { path: 'history/transcriptions/:id', element: <TranscriptWorkspace /> },
       { path: 'projects/:id', element: <ProjectWorkspace /> },

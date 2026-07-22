@@ -51,5 +51,15 @@ describe('观点研究 API', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.results).toHaveLength(1);
+    expect(response.body.pagination).toEqual({ page: 1, limit: 20, total: 1 });
+  });
+
+  test('GET /api/research/claims/search 支持 page/limit 分页', async () => {
+    createClaim();
+    const response = await request(app).get('/api/research/claims/search').query({ q: 'Agent', page: 2, limit: 1 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.results).toHaveLength(0);
+    expect(response.body.pagination).toEqual({ page: 2, limit: 1, total: 1 });
   });
 });

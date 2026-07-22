@@ -19,15 +19,13 @@ import type { AppState, ContentGenerationJob } from './types';
 import type { StoreGet, StoreSet } from './storeTypes';
 import { acceptMilestoneEvent } from '../components/Projects/projectMilestoneModel';
 import { CONTENT_CREATION_PROMPT_VERSION, createStableProjectRequestKey, normalizeCreationJobInput } from './projectRequestKey';
+import { bindBackgroundTaskTransport } from './sseBackgroundTask';
 
 let workspaceRequestSequence = 0;
 let revisionsRequestSequence = 0;
 let outlineRevisionsRequestSequence = 0;
-let editorRevisionRequestSequence = 0;
 let activeProjectSseClient: ReturnType<typeof createSSEClient> | null = null;
 let activeProjectPollTimer: ReturnType<typeof setTimeout> | null = null;
-
-class ProjectEditorValidationError extends Error {}
 
 function createOperationId(prefix: string): string {
   const random = typeof globalThis.crypto?.randomUUID === 'function'
@@ -44,6 +42,12 @@ function closeActiveProjectSse(): void {
 function clearActiveProjectPoll(): void {
   if (activeProjectPollTimer) clearTimeout(activeProjectPollTimer);
   activeProjectPollTimer = null;
+}
+
+/** 应用根卸载时释放项目创作的模块级 SSE 与轮询资源。 */
+export function disposeProjectWorkspaceRuntime(): void {
+  closeActiveProjectSse();
+  clearActiveProjectPoll();
 }
 
 function parseMilestone(value: unknown) {
@@ -120,8 +124,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
   | 'isLoadingProjectOutlineRevisions'
   | 'projectOutlineRevisionsError'
   | 'projectEditorContext'
-  | 'isLoadingProjectEditorRevision'
-  | 'projectEditorRevisionError'
   | 'fetchProjectWorkspace'
   | 'clearProjectWorkspace'
   | 'addProjectWorkspaceSource'
@@ -135,24 +137,32 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
   | 'saveProjectArtifactRevision'
   | 'fetchProjectArtifactRevisions'
   | 'fetchProjectOutlineRevisions'
-  | 'loadProjectEditorRevision'
-  | 'adoptProjectEditorRevision'
-  | 'clearProjectEditorContext'
 > {
   const scheduleJobPoll = (projectId: number, jobId: number, taskId: string, attempt = 0): void => {
     clearActiveProjectPoll();
     activeProjectPollTimer = setTimeout(async () => {
       const current = get();
-      if (current.projectWorkspace?.project.id !== projectId || current.activeProjectTaskId !== taskId) return;
+      if (current.activeProjectTaskId !== taskId) return;
       try {
         const response = await projectWorkspaceApi.getWorkspace(projectId);
         const workspace = safeParseStrict(ContentProjectWorkspaceSchema, response.data.workspace);
-        if (get().projectWorkspace?.project.id !== projectId || get().activeProjectTaskId !== taskId) return;
+        if (get().activeProjectTaskId !== taskId) return;
         const job = workspace.generation_jobs.find((item) => item.id === jobId);
-        set({ projectWorkspace: workspace });
+        if (job) {
+          get().updateBackgroundTask(taskId, {
+            status: 'running',
+            phase: job.phase,
+            percent: job.progress ?? 0,
+            message: job.phase || '正在生成内容',
+          });
+        }
+        if (get().projectWorkspace?.project.id === projectId) {
+          set({ projectWorkspace: workspace });
+        }
         if (job?.status === 'completed' || job?.status === 'failed' || job?.status === 'superseded') {
           clearActiveProjectPoll();
           closeActiveProjectSse();
+          get().endBackgroundTask(taskId);
           set({
             activeProjectTaskId: null,
             activeProjectJobOperation: null,
@@ -189,8 +199,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
     isLoadingProjectOutlineRevisions: false,
     projectOutlineRevisionsError: null,
     projectEditorContext: null,
-    isLoadingProjectEditorRevision: false,
-    projectEditorRevisionError: null,
 
     fetchProjectWorkspace: async (projectId) => {
       const requestSequence = ++workspaceRequestSequence;
@@ -216,16 +224,34 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
           const runningJob = workspace.generation_jobs
             .filter((job) => job.status === 'queued' || job.status === 'running')
             .sort((a, b) => b.id - a.id)[0];
-          const resumedTaskId = runningJob ? createOperationId(`project-poll-${projectId}`) : null;
+          const existingTaskId = get().activeProjectTaskId;
+          const resumedTaskId = !existingTaskId && runningJob
+            ? createOperationId(`project-poll-${projectId}`)
+            : null;
           set({
             projectWorkspace: workspace,
             isLoadingProjectWorkspace: false,
             projectWorkspaceError: null,
             projectWorkspaceJobError: getLatestGenerationJobError(workspace.generation_jobs),
-            activeProjectTaskId: resumedTaskId,
-            activeProjectJobOperation: runningJob?.operation || null,
+            activeProjectTaskId: existingTaskId || resumedTaskId,
+            activeProjectJobOperation: existingTaskId
+              ? get().activeProjectJobOperation
+              : (runningJob?.operation || null),
           });
-          if (runningJob && resumedTaskId) scheduleJobPoll(projectId, runningJob.id, resumedTaskId);
+          if (runningJob && resumedTaskId) {
+            get().startBackgroundTask({
+              taskId: resumedTaskId,
+              kind: 'content-creation',
+              entityId: projectId,
+              title: `内容创作：${workspace.project.title}`,
+              href: `/projects/${projectId}`,
+              status: 'running',
+              phase: runningJob.phase,
+              percent: runningJob.progress ?? 0,
+              message: runningJob.phase || '正在恢复创作任务',
+            });
+            scheduleJobPoll(projectId, runningJob.id, resumedTaskId);
+          }
         }
         return workspace;
       } catch (error) {
@@ -238,8 +264,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
     },
 
     clearProjectWorkspace: () => {
-      closeActiveProjectSse();
-      clearActiveProjectPoll();
       workspaceRequestSequence += 1;
       revisionsRequestSequence += 1;
       outlineRevisionsRequestSequence += 1;
@@ -253,8 +277,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
         isLoadingProjectSourceFragments: false,
         projectSourceFragmentsError: null,
         isUnlinkingProjectSourceId: null,
-        activeProjectTaskId: null,
-        activeProjectJobOperation: null,
         projectWorkspaceJobError: null,
         projectMilestoneFeedback: null,
         projectArtifactRevisions: [],
@@ -436,7 +458,7 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
         }),
       };
       const requestKey = createStableProjectRequestKey(`project-${projectId}-${data.operation}`, requestContext);
-      const sseClient = createSSEClient(taskId);
+      const sseClient = createSSEClient(taskId, 'content-creation');
       closeActiveProjectSse();
       clearActiveProjectPoll();
       activeProjectSseClient = sseClient;
@@ -445,12 +467,30 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
         activeProjectJobOperation: data.operation,
         projectWorkspaceJobError: null,
       });
+      get().startBackgroundTask({
+        taskId,
+        kind: 'content-creation',
+        entityId: projectId,
+        title: `内容创作：${state.projectWorkspace.project.title}`,
+        href: `/projects/${projectId}`,
+        phase: 'queued',
+        percent: 0,
+        message: '创作任务已进入队列',
+      });
+      bindBackgroundTaskTransport(sseClient, taskId, get);
 
       sseClient.on('progress', (event) => {
         const parsed = ContentJobProgressEventSchema.safeParse(event);
         if (!parsed.success) return;
         const current = get();
-        if (current.activeProjectTaskId !== taskId || current.projectWorkspace?.project.id !== projectId) return;
+        if (current.activeProjectTaskId !== taskId) return;
+        current.updateBackgroundTask(taskId, {
+          status: 'running',
+          phase: parsed.data.job.phase,
+          percent: parsed.data.job.progress ?? 0,
+          message: parsed.data.job.phase || '正在生成内容',
+        });
+        if (current.projectWorkspace?.project.id !== projectId) return;
         set((latest) => ({ projectWorkspace: mergeJobIntoWorkspace(latest, projectId, parsed.data.job) }));
       });
 
@@ -458,14 +498,17 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
         const parsed = ContentJobCompleteEventSchema.safeParse(event);
         if (!parsed.success) return;
         const current = get();
-        if (current.activeProjectTaskId !== taskId || current.projectWorkspace?.project.id !== projectId) return;
+        if (current.activeProjectTaskId !== taskId) return;
+        current.endBackgroundTask(taskId);
         consumeMilestone(set, get, projectId, parsed.data.milestone, taskId);
-        set({
-          projectWorkspace: parsed.data.workspace,
+        set((latest) => ({
+          projectWorkspace: latest.projectWorkspace?.project.id === projectId
+            ? parsed.data.workspace
+            : latest.projectWorkspace,
           activeProjectTaskId: null,
           activeProjectJobOperation: null,
           projectWorkspaceJobError: null,
-        });
+        }));
         clearActiveProjectPoll();
         sseClient.close();
         if (activeProjectSseClient === sseClient) activeProjectSseClient = null;
@@ -475,7 +518,8 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
         const parsed = ContentJobErrorEventSchema.safeParse(event);
         if (!parsed.success) return;
         const current = get();
-        if (current.activeProjectTaskId !== taskId || current.projectWorkspace?.project.id !== projectId) return;
+        if (current.activeProjectTaskId !== taskId) return;
+        current.endBackgroundTask(taskId);
         set((latest) => ({
           projectWorkspace: mergeJobIntoWorkspace(latest, projectId, parsed.data.job),
           activeProjectTaskId: null,
@@ -495,31 +539,46 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
           requestKey,
         });
         const job = safeParseStrict(ContentGenerationJobSchema, response.data.job);
+        if (get().activeProjectTaskId === taskId) {
+          get().updateBackgroundTask(taskId, {
+            status: 'running',
+            phase: job.phase,
+            percent: job.progress ?? 0,
+            message: job.phase || '正在生成内容',
+          });
+        }
         if (get().activeProjectTaskId === taskId && get().projectWorkspace?.project.id === projectId) {
           set((latest) => ({ projectWorkspace: mergeJobIntoWorkspace(latest, projectId, job) }));
         }
         if (job.status === 'completed') {
           clearActiveProjectPoll();
+          get().endBackgroundTask(taskId);
           sseClient.close();
           if (activeProjectSseClient === sseClient) activeProjectSseClient = null;
           const workspaceResponse = await projectWorkspaceApi.getWorkspace(projectId);
           const workspace = safeParseStrict(ContentProjectWorkspaceSchema, workspaceResponse.data.workspace);
-          if (get().projectWorkspace?.project.id === projectId && get().activeProjectTaskId === taskId) {
-            set({
-              projectWorkspace: workspace,
+          if (get().activeProjectTaskId === taskId) {
+            set((latest) => ({
+              projectWorkspace: latest.projectWorkspace?.project.id === projectId
+                ? workspace
+                : latest.projectWorkspace,
               activeProjectTaskId: null,
               activeProjectJobOperation: null,
               projectWorkspaceJobError: null,
-            });
+            }));
           }
         } else if ((job.status === 'queued' || job.status === 'running') && get().activeProjectTaskId === taskId) {
           scheduleJobPoll(projectId, job.id, taskId);
-        } else if (job.status === 'failed' && get().activeProjectTaskId === taskId) {
+        } else if ((job.status === 'failed' || job.status === 'superseded') && get().activeProjectTaskId === taskId) {
+          get().endBackgroundTask(taskId);
+          sseClient.close();
+          if (activeProjectSseClient === sseClient) activeProjectSseClient = null;
           set({ activeProjectTaskId: null, activeProjectJobOperation: null, projectWorkspaceJobError: job.error });
         }
         return job;
       } catch (error) {
         clearActiveProjectPoll();
+        get().endBackgroundTask(taskId);
         sseClient.close();
         if (activeProjectSseClient === sseClient) activeProjectSseClient = null;
         const message = getApiErrorMessage(error, '启动创作任务失败');
@@ -632,78 +691,6 @@ export function createProjectWorkspaceSlice(set: StoreSet, get: StoreGet): Pick<
       }
     },
 
-    loadProjectEditorRevision: async (projectId, artifactId, revisionId) => {
-      const requestSequence = ++editorRevisionRequestSequence;
-      set({
-        projectEditorContext: null,
-        isLoadingProjectEditorRevision: true,
-        projectEditorRevisionError: null,
-      });
-      try {
-        const [workspaceResponse, revisionsResponse] = await Promise.all([
-          projectWorkspaceApi.getWorkspace(projectId),
-          projectWorkspaceApi.getRevisions(projectId, artifactId),
-        ]);
-        const workspace = safeParseStrict(ContentProjectWorkspaceSchema, workspaceResponse.data.workspace);
-        const revisions = safeParseStrict(ContentArtifactRevisionSchema.array(), revisionsResponse.data.revisions)
-          .sort((a, b) => b.revision_number - a.revision_number);
-        const artifact = workspace.artifacts.find((item) => item.id === artifactId);
-        if (!artifact || artifact.kind !== 'audio_script') {
-          throw new ProjectEditorValidationError('这个稿件不是项目口播稿，请返回内容项目重新选择。');
-        }
-        const revision = revisions.find((item) => item.id === revisionId && item.artifact_id === artifactId);
-        if (!revision) {
-          throw new ProjectEditorValidationError('找不到指定的口播稿版本，请返回内容项目重新选择。');
-        }
-        if (requestSequence === editorRevisionRequestSequence) {
-          set({
-            projectWorkspace: workspace,
-            projectArtifactRevisions: revisions,
-            projectEditorContext: { projectId, artifactId, revision },
-            isLoadingProjectEditorRevision: false,
-            projectEditorRevisionError: null,
-            script: revision.content,
-            currentBroadcast: null,
-            segments: [],
-          });
-        }
-        return revision;
-      } catch (error) {
-        const message = error instanceof ProjectEditorValidationError
-          ? error.message
-          : getApiErrorMessage(error, '加载项目口播稿失败，请稍后重试');
-        if (requestSequence === editorRevisionRequestSequence) {
-          set({
-            projectEditorContext: null,
-            isLoadingProjectEditorRevision: false,
-            projectEditorRevisionError: message,
-          });
-        }
-        throw new Error(message, { cause: error });
-      }
-    },
-
-    adoptProjectEditorRevision: (revision) => {
-      set((state) => {
-        const context = state.projectEditorContext;
-        if (!context || context.artifactId !== revision.artifact_id) return state;
-        return {
-          projectEditorContext: { ...context, revision },
-          script: revision.content,
-          currentBroadcast: null,
-          segments: [],
-        };
-      });
-    },
-
-    clearProjectEditorContext: () => {
-      editorRevisionRequestSequence += 1;
-      set({
-        projectEditorContext: null,
-        isLoadingProjectEditorRevision: false,
-        projectEditorRevisionError: null,
-      });
-    },
   };
 }
 

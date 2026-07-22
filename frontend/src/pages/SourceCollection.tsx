@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Layout/Header';
 import { ModalShell } from '../components/ModalShell';
 import { QuickGenerate } from '../components/Dashboard/QuickGenerate';
@@ -7,7 +7,6 @@ import { ActionButton } from '../components/ui/ActionButton';
 import { WorkbenchCard } from '../components/ui/WorkbenchCard';
 import { ProjectList } from '../components/Projects/ProjectList';
 import useStore from '../store';
-import { getProjectEditorUrl } from './projectEditorContext';
 
 export const SourceCollection: React.FC = () => {
   const navigate = useNavigate();
@@ -16,25 +15,59 @@ export const SourceCollection: React.FC = () => {
   const currentBroadcast = useStore((state) => state.currentBroadcast);
   const projectEditorContext = useStore((state) => state.projectEditorContext);
   const isRewriting = useStore((state) => state.isRewriting);
+  const isCreatingEditorDraft = useStore((state) => state.isCreatingEditorDraft);
+  const createEditorDraft = useStore((state) => state.createEditorDraft);
+  const forkEditorDraft = useStore((state) => state.forkEditorDraft);
+  const cancelEditorDraftCreation = useStore((state) => state.cancelEditorDraftCreation);
   const contentProjects = useStore((state) => state.contentProjects);
   const isLoadingContentProjects = useStore((state) => state.isLoadingContentProjects);
   const fetchContentProjects = useStore((state) => state.fetchContentProjects);
   const createContentProject = useStore((state) => state.createContentProject);
+  const settings = useStore((state) => state.settings);
   const newsIntakeRef = useRef<HTMLDivElement>(null);
   const projectTitleRef = useRef<HTMLInputElement>(null);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [editorOpenError, setEditorOpenError] = useState<string | null>(null);
   const [projectDraft, setProjectDraft] = useState({ title: '', topic: '', audience: '' });
   const activeProjectEditorContext = projectEditorContext
     && script === projectEditorContext.revision.content
     ? projectEditorContext
     : null;
+  const isConfigurationIncomplete = !settings.mimo_api_key.is_set || !settings.mimo_tts_api_key.is_set;
 
-  const handleRewriteComplete = useCallback(() => {
-    navigate('/editor');
-  }, [navigate]);
+  const handleRewriteComplete = useCallback(async (rewrittenScript: string) => {
+    setEditorOpenError(null);
+    const draft = await createEditorDraft({ text: rewrittenScript });
+    navigate(`/editor/${draft.id}`);
+  }, [createEditorDraft, navigate]);
+
+  const handleContinueEditing = useCallback(async () => {
+    if (!script.trim()) return;
+    setEditorOpenError(null);
+    const expectedRevisionId = activeProjectEditorContext?.revision.id ?? null;
+    try {
+      if (
+        currentBroadcast?.content === script
+        && currentBroadcast.source_artifact_revision_id === expectedRevisionId
+      ) {
+        const target = currentBroadcast.saved === 0
+          ? currentBroadcast
+          : await forkEditorDraft(currentBroadcast.id);
+        navigate(`/editor/${target.id}`);
+        return;
+      }
+      const draft = await createEditorDraft({
+        text: script,
+        ...(expectedRevisionId ? { artifactRevisionId: expectedRevisionId } : {}),
+      });
+      navigate(`/editor/${draft.id}`);
+    } catch (error) {
+      setEditorOpenError(error instanceof Error ? error.message : '打开编辑器失败，请重试。');
+    }
+  }, [activeProjectEditorContext, createEditorDraft, currentBroadcast, forkEditorDraft, navigate, script]);
 
   const handleStartNewsIntake = useCallback(() => {
     const newsIntake = newsIntakeRef.current;
@@ -61,6 +94,8 @@ export const SourceCollection: React.FC = () => {
       });
     return () => { isCurrent = false; };
   }, [fetchContentProjects]);
+
+  useEffect(() => cancelEditorDraftCreation, [cancelEditorDraftCreation]);
 
   const handleCreateProject = useCallback(async () => {
     const title = projectDraft.title.trim();
@@ -89,32 +124,45 @@ export const SourceCollection: React.FC = () => {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <Header title="内容工作台" subtitle="收集素材，提炼与写作，再沉淀为成稿或音频" />
+      <Header title="内容工作台" subtitle="从来源到证据，再到带引用成稿；口播和音频是可选输出" />
 
       <main className="flex-1 overflow-y-auto p-5 sm:p-6">
         <div className="mx-auto max-w-6xl space-y-4">
+          {isConfigurationIncomplete && (
+            <section role="status" className="flex flex-col gap-3 rounded-card border border-lemon/45 bg-lemon/15 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="ui-section-title text-ink">完成 LLM/TTS 配置后解锁全部能力</p>
+                <p className="ui-body mt-1 text-ink-soft/75">密钥只保存在服务端；工作台不会在页面或接口中回显明文。</p>
+              </div>
+              <Link to="/settings" className="ui-pressable inline-flex min-h-10 items-center justify-center rounded-full bg-lemon px-4 py-2 ui-control-label text-ink shadow-btn">
+                前往设置 →
+              </Link>
+            </section>
+          )}
+
           <WorkbenchCard className="p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-lemon" />
-                  <h2 className="font-display text-[17px] font-medium text-ink">选择创作起点</h2>
+                  <h2 className="font-display text-[17px] font-medium text-ink">从来源到带引用成稿</h2>
                 </div>
                 <p className="mt-2 font-body text-[13px] leading-relaxed text-ink-soft/75">
-                  先把素材收进来，再进入编辑器提炼和写作。音频是成稿后的发布选择，不是唯一终点。
+                  第一步先建立项目并加入来源，再核验和选择证据，最终形成能回到原文的成稿。音频只是可选输出。
                 </p>
               </div>
               <ol aria-label="内容创作流程" className="flex flex-wrap items-center gap-2 font-body text-[11px] text-ink-soft/70">
-                <li className="rounded-full bg-lemon/25 px-2.5 py-1">1 收集素材</li>
+                <li className="rounded-full bg-lemon/25 px-2.5 py-1">1 加入来源</li>
                 <li aria-hidden="true">→</li>
-                <li className="rounded-full bg-lilac/25 px-2.5 py-1">2 提炼与写作</li>
+                <li className="rounded-full bg-lilac/25 px-2.5 py-1">2 核验并选择证据</li>
                 <li aria-hidden="true">→</li>
-                <li className="rounded-full bg-sage/25 px-2.5 py-1">3 成稿或音频</li>
+                <li className="rounded-full bg-sage/25 px-2.5 py-1">3 带引用成稿</li>
               </ol>
             </div>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
               <button
                 type="button"
+                aria-label="新建内容项目并填写 Brief"
                 disabled={isCreatingProject}
                 onClick={() => {
                   setCreateError(null);
@@ -125,7 +173,7 @@ export const SourceCollection: React.FC = () => {
                 <span className="font-body text-[11px] font-medium text-ink-soft/70">从一个清晰问题开始</span>
                 <span className="mt-2 block font-display text-[21px] font-medium leading-tight text-ink">新建内容项目</span>
                 <span className="mt-2 block max-w-md font-body text-[13px] leading-relaxed text-ink-soft/75">
-                  先定义受众、目标和创作角度，再逐步加入来源、主稿与版本。
+                  先定义受众、目标和创作角度，再加入来源、选择证据并形成带引用的版本化稿件。
                 </span>
                 <span className="mt-4 inline-flex font-body text-[12px] font-medium text-ink">{isCreatingProject ? '正在建立项目…' : '进入项目 Brief →'}</span>
               </button>
@@ -174,9 +222,13 @@ export const SourceCollection: React.FC = () => {
                   projects={contentProjects.slice(0, 3)}
                   isLoading={isLoadingContentProjects}
                   error={projectsError}
-                  emptyDescription="从上方新建第一个项目，Brief、来源和稿件会可靠保存在服务器。"
+                  emptyDescription="第一步：新建内容项目并填写最小 Brief。之后加入来源、选择证据并生成带引用成稿。"
                   onOpen={(projectId) => navigate(`/projects/${projectId}`)}
                   onRetry={() => void refreshProjects()}
+                  onCreate={() => {
+                    setCreateError(null);
+                    setIsCreateProjectOpen(true);
+                  }}
                 />
               </WorkbenchCard>
 
@@ -218,13 +270,17 @@ export const SourceCollection: React.FC = () => {
                   {script && (
                     <ActionButton
                       tone="edit"
-                      onClick={() => navigate(activeProjectEditorContext
-                        ? getProjectEditorUrl(activeProjectEditorContext)
-                        : '/editor')}
+                      onClick={() => void handleContinueEditing()}
+                      disabled={isCreatingEditorDraft}
                       className="mt-3 w-full"
                     >
-                      {activeProjectEditorContext ? '继续项目口播稿' : '继续提炼与写作'}
+                      {isCreatingEditorDraft
+                        ? '正在准备编辑器…'
+                        : activeProjectEditorContext ? '继续项目口播稿' : '继续提炼与写作'}
                     </ActionButton>
+                  )}
+                  {editorOpenError && (
+                    <p role="alert" className="mt-2 font-body text-[11px] text-pink">{editorOpenError}</p>
                   )}
                 </div>
               </WorkbenchCard>
