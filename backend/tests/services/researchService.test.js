@@ -77,4 +77,52 @@ describe('跨播客观点研究服务', () => {
     expect(result.synthesis.disagreements).toEqual(['两条证据给出相反判断']);
     expect(generateText).not.toHaveBeenCalled();
   });
+
+  test('500 条观点下搜索查询次数不随数量增长', async () => {
+    const record = createRecord('长播客.wav', 'AI 合集');
+    researchStore.replaceClaims(record.id, {
+      model: 'test',
+      claims: Array.from({ length: 500 }, (_, index) => ({
+        speakerKey: 'speaker-0001', question: `AI 问题 ${index}`, claim: `AI 观点 ${index}`, reasoning: '理由',
+        evidenceExcerpt: '证据', evidenceStartIndex: 0, evidenceEndIndex: 0, startSeconds: 0, endSeconds: 1,
+        topicTags: ['AI'], contentValue: 50, confidence: 0.8,
+      })),
+    });
+
+    const prepareSpy = jest.spyOn(db, 'prepare');
+    try {
+      const { items } = await researchService.searchClaims({ query: 'AI', limit: 20, embedText: async () => null });
+      expect(items.length).toBeGreaterThan(0);
+      expect(prepareSpy.mock.calls.length).toBeLessThanOrEqual(3);
+    } finally {
+      prepareSpy.mockRestore();
+    }
+  });
+
+  test('10 条候选关系分析查询次数为常数级', async () => {
+    const record = createRecord('合集.wav', '观点合集');
+    const claims = researchStore.replaceClaims(record.id, {
+      model: 'test',
+      claims: Array.from({ length: 10 }, (_, index) => ({
+        speakerKey: 'speaker-0001', question: `问题 ${index}`, claim: `观点 ${index}`, reasoning: '理由',
+        evidenceExcerpt: '证据', evidenceStartIndex: 0, evidenceEndIndex: 0, startSeconds: 0, endSeconds: 1,
+        topicTags: ['AI'], contentValue: 50, confidence: 0.8,
+      })),
+    });
+    for (let left = 0; left < claims.length; left++) {
+      for (let right = left + 1; right < claims.length; right++) {
+        researchStore.upsertRelation({ claimAId: claims[left].id, claimBId: claims[right].id, relationType: 'support', explanation: '一致', confidence: 0.9, analysisModel: 'cached' });
+      }
+    }
+
+    const prepareSpy = jest.spyOn(db, 'prepare');
+    try {
+      const result = await researchService.analyzeRelations({ claimIds: claims.map((claim) => claim.id), generateText: jest.fn(), model: 'new' });
+      expect(result.cached).toBe(true);
+      // 批量 IN 查询 + 关系批量查询为常数；旧实现需要 10 + 45 次
+      expect(prepareSpy.mock.calls.length).toBeLessThanOrEqual(4);
+    } finally {
+      prepareSpy.mockRestore();
+    }
+  });
 });

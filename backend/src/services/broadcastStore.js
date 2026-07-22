@@ -131,14 +131,23 @@ function getEditorSnapshot(id) {
 }
 
 /**
- * 获取已保存播报历史列表（按创建时间倒序）
+ * 获取已保存播报历史列表（按创建时间倒序）。
+ * 列表不搬运大文本 content，改用 content_length；预览全文走单条详情查询。
  * @param {Object} params
  * @param {number} params.limit - 每页数量
  * @param {number} params.offset - 偏移量
- * @returns {Array} 播报记录列表
+ * @returns {Array} 播报列表项（含 content_length，不含 content）
  */
 function getHistory({ limit, offset }) {
-  return db.prepare('SELECT * FROM broadcasts WHERE saved = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?')
+  return db.prepare(`
+    SELECT id, title, audio_path, duration, voice_type, voice_config, source_items,
+           status, saved, mode, artifact_revision_id, created_at, updated_at,
+           LENGTH(content) AS content_length
+    FROM broadcasts
+    WHERE saved = 1
+    ORDER BY created_at DESC
+    LIMIT ? OFFSET ?
+  `)
     .all(limit, offset)
     .map(toBroadcastDto);
 }

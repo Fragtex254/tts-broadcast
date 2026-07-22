@@ -83,6 +83,21 @@ describe('播报 API', () => {
     expect(res.body.pagination.total).toBe(1);
   });
 
+  test('GET /api/broadcast/history - 列表不搬运 content 大文本，返回 content_length', async () => {
+    db.prepare('DELETE FROM broadcasts').run();
+    db.prepare(`
+      INSERT INTO broadcasts (title, content, voice_type, voice_config, status, mode, saved)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run('长稿件', '一'.repeat(5000), 'preset', '{}', 'generated', 'whole', 1);
+
+    const res = await request(app).get('/api/broadcast/history');
+
+    expect(res.status).toBe(200);
+    expect(res.body.broadcasts).toHaveLength(1);
+    expect(res.body.broadcasts[0].content_length).toBe(5000);
+    expect(res.body.broadcasts[0]).not.toHaveProperty('content');
+  });
+
   test('GET /api/broadcast/:id - 获取播报详情（不存在）', async () => {
     const res = await request(app).get('/api/broadcast/999');
     expect(res.status).toBe(404);

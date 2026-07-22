@@ -71,6 +71,14 @@ export const BroadcastSchema = z.object({
   mode: z.enum(['whole', 'segmented']),
   created_at: z.string(),
   updated_at: z.string(),
+  /** 列表接口的 content 长度（列表不搬运大文本，详情查询才带 content） */
+  content_length: z.number().optional(),
+});
+
+/** 历史列表项：后端不返回 content，解析时补空串占位，预览全文走详情查询 */
+export const BroadcastListItemSchema = BroadcastSchema.omit({ content: true }).extend({
+  content: z.string().default(''),
+  content_length: z.number().optional(),
 });
 
 export const SegmentSchema = z.object({

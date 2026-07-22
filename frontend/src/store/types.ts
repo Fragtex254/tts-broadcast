@@ -35,6 +35,8 @@ export interface Broadcast {
   mode: 'whole' | 'segmented';
   created_at: string;
   updated_at: string;
+  /** 列表接口返回的 content 长度；详情查询才有完整 content */
+  content_length?: number;
 }
 
 /** 逐句 segment */

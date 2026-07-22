@@ -2,6 +2,7 @@ import { broadcastApi } from '../services/api';
 import { getApiErrorMessage } from '../services/apiError';
 import { createScopedLogger, toLogError } from '../services/logger';
 import {
+  BroadcastListItemSchema,
   BroadcastSchema,
   EditorBroadcastPayloadSchema,
   TodayItemSchema,
@@ -151,7 +152,7 @@ export function createBroadcastSlice(set: StoreSet): Pick<
     fetchBroadcasts: async (params) => {
       try {
         const response = await broadcastApi.getHistory(params);
-        const broadcasts = safeParseArray(BroadcastSchema, response.data.broadcasts || []);
+        const broadcasts = safeParseArray(BroadcastListItemSchema, response.data.broadcasts || []);
         const pagination = response.data.pagination;
         set({ broadcasts });
         return { broadcasts, pagination };
