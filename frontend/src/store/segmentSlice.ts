@@ -1,5 +1,6 @@
 import { broadcastApi } from '../services/api';
 import { createScopedLogger, toLogError } from '../services/logger';
+import { BroadcastSchema, safeParseArray, safeParseStrict, SegmentSchema } from '../services/schemas';
 import { createSSEClient, type SSEErrorEvent } from '../services/sseClient';
 import { buildVoicePayload } from './voiceConfigModel';
 import type { AppState, Segment } from './types';
@@ -69,11 +70,14 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
         }
 
         const splitResponse = await broadcastApi.split(broadcast.id);
-        const segments = splitResponse.data.segments;
+        const segments = safeParseArray(SegmentSchema, splitResponse.data.segments || []);
+        const splitBroadcast = splitResponse.data.broadcast
+          ? safeParseStrict(BroadcastSchema, splitResponse.data.broadcast)
+          : null;
         markSegmentEntityChanged(broadcast.id);
         set((state) => ({
           segments,
-          currentBroadcast: splitResponse.data.broadcast || (
+          currentBroadcast: splitBroadcast || (
             state.currentBroadcast?.id === broadcast?.id
               ? { ...state.currentBroadcast, status: 'pending', mode: 'segmented' as const }
               : state.currentBroadcast
@@ -91,11 +95,13 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
       set({ isSplitting: true });
       try {
         const response = await broadcastApi.split(broadcastId);
-        const segments = response.data.segments;
+        const segments = safeParseArray(SegmentSchema, response.data.segments || []);
         markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments,
-          currentBroadcast: response.data.broadcast || state.currentBroadcast,
+          currentBroadcast: response.data.broadcast
+            ? safeParseStrict(BroadcastSchema, response.data.broadcast)
+            : state.currentBroadcast,
           isSplitting: false,
         }));
         return segments;
@@ -109,7 +115,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     fetchSegments: async (broadcastId) => {
       try {
         const response = await broadcastApi.getSegments(broadcastId);
-        const segments = response.data.segments;
+        const segments = safeParseArray(SegmentSchema, response.data.segments || []);
         set({ segments });
         return segments;
       } catch (error) {
@@ -121,7 +127,7 @@ export function createSegmentSlice(set: StoreSet, get: StoreGet): Pick<
     updateSegmentText: async (broadcastId, segId, text) => {
       try {
         const response = await broadcastApi.updateSegment(broadcastId, segId, { text });
-        const updated = response.data.segment;
+        const updated = safeParseStrict(SegmentSchema, response.data.segment);
         markSegmentEntityChanged(broadcastId);
         set((state) => ({
           segments: state.segments.map((s) => (s.id === segId ? updated : s)),

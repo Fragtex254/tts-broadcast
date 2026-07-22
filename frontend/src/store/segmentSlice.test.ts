@@ -109,6 +109,37 @@ describe('segmentSlice provenance', () => {
     expect(apiMocks.split).toHaveBeenCalledWith(51);
   });
 
+  test('切分响应缺少合法 segments 时拒绝并复位切分状态', async () => {
+    apiMocks.split.mockResolvedValue({ data: { broadcast: null, segments: [{ id: 'not-a-number' }] } });
+
+    await expect(useStore.getState().splitScript(51)).rejects.toThrow();
+
+    expect(useStore.getState().isSplitting).toBe(false);
+    expect(useStore.getState().segments).toEqual([]);
+  });
+
+  test('拉取 segments 响应结构非法时拒绝且不覆盖现有段落', async () => {
+    const existing = {
+      id: 1,
+      broadcast_id: 51,
+      index: 0,
+      text: '已有段落',
+      audio_path: null,
+      status: 'pending' as const,
+      style_tag: '',
+      playback_rate: 1,
+      error_message: '',
+      created_at: '',
+      updated_at: '',
+    };
+    useStore.setState({ segments: [existing] });
+    apiMocks.getSegments.mockResolvedValue({ data: { segments: [{ text: 123 }] } });
+
+    await expect(useStore.getState().fetchSegments(51)).rejects.toThrow();
+
+    expect(useStore.getState().segments).toEqual([existing]);
+  });
+
   test('同一播报已有后台生成任务时拒绝重复启动且保留旧连接', async () => {
     useStore.getState().startBackgroundTask({
       taskId: String(broadcast.id),
