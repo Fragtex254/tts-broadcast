@@ -63,6 +63,7 @@ app.use('/api/content-projects', require('./routes/contentProjects'));
 app.use('/api/content-projects', require('./routes/contentWorkspace'));
 app.use('/api/content-projects', require('./routes/contentCreation'));
 app.use('/api/sse', require('./routes/sse'));
+app.use('/api/health', require('./routes/health'));
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
