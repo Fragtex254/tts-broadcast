@@ -81,11 +81,11 @@ const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { index: true, element: <SourceCollection /> },
-      { path: 'editor/:broadcastId', element: <ScriptEditor /> },
-      { path: 'editor', element: <ScriptEditor /> },
+      { index: true, element: <ErrorBoundary section="工作台"><SourceCollection /></ErrorBoundary> },
+      { path: 'editor/:broadcastId', element: <ErrorBoundary section="口播编辑器"><ScriptEditor /></ErrorBoundary> },
+      { path: 'editor', element: <ErrorBoundary section="口播编辑器"><ScriptEditor /></ErrorBoundary> },
       { path: 'voice-presets', element: <VoicePresets /> },
-      { path: 'transcribe', element: <Transcribe /> },
+      { path: 'transcribe', element: <ErrorBoundary section="转录"><Transcribe /></ErrorBoundary> },
       { path: 'history', element: <ContentLibrary /> },
       { path: 'history/transcriptions/:id', element: <TranscriptWorkspace /> },
       { path: 'projects/:id', element: <ProjectWorkspace /> },
