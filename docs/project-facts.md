@@ -64,7 +64,7 @@ npm run preview      # 预览生产构建
 检查内容：
 
 - 后端：`cd backend && npm ci && NODE_ENV=test npm test -- --runInBand`
-- 前端：`cd frontend && npm ci && npm run lint && npm run build`
+- 前端：`cd frontend && npm ci && npm run lint && npm run test && npm run build`
 
 约束：
 

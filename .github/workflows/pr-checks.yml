@@ -44,7 +44,7 @@ jobs:
         run: npm test -- --runInBand
 
   frontend:
-    name: Frontend lint and build
+    name: Frontend lint, test and build
     runs-on: ubuntu-latest
 
     defaults:
@@ -70,6 +70,9 @@ jobs:
 
       - name: Run frontend lint
         run: npm run lint
+
+      - name: Run frontend tests
+        run: npm run test
 
       - name: Build frontend
         run: npm run build
