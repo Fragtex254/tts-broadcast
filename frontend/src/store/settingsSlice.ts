@@ -46,7 +46,7 @@ export function createSettingsSlice(set: StoreSet): Pick<
         return response.data;
       } catch (error) {
         logger.error({ err: toLogError(error), type, hasApiKey: Boolean(apiKey), hasLlmConfig: Boolean(llmConfig) }, '测试 API Key 失败');
-        return { valid: false, error: (error as Error).message };
+        return { valid: false, error: getApiErrorMessage(error, '验证失败，请检查 API Key 是否正确') };
       }
     },
 

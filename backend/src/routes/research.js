@@ -3,6 +3,7 @@ const researchService = require('../services/researchService');
 const researchStore = require('../services/researchStore');
 const { createScopedLogger } = require('../services/logger');
 const { validateId } = require('../utils/validation');
+const { sendInternalError } = require('../utils/httpResponse');
 
 const router = express.Router();
 const logger = createScopedLogger('research-route');
@@ -18,7 +19,7 @@ router.get('/claims/search', async (req, res) => {
     res.json({ results });
   } catch (error) {
     logger.error({ err: error }, '搜索观点失败');
-    res.status(500).json({ error: error.message || '搜索观点失败' });
+    sendInternalError(res);
   }
 });
 
@@ -32,7 +33,7 @@ router.get('/claims/:id', (req, res) => {
     res.json({ claim });
   } catch (error) {
     logger.error({ err: error }, '获取观点详情失败');
-    res.status(500).json({ error: error.message || '获取观点详情失败' });
+    sendInternalError(res);
   }
 });
 

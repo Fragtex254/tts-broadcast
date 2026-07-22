@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const mimo = require('../services/mimo');
 const { createScopedLogger } = require('../services/logger');
+const { sendInternalError } = require('../utils/httpResponse');
 
 const logger = createScopedLogger('settings-route');
 
@@ -54,7 +55,7 @@ router.get('/', (req, res) => {
     res.json({ settings });
   } catch (error) {
     logger.error({ err: error }, '获取设置失败');
-    res.status(500).json({ error: '获取设置失败' });
+    sendInternalError(res);
   }
 });
 
@@ -119,7 +120,7 @@ router.put('/', (req, res) => {
     res.json({ settings });
   } catch (error) {
     logger.error({ err: error }, '更新设置失败');
-    res.status(500).json({ error: '更新设置失败' });
+    sendInternalError(res);
   }
 });
 
@@ -134,10 +135,16 @@ router.post('/test-key', async (req, res) => {
     const keyToTest = readSubmittedSecret(apiKey);
     const llmConfig = mimoType === 'tts' ? undefined : { apiFormat, baseUrl, model };
     const isValid = await mimo.testApiKey(mimoType, keyToTest || undefined, llmConfig);
+    if (!isValid) {
+      return res.status(400).json({
+        valid: false,
+        error: 'API Key 验证失败，请检查密钥与连接配置',
+      });
+    }
     res.json({ valid: isValid });
   } catch (error) {
     logger.error({ err: error }, '测试 API Key 失败');
-    res.json({ valid: false, error: error.message });
+    res.status(400).json({ valid: false, error: error.message || 'API Key 验证失败' });
   }
 });
 
@@ -149,7 +156,7 @@ router.post('/llm-models', async (req, res) => {
   try {
     const { baseUrl, apiKey } = req.body || {};
     if (!baseUrl || typeof baseUrl !== 'string') {
-      return res.status(400).json({ error: '请提供 LLM Base URL' });
+      return res.status(400).json({ valid: false, error: '请提供 LLM Base URL' });
     }
 
     let keyToUse = readSubmittedSecret(apiKey);
@@ -167,7 +174,8 @@ router.post('/llm-models', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || '获取模型列表失败' });
+    logger.warn({ err: error }, '获取 LLM 模型列表失败');
+    res.status(400).json({ valid: false, error: error.message || '获取模型列表失败' });
   }
 });
 

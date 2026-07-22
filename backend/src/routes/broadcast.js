@@ -13,6 +13,7 @@ const segmentStore = require('../services/segmentStore');
 const voiceConfigService = require('../services/voiceConfig');
 const editorSplitCoordinator = require('../services/editorSplitCoordinator');
 const { createScopedLogger } = require('../services/logger');
+const { sendInternalError } = require('../utils/httpResponse');
 const { validateId, cleanAudioFile, resolveAudioFilePath } = require('../utils/validation');
 
 const logger = createScopedLogger('broadcast-route');
@@ -448,7 +449,7 @@ router.post('/batch-delete', (req, res) => {
     res.json(result);
   } catch (error) {
     logger.error({ err: error }, '批量删除失败');
-    res.status(500).json({ error: error.message || '批量删除失败' });
+    sendInternalError(res);
   }
 });
 
@@ -653,7 +654,7 @@ router.get('/:id/download', async (req, res) => {
       hasBroadcastId: Boolean(req.params.id),
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '下载音频失败');
-    res.status(500).json({ error: error.message || '下载音频失败' });
+    sendInternalError(res);
   }
 });
 
@@ -699,7 +700,7 @@ router.get('/:id/audio', async (req, res) => {
       hasBroadcastId: Boolean(req.params.id),
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '获取音频失败');
-    res.status(500).json({ error: error.message || '获取音频失败' });
+    sendInternalError(res);
   }
 });
 

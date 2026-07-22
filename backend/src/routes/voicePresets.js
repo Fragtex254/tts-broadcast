@@ -10,6 +10,7 @@ const voicePresetStore = require('../services/voicePresetStore');
 const audioAsset = require('../services/audioAsset');
 const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
+const { sendInternalError } = require('../utils/httpResponse');
 const { validateId, cleanAudioFile, cleanAssetFile, audioDir } = require('../utils/validation');
 
 const logger = createScopedLogger('voice-presets-route');
@@ -350,7 +351,7 @@ router.post('/', createUpload, (req, res) => {
       voicePresetStore.deleteById(createdPresetId);
     }
     logger.error({ err: error }, '创建预设失败');
-    res.status(500).json({ error: error.message || '创建预设失败' });
+    sendInternalError(res);
   }
 });
 
@@ -465,7 +466,7 @@ router.put('/:id', createUpload, (req, res) => {
       hasPresetId: Boolean(req.params.id),
       presetIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '更新预设失败');
-    res.status(500).json({ error: error.message || '更新预设失败' });
+    sendInternalError(res);
   }
 });
 

@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 const { createScopedLogger } = require('./services/logger');
 const { createProcessLifecycle } = require('./services/processLifecycle');
+const { sendInternalError } = require('./utils/httpResponse');
 const { audioDir, assetDir } = require('./utils/validation');
 
 const app = express();
@@ -75,7 +76,7 @@ app.use((err, req, res, next) => {
   }
 
   logger.error({ err }, '服务器内部错误');
-  res.status(500).json({ error: '服务器内部错误' });
+  sendInternalError(res);
 });
 
 /**

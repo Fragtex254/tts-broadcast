@@ -14,6 +14,7 @@ const editorSplitCoordinator = require('../services/editorSplitCoordinator');
 const sseManager = require('../services/sseManager');
 const ttsQueue = require('../services/ttsQueue');
 const { createScopedLogger } = require('../services/logger');
+const { sendInternalError } = require('../utils/httpResponse');
 const { validateId, cleanAudioFile } = require('../utils/validation');
 const { prependStyleTag, sanitizeStyleTag, MAX_SEGMENT_TEXT_LENGTH } = require('../utils/segmentText');
 
@@ -627,7 +628,7 @@ router.post('/:id/segments/merge', async (req, res) => {
       hasBroadcastId: Boolean(req.params.id),
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '合并失败');
-    res.status(500).json({ error: error.message || '合并失败' });
+    sendInternalError(res);
   }
 });
 
@@ -700,7 +701,7 @@ router.patch('/:id/segments/playback-rate', (req, res) => {
       hasBroadcastId: Boolean(req.params.id),
       broadcastIdParamLength: typeof req.params.id === 'string' ? req.params.id.length : undefined,
     }, '批量设置倍速失败');
-    res.status(500).json({ error: error.message || '批量设置倍速失败' });
+    sendInternalError(res);
   }
 });
 

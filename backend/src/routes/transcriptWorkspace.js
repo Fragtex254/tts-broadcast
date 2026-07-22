@@ -5,6 +5,7 @@ const transcriptionClaimRunner = require('../services/transcriptionClaimRunner')
 const researchStore = require('../services/researchStore');
 const { createScopedLogger } = require('../services/logger');
 const { validateId } = require('../utils/validation');
+const { sendInternalError } = require('../utils/httpResponse');
 
 const router = express.Router();
 const logger = createScopedLogger('transcript-workspace-route');
@@ -37,7 +38,7 @@ router.get('/results/:id', (req, res) => {
     res.json({ transcript });
   } catch (error) {
     logger.error({ err: error }, '获取转录内容详情失败');
-    res.status(500).json({ error: error.message || '获取转录内容详情失败' });
+    sendInternalError(res);
   }
 });
 
@@ -80,7 +81,7 @@ router.patch('/results/:id/metadata', (req, res) => {
     res.json({ record });
   } catch (error) {
     logger.error({ err: error }, '更新播客元数据失败');
-    res.status(500).json({ error: error.message || '更新播客元数据失败' });
+    sendInternalError(res);
   }
 });
 
@@ -102,7 +103,7 @@ router.patch('/results/:id/speakers/:speakerId', (req, res) => {
     res.json({ speaker });
   } catch (error) {
     logger.error({ err: error }, '更新说话人名称失败');
-    res.status(500).json({ error: error.message || '更新说话人名称失败' });
+    sendInternalError(res);
   }
 });
 
@@ -124,7 +125,7 @@ router.patch('/results/:id/turns/:turnId', (req, res) => {
     res.json(updated);
   } catch (error) {
     logger.error({ err: error }, '校对逐字稿失败');
-    res.status(500).json({ error: error.message || '校对逐字稿失败' });
+    sendInternalError(res);
   }
 });
 
@@ -178,7 +179,7 @@ router.get('/results/:id/claims', (req, res) => {
     res.json({ claims: researchStore.listClaims({ transcriptionId: idCheck.id, status }) });
   } catch (error) {
     logger.error({ err: error }, '获取观点卡失败');
-    res.status(500).json({ error: error.message || '获取观点卡失败' });
+    sendInternalError(res);
   }
 });
 
@@ -201,7 +202,7 @@ router.patch('/claims/:claimId', (req, res) => {
     res.json({ claim });
   } catch (error) {
     logger.error({ err: error }, '更新观点卡失败');
-    res.status(500).json({ error: error.message || '更新观点卡失败' });
+    sendInternalError(res);
   }
 });
 
@@ -217,7 +218,7 @@ router.delete('/claims/:claimId', (req, res) => {
       return res.status(409).json({ error: error.message });
     }
     logger.error({ err: error }, '删除观点卡失败');
-    res.status(500).json({ error: error.message || '删除观点卡失败' });
+    sendInternalError(res);
   }
 });
 

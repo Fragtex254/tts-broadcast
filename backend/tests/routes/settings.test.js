@@ -145,6 +145,40 @@ describe('设置 API', () => {
     expect(res.body.error).toBe('WSL ASR 引擎无效');
   });
 
+  test('POST /api/settings/test-key - 验证失败统一返回 400 与 valid:false', async () => {
+    jest.spyOn(mimo, 'testApiKey').mockResolvedValue(false);
+
+    const res = await request(app)
+      .post('/api/settings/test-key')
+      .send({ type: 'llm', apiKey: 'bad-key' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.valid).toBe(false);
+    expect(typeof res.body.error).toBe('string');
+  });
+
+  test('POST /api/settings/test-key - 连接异常统一返回 400 与用户可读原因', async () => {
+    jest.spyOn(mimo, 'testApiKey').mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const res = await request(app)
+      .post('/api/settings/test-key')
+      .send({ type: 'tts', apiKey: 'bad-key' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.valid).toBe(false);
+    expect(res.body.error).toContain('ECONNREFUSED');
+  });
+
+  test('POST /api/settings/llm-models - 缺少 baseUrl 返回 400 与 valid:false', async () => {
+    const res = await request(app)
+      .post('/api/settings/llm-models')
+      .send({ apiKey: 'model-key' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.valid).toBe(false);
+    expect(res.body.error).toBe('请提供 LLM Base URL');
+  });
+
   test('POST /api/settings/test-key - 测试 API Key', async () => {
     jest.spyOn(mimo, 'testApiKey').mockResolvedValue(true);
 
