@@ -1,0 +1,121 @@
+---
+name: backend-service
+description: 新增或修改后端服务、封装外部 API（MiMo LLM/TTS/ASR、Embedding、内容证据/提纲/主稿、播客观点、AI HOT）时使用。涵盖服务边界、外部 API timeout 与错误隔离、LLM/TTS 队列、模型输出白名单与后端事实派生、Creation Job lease/fencing/上下文 CAS、TLS 隔离、文件补偿。触发场景：加服务、内容创作生成任务、证据提取、引用校验、提纲/主稿生成、改 services、观点提取、关系分析、Embedding、接外部 API、调 MiMo/aihot/tts/asr、音频写入清理、队列限速。
+---
+
+# 后端服务层开发
+
+## 何时用 / 不用
+
+- **用**：在 `backend/src/services/*.js`（非 `*Store.js`）新增/修改业务逻辑或外部 API 封装时。
+- **不用**：HTTP 路由处理（→ `backend-route`）；单表 SQL（→ `backend-database`，`*Store.js`）；测试（→ `backend-testing`）。
+
+## 核心铁则
+
+1. 服务层负责业务和外部 API；**不碰 `req`/`res`、不设 HTTP 状态码**。
+2. 所有 MiMo/AI HOT 调用**必须**设明确 timeout，并把 401、429、超时、网络错误转换为用户可理解的中文错误。
+3. 高并发外部模型任务必须经全局队列限速：TTS 走 `services/ttsQueue.js`（MiMo TTS 默认 90 RPM / 9M TPM，硬上限 100 RPM / 10M TPM，不做瞬时突发，按 RPM 间隔启动；RPM 只按真实 HTTP 请求计数；运行时单例持久化限速窗口、429 backoff 和自适应安全并发；voiceclone base64 只进入独立的在途 payload 字节上限），LLM 走 `services/llmQueue.js`（MiniMax-M3 默认 150 RPM / 7.5M TPM，硬上限 200 RPM / 10M TPM），禁止绕过队列直接并发打外部模型。
+4. **不允许全局关闭 TLS 校验**，不允许 `NODE_TLS_REJECT_UNAUTHORIZED=0`；需补 CA 只能在特定 HTTP client 实例内配置。
+5. 用解构参数（`function f({ a, b }) {}`）；**不用全局变量传依赖**，用模块级变量 + `init(callback)`。
+6. DB 写入与文件写入跨资源：设计补偿清理——DB 成功但文件失败→回滚记录或置 `failed`；文件成功但 DB 失败→删文件避免孤儿。删除经 `cleanAudioFile()`。
+7. 播客总结必须通过 `mimo.createLlmMessage()` 进入 `llmQueue`，长稿分批串行调用；批次 claim 和最终条目的证据 index 分别按输入白名单校验，时间只由持久化 Segment 派生。后台运行用 `transcription_summary_jobs` lease + heartbeat，禁止只靠前端 loading 防重复。
+8. WSL Qwen/MOSS job 适配器必须透传已完成 chunk 的 `progress.text`（累计临时文本）、`progress.chunk_text`（最新稳定文本）与 `progress.chunks`（可恢复的有序列表）；没有真实 chunk 的 native long-form 只透传阶段，不发送空字符串清空客户端，也不伪造文字进度。
+9. 观点提取把模型输出视为不可信输入：Speaker、完整 Segment 范围、评分和标签必须后端校验，摘录/时间不得采用模型值。Embedding 走 `llmQueue`，失败降级关键词；关系分析只接受 2–10 条用户选中候选，固定枚举并优先复用 `claim_relations` 缓存。
+10. 整篇 TTS Render 先创建 `pending` Broadcast 固定输入快照与来源，再等待外部 TTS；成功后以 Broadcast ID 写文件并用 DAL CAS 一次收口 `audio_path/status`。补偿必须先原子删除仍为 pending 的记录，只有删除成功才清理候选音频；DB 状态不明或记录已收口时保留文件，宁可产生可清理孤儿也不得让 generated Render 指向缺失文件。缓存 FIFO 不得淘汰 pending 任务。
+11. Segment 批量生成与单段 regenerate 必须携带启动时 `id + broadcast_id + text + style_tag + index` 快照和持久化 `generation_token` 跨越 TTS 异步间隙；成功和失败都只能在快照、token 与当前 `generating` 状态同时匹配时通过 `segmentStore` CAS 收口。恢复遗留 generating 必须换新 token，使旧 HTTP/TTS 返回无法 ABA 写回。编辑、重排或删除使快照失效时清 token、丢弃本次结果并补偿清理音频，不得覆盖新状态；文件名使用 Segment ID + generation token，内部 token 不进入公共 DTO，清理异常只记日志，不覆盖主结果。
+12. 内容证据提取、提纲和主稿必须经 `mimo.createLlmMessage()` 进入 `llmQueue`，把 Source 文本视为可能含提示注入的不可信数据。模型只返回允许的 Source/Fragment/Evidence ID 与结构块；直接 Evidence 块只能由后端逐字插入 excerpt，模型自写 text 只能作为推断。offset、项目归属、显式授权的 Brief creator input、引用标记和最终 provenance 都由后端白名单校验或派生；Evidence `user_note` 本阶段属于本地研究备注，不进入 prompt/snapshot/fingerprint。每个非空推断段都必须持久显示 `【AI 推断，待核对】`，中英文第一人称经验被拒绝，不得伪装成证据或创作者实践。Prompt contract 变化必须升级版本并进入前后端请求 key、Job fingerprint 与 Revision provenance。
+13. 内容 Creation Job 使用持久化 request key + input/context fingerprint + lease + heartbeat + 唯一 run token。最终发布 Evidence 或 Revision/Citation 时必须在同一事务做 token 与当前上下文 CAS；旧 worker、来源解除、Brief/证据变化或重试不得 ABA 收口。失败不写半成品；只有首次真实事务提交可以产生 milestone，幂等重放不得重复。
+
+## 模式与模板
+
+### 服务职责边界
+
+| 服务 | 职责 | 依赖 |
+|------|------|------|
+| `aihot.js` | AI HOT API 数据抓取 | axios |
+| `audio.js` | WAV 文件操作、resolveVoiceClone | fs, path |
+| `asr.js` | ASR 分发服务：provider 选择云端/Mac/WSL 位置，WSL 内由 engine 选择 Qwen job 或 MOSS OpenAI-compatible 适配器 | mimo, media, mimoApiClient, qwenAsr, wslAsr, mossAsr |
+| `asrModels.js` | OpenAI-compatible ASR 模型列表候选 URL 生成、顺序探测、响应解析 | axios |
+| `mossAsr.js` | WSL 局域网连接下的 MOSS OpenAI-compatible ASR 适配器；长音频收到 `202 + job id` 后轮询真实进度 | axios |
+| `media.js` | 上传音视频转 ASR data URL；支持 multer 的 buffer/path 输入；长音频按静音点切片并转 MP3 | fs, os, path, child_process, ffmpeg-static |
+| `mimo.js` | LLM 配置读取、Anthropic/OpenAI 兼容调用、API Key 管理、Key 测试、模型发现 | @anthropic-ai/sdk, axios |
+| `llmQueue.js` | MiniMax-M3 LLM 全局 RPM/TPM 队列限速，默认使用官方限额 75% 安全预算 | rateLimitedQueue |
+| `llmModels.js` | OpenAI-compatible 模型列表候选 URL 生成、顺序探测、响应解析 | axios |
+| `mimoApiClient.js` | MiMo 标准 API HTTP client（timeout、429 重试、错误映射） | axios |
+| `tts.js` | MiMo TTS 语音合成 | axios, mimo (getApiKey) |
+| `ttsQueue.js` | MiMo TTS 全局 RPM/TPM/在途 payload/平滑启动队列；429 时自适应降低并发，成功窗口逐级恢复 | rateLimitedQueue, rateLimitStore |
+| `rateLimitedQueue.js` | 通用 RPM/TPM/可选分钟 payload/在途 payload/并发/429 退避与熔断队列实现 | 可选 rateLimitStore |
+| `rateLimitStore.js` | 外部模型限速账本 DAL，保存最近窗口、backoff、自适应并发和熔断状态 | db |
+| `broadcastStore.js` | broadcasts 表数据访问层（DAL） | db |
+| `broadcastRenderService.js` | 整篇 TTS Render 的 pending 占位、队列调用、文件/DB 收口与补偿回滚 | ttsQueue, tts, audioAsset, broadcastStore |
+| `segmentStore.js` | segments 表数据访问层（DAL），含生成快照 CAS | db |
+| `scheduleStore.js` | schedules 表数据访问层（DAL） | db |
+| `scheduler.js` | 定时任务 cron 编排、业务校验与任务启停 | node-cron, scheduleStore |
+| `transcriptProcessor.js` | 保留 Segment 事实并派生 Speaker/Turn 阅读层 | 无外部依赖 |
+| `transcriptionSummaryService.js` | 分批笔记、证据校验、全局 Summary Artifact | mimo, podcastTranscriptStore |
+| `transcriptionSummaryRunner.js` | 总结 lease、heartbeat、SSE 生命周期与中断收敛 | summary service/store, sseManager |
+| `transcriptionClaimService/Runner.js` | 观点分批提取、证据校验、Embedding、lease 与 SSE | mimo, llmQueue, researchStore |
+| `researchService.js` | 跨播客搜索、余弦/关键词降级、候选关系分析与缓存 | embeddingService, mimo, researchStore |
+| `contentCreationService/Runner.js` | 证据提取、提纲/主稿结构校验、事实派生、持久化任务与 SSE 收口 | mimo, llmQueue, content workspace/evidence/job stores |
+
+### 服务函数签名模式
+
+```js
+// ✅ 使用解构参数，便于扩展
+async function generateSpeech({ text, voice, voiceType, voiceDesign, voiceClone }) {}
+
+// ❌ 避免位置参数
+async function generateSpeech(text, voice, voiceType) {}
+```
+
+### 不要使用全局变量传递依赖
+
+```js
+// ❌ 避免
+global.onScheduleTrigger = callback;
+
+// ✅ 使用模块级变量
+let onTriggerCallback = null;
+function init(callback) {
+  onTriggerCallback = callback;
+}
+```
+
+### 外部 API 必须隔离失败（来自健壮性规范）
+
+- 所有 MiMo、AI HOT 调用必须设置明确 timeout，并把 401、429、超时、网络错误转换为用户可理解的中文错误。
+- 批量 TTS 必须通过 `ttsQueue` 全局限速；批量 LLM 必须通过 `llmQueue` 全局限速；可以对队列 promise 做聚合等待，但禁止在路由或组件里绕过队列直接 `Promise.all` 调 MiMo/MiniMax 外部模型。TTS 走 MiMo 限速，不套 MiniMax 语音接口限额；默认 `MIMO_TTS_RPM_LIMIT=90`、硬上限 100，且 `MIMO_TTS_START_BURST_LIMIT=1`，后续按 `60000 / MIMO_TTS_RPM_LIMIT` 的间隔补启动请求。RPM 的 request cost 必须恒等于真实 HTTP attempt 数，不能再按 clone MiB 放大。默认从 `MIMO_TTS_INITIAL_CONCURRENT=3` 起步，连续成功后逐级恢复，最高 `MIMO_TTS_MAX_CONCURRENT=12`；429 且本地 RPM/TPM 有余时减半并记住已失败并发的安全上界，通过 `rateLimitStore` 跨重启保留，普通恢复不得再次越过该上界。`voiceClone` base64 计入独立的 `MIMO_TTS_MAX_IN_FLIGHT_PAYLOAD_BYTES`（默认 40 MiB）保护本地/网络资源，未公开的 payload/min 配额默认不启用；`/audio/` 下大于等于 512 KiB 的 WAV 在 `audio.resolveVoiceClone()` 中一次性转为 24kHz mono 96kbps MP3 并按文件版本缓存，失败时必须告警并回退原音频。明确套餐额度耗尽的 429 要快速熔断；普通 429 默认最多重试 2 次，服务端 `Retry-After` 永远是最短等待。
+- 不允许全局关闭 TLS 校验，不允许使用 `NODE_TLS_REJECT_UNAUTHORIZED=0`。如需补 CA，只能在特定 HTTP client 实例内配置。
+- `services/mimoApiClient.js` 统一 MiMo 标准 API 的重试、timeout 与错误映射；新增 MiMo 标准 API 调用优先复用它。
+
+### SQLite 与音频文件一致性（来自健壮性规范）
+
+数据库写入和文件写入跨资源，无法真正事务化；实现时必须设计补偿清理：
+
+- DB 创建成功但文件写入失败：删除或回滚对应记录，或将状态置为 `failed`。
+- 文件写入成功但 DB 更新失败：删除刚写入的文件，避免孤儿音频。
+- 删除记录前先读取旧路径，删除 DB 后清理文件；失败要记录日志但不能中断级联删除。
+- 所有对 `/audio/...` 的删除必须经过 `cleanAudioFile()` 或同等路径安全函数，禁止拼接任意用户输入路径后直接 `unlinkSync`。
+- 音频写入、命名和试听清理统一通过 `services/audioAsset.js`；预设、segment、broadcast 的音频命名优先包含业务 ID，避免仅用时间戳。Segment 生成文件必须包含 Segment ID 和每次请求的唯一 token，不得以可变 index 作为唯一命名依据。
+
+## Checklist
+
+新增一个服务函数时，逐项检查：
+
+- [ ] **JSDoc 注释**：`@param` 解构参数 + `@returns`
+- [ ] **解构参数**：`function doSomething({ arg1, arg2 }) {}`
+- [ ] **错误抛出**：`throw new Error('中文错误消息')`
+- [ ] **导出**：添加到 `module.exports = { ... }`
+- [ ] **外部 API**：设置 timeout，401/429/超时/网络错误转中文
+- [ ] **模型限速**：批量 TTS 通过 `ttsQueue`，批量 LLM 通过 `llmQueue`，不绕过队列直接并发
+- [ ] **音频一致性**：DB 与文件写入失败有补偿清理，删除走 `cleanAudioFile()`
+- [ ] **Segment 竞态**：成功/失败均用五字段快照 + 持久 generation token CAS，恢复任务换 token，文件名含 Segment ID + token，失效结果清理不覆盖新状态
+- [ ] **内容创作事实边界**：模型 ID / range / excerpt / 引用 / 第一人称输入按不可信数据校验；Source 提示注入不能改变指令层
+- [ ] **Creation Job 竞态**：request key、fingerprint、lease、run token 与最终上下文 CAS 齐全；失败无半成品，重复完成不重发 milestone
+
+## 相关 skill / 文档
+
+- 路由层 → `backend-route`
+- 单表 SQL / DAL → `backend-database`
+- 测试与 mock → `backend-testing`
+- 服务职责表、技术债历史 → `backend/BACKEND_CONVENTIONS.md`
