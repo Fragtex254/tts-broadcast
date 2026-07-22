@@ -125,6 +125,8 @@ try {
 // 迁移：将音频 Render 可选关联到不可变的口播稿 Revision。
 ensureBroadcastArtifactRevisionColumn();
 db.exec('CREATE INDEX IF NOT EXISTS idx_broadcasts_artifact_revision_id ON broadcasts(artifact_revision_id)');
+// 迁移：broadcasts.saved 高频过滤（保存/淘汰）索引
+db.exec('CREATE INDEX IF NOT EXISTS idx_broadcasts_saved ON broadcasts(saved)');
 
 // 迁移：为旧数据库的 segments 添加 style_tag 列
 try {

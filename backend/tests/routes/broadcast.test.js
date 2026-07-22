@@ -609,6 +609,12 @@ describe('播报 API', () => {
       expect(db.prepare('SELECT COUNT(*) AS count FROM broadcasts').get().count).toBe(0);
     });
 
+    test('broadcasts.saved 过滤列已建索引', () => {
+      expect(db.prepare(`
+        SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_broadcasts_saved'
+      `).get()).toEqual({ name: 'idx_broadcasts_saved' });
+    });
+
     test('删除项目后保留播报且 Revision 关联置空', async () => {
       expect(db.prepare(`
         SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_broadcasts_artifact_revision_id'
